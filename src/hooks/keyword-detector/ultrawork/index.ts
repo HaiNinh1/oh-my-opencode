@@ -2,10 +2,11 @@
  * Ultrawork message module - routes to appropriate message based on agent/model.
  *
  * Routing:
- * 1. Planner agents (prometheus, plan) → planner.ts
- * 2. GPT 5.2 models → gpt5.2.ts
- * 3. Gemini models → gemini.ts
- * 4. Default (Claude, etc.) → default.ts (optimized for Claude series)
+ * 1. Mnemosyne → skip (has own planning instructions, ultrawork would contradict)
+ * 2. Planner agents (prometheus, plan) → planner.ts
+ * 3. GPT 5.2 models → gpt5.2.ts
+ * 4. Gemini models → gemini.ts
+ * 5. Default (Claude, etc.) → default.ts (optimized for Claude series)
  */
 
 export { isPlannerAgent, isGptModel, isGeminiModel, getUltraworkSource } from "./source-detector"
@@ -28,6 +29,8 @@ export function getUltraworkMessage(agentName?: string, modelID?: string): strin
   const source = getUltraworkSource(agentName, modelID)
 
   switch (source) {
+    case "skip":
+      return ""
     case "planner":
       return getPlannerUltraworkMessage()
     case "gpt":

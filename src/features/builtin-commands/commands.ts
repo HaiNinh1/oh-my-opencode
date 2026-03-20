@@ -5,6 +5,7 @@ import { RALPH_LOOP_TEMPLATE, CANCEL_RALPH_TEMPLATE } from "./templates/ralph-lo
 import { STOP_CONTINUATION_TEMPLATE } from "./templates/stop-continuation"
 import { REFACTOR_TEMPLATE } from "./templates/refactor"
 import { START_WORK_TEMPLATE } from "./templates/start-work"
+import { EXECUTE_PLAN_TEMPLATE } from "./templates/execute-plan"
 import { HANDOFF_TEMPLATE } from "./templates/handoff"
 
 const BUILTIN_COMMAND_DEFINITIONS: Record<BuiltinCommandName, Omit<CommandDefinition, "name">> = {
@@ -93,6 +94,23 @@ Timestamp: $TIMESTAMP
 $ARGUMENTS
 </user-request>`,
     argumentHint: "[goal]",
+  },
+  "execute-plan": {
+    description: "(builtin) Start Heracles direct execution session from work plan",
+    agent: "heracles",
+    template: `<command-instruction>
+${EXECUTE_PLAN_TEMPLATE}
+</command-instruction>
+
+<session-context>
+Session ID: $SESSION_ID
+Timestamp: $TIMESTAMP
+</session-context>
+
+<user-request>
+$ARGUMENTS
+</user-request>`,
+    argumentHint: "[plan-name]",
   },
 }
 

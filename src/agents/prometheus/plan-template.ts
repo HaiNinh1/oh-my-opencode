@@ -68,7 +68,7 @@ Generate plan to: \`.sisyphus/plans/{name}.md\`
 
 ---
 
-## Verification Strategy (MANDATORY)
+## Verification Strategy
 
 > **ZERO HUMAN INTERVENTION** — ALL verification is agent-executed. No exceptions.
 > Acceptance criteria requiring "user manually tests/confirms" are FORBIDDEN.
@@ -167,7 +167,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 > Implementation + Test = ONE Task. Never separate.
 > EVERY task MUST have: Recommended Agent Profile + Parallelization info + QA Scenarios.
-> **A task WITHOUT QA Scenarios is INCOMPLETE. No exceptions.**
+> Agent-Executed QA Scenarios are mandatory for all tasks.
 
 - [ ] 1. [Task Title]
 
@@ -194,9 +194,8 @@ Max Concurrent: 7 (Waves 1 & 2)
   - **Blocks**: [Tasks that depend on this task completing]
   - **Blocked By**: [Tasks this depends on] | None (can start immediately)
 
-  **References** (CRITICAL - Be Exhaustive):
+  **References** (be exhaustive — the executor has no interview context):
 
-  > The executor has NO context from your interview. References are their ONLY guide.
   > Each reference must answer: "What should I look at and WHY?"
 
   **Pattern References** (existing code to follow):
@@ -211,39 +210,34 @@ Max Concurrent: 7 (Waves 1 & 2)
   **External References** (libraries and frameworks):
   - Official docs: \`https://zod.dev/?id=basic-usage\` - Zod validation syntax
 
-  **WHY Each Reference Matters** (explain the relevance):
-  - Don't just list files - explain what pattern/information the executor should extract
-  - Bad: \`src/utils.ts\` (vague, which utils? why?)
+  **Reference quality**: Explain what pattern/information the executor should extract.
   - Good: \`src/utils/validation.ts:sanitizeInput()\` - Use this sanitization pattern for user input
+  - Bad: \`src/utils.ts\` (vague, which utils? why?)
 
   **Acceptance Criteria**:
 
-  > **AGENT-EXECUTABLE VERIFICATION ONLY** — No human action permitted.
-  > Every criterion MUST be verifiable by running a command or using a tool.
+  > Agent-executable verification only — every criterion must be verifiable by running a command or using a tool.
 
   **If TDD (tests enabled):**
   - [ ] Test file created: src/auth/login.test.ts
   - [ ] bun test src/auth/login.test.ts → PASS (3 tests, 0 failures)
 
-  **QA Scenarios (MANDATORY — task is INCOMPLETE without these):**
+  **QA Scenarios (mandatory for all tasks):**
 
-  > **This is NOT optional. A task without QA scenarios WILL BE REJECTED.**
-  >
-  > Write scenario tests that verify the ACTUAL BEHAVIOR of what you built.
+  > Write scenario tests that verify the actual behavior of what you built.
   > Minimum: 1 happy path + 1 failure/edge case per task.
   > Each scenario = exact tool + exact steps + exact assertions + evidence path.
-  >
-  > **The executing agent MUST run these scenarios after implementation.**
-  > **The orchestrator WILL verify evidence files exist before marking task complete.**
+  > The executing agent runs these scenarios after implementation.
+  > The orchestrator verifies evidence files exist before marking task complete.
 
   \\\`\\\`\\\`
   Scenario: [Happy path — what SHOULD work]
     Tool: [Playwright / interactive_bash / Bash (curl)]
     Preconditions: [Exact setup state]
     Steps:
-      1. [Exact action — specific command/selector/endpoint, no vagueness]
+      1. [Exact action — specific command/selector/endpoint]
       2. [Next action — with expected intermediate state]
-      3. [Assertion — exact expected value, not "verify it works"]
+      3. [Assertion — exact expected value]
     Expected Result: [Concrete, observable, binary pass/fail]
     Failure Indicators: [What specifically would mean this failed]
     Evidence: .sisyphus/evidence/task-{N}-{scenario-slug}.{ext}
@@ -258,18 +252,12 @@ Max Concurrent: 7 (Waves 1 & 2)
     Evidence: .sisyphus/evidence/task-{N}-{scenario-slug}-error.{ext}
   \\\`\\\`\\\`
 
-  > **Specificity requirements — every scenario MUST use:**
+  > **Specificity requirements — every scenario must use:**
   > - **Selectors**: Specific CSS selectors (\`.login-button\`, not "the login button")
   > - **Data**: Concrete test data (\`"test@example.com"\`, not \`"[email]"\`)
   > - **Assertions**: Exact values (\`text contains "Welcome back"\`, not "verify it works")
   > - **Timing**: Wait conditions where relevant (\`timeout: 10s\`)
   > - **Negative**: At least ONE failure/error scenario per task
-  >
-  > **Anti-patterns (your scenario is INVALID if it looks like this):**
-  > - ❌ "Verify it works correctly" — HOW? What does "correctly" mean?
-  > - ❌ "Check the API returns data" — WHAT data? What fields? What values?
-  > - ❌ "Test the component renders" — WHERE? What selector? What content?
-  > - ❌ Any scenario without an evidence path
 
   **Evidence to Capture:**
   - [ ] Each evidence file named: task-{N}-{scenario-slug}.{ext}
@@ -282,7 +270,7 @@ Max Concurrent: 7 (Waves 1 & 2)
 
 ---
 
-## Final Verification Wave (MANDATORY — after ALL implementation tasks)
+## Final Verification Wave (after ALL implementation tasks)
 
 > 4 review agents run in PARALLEL. ALL must APPROVE. Rejection → fix → re-run.
 

@@ -8,6 +8,7 @@ import { buildSystemContent } from "./prompt-builder"
 import type {
   AvailableCategory,
   AvailableSkill,
+  AvailableToolInfo,
 } from "../../agents/dynamic-agent-prompt-builder"
 import {
   resolveSkillContent,
@@ -24,6 +25,7 @@ import {
 export { resolveCategoryConfig } from "./categories"
 export type { SyncSessionCreatedEvent, DelegateTaskToolOptions, BuildSystemContentInput } from "./types"
 export { buildSystemContent } from "./prompt-builder"
+export { isMnemosyneAgent, buildMnemosyneSystemPrepend } from "./mnemosyne-plan-constants"
 
 export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefinition {
   const { userCategories } = options
@@ -213,6 +215,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         })
 
         if (isUnstableAgent && isRunInBackgroundExplicitlyFalse) {
+          const availableToolInfos: AvailableToolInfo[] = options.getAvailableToolInfos?.() ?? []
           const systemContent = buildSystemContent({
             skillContent,
             skillContents,
@@ -222,6 +225,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
             model: categoryModel,
             availableCategories,
             availableSkills,
+            availableToolInfos,
           })
           return executeUnstableAgentTask(args, ctx, options, parentContext, agentToUse, categoryModel, systemContent, actualModel)
         }
@@ -235,6 +239,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         fallbackChain = resolution.fallbackChain
       }
 
+      const availableToolInfos: AvailableToolInfo[] = options.getAvailableToolInfos?.() ?? []
       const systemContent = buildSystemContent({
         skillContent,
         skillContents,
@@ -244,6 +249,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         model: categoryModel,
         availableCategories,
         availableSkills,
+        availableToolInfos,
       })
 
       if (runInBackground) {

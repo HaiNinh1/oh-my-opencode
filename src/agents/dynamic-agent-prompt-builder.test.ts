@@ -40,7 +40,7 @@ describe("buildCategorySkillsDelegationGuide", () => {
 
     //#then: should use compact format with both sections
     expect(result).toContain("**Built-in**: playwright, frontend-ui-ux")
-    expect(result).toContain("YOUR SKILLS (PRIORITY)")
+    expect(result).toContain("Your Skills")
     expect(result).toContain("react-19 (user)")
     expect(result).toContain("tailwind-4 (user)")
   })
@@ -88,21 +88,21 @@ describe("buildCategorySkillsDelegationGuide", () => {
     //#when: building the delegation guide
     const result = buildCategorySkillsDelegationGuide(categories, allSkills)
 
-    //#then: should show custom skills with emphasis, no builtin line
-    expect(result).toContain("YOUR SKILLS (PRIORITY)")
+    //#then: should show custom skills, no builtin line
+    expect(result).toContain("Your Skills")
     expect(result).not.toContain("**Built-in**:")
   })
 
-  it("should include priority note for custom skills in evaluation step", () => {
+  it("should reference skill tool for loading skills", () => {
     //#given: custom skills present
     const allSkills = [...builtinSkills, ...customUserSkills]
 
     //#when: building the delegation guide
     const result = buildCategorySkillsDelegationGuide(categories, allSkills)
 
-    //#then: evaluation section should mention user-installed priority
-    expect(result).toContain("User-installed skills get PRIORITY")
-    expect(result).toContain("INCLUDE rather than omit")
+    //#then: should mention loading skills via skill tool
+    expect(result).toContain("`skill` tool")
+    expect(result).toContain("domain matches")
   })
 
   it("should NOT include priority note when no custom skills", () => {
@@ -112,8 +112,8 @@ describe("buildCategorySkillsDelegationGuide", () => {
     //#when: building the delegation guide
     const result = buildCategorySkillsDelegationGuide(categories, allSkills)
 
-    //#then: no priority note for custom skills
-    expect(result).not.toContain("User-installed skills get PRIORITY")
+    //#then: no custom skills section
+    expect(result).not.toContain("Your Skills")
   })
 
   it("should return empty string when no categories and no skills", () => {

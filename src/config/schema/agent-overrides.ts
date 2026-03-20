@@ -58,6 +58,7 @@ export const AgentOverrideConfigSchema = z.object({
 export const AgentOverridesSchema = z.object({
   build: AgentOverrideConfigSchema.optional(),
   plan: AgentOverrideConfigSchema.optional(),
+  hermes: AgentOverrideConfigSchema.optional(),
   sisyphus: AgentOverrideConfigSchema.optional(),
   hephaestus: AgentOverrideConfigSchema.extend({
     allow_non_gpt_model: z.boolean().optional(),
@@ -72,6 +73,8 @@ export const AgentOverridesSchema = z.object({
   explore: AgentOverrideConfigSchema.optional(),
   "multimodal-looker": AgentOverrideConfigSchema.optional(),
   atlas: AgentOverrideConfigSchema.optional(),
+  mnemosyne: AgentOverrideConfigSchema.optional(),
+  heracles: AgentOverrideConfigSchema.optional(),
 })
 
 export type AgentOverrideConfig = z.infer<typeof AgentOverrideConfigSchema>

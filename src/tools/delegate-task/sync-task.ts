@@ -106,6 +106,7 @@ export async function executeSyncTask(
       categoryModel,
       toastManager,
       taskId,
+      parentAgent: parentContext.agent,
     })
     if (promptError) {
       return promptError

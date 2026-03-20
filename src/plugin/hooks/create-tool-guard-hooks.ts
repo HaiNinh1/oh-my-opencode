@@ -14,6 +14,7 @@ import {
   createHashlineReadEnhancerHook,
   createReadImageResizerHook,
   createJsonErrorRecoveryHook,
+  createHermesRoutingGuardHook,
 } from "../../hooks"
 import {
   getOpenCodeVersion,
@@ -35,6 +36,7 @@ export type ToolGuardHooks = {
   hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null
   jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
   readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
+  hermesRoutingGuard: ReturnType<typeof createHermesRoutingGuardHook> | null
 }
 
 export function createToolGuardHooks(args: {
@@ -111,6 +113,10 @@ export function createToolGuardHooks(args: {
     ? safeHook("read-image-resizer", () => createReadImageResizerHook(ctx))
     : null
 
+  const hermesRoutingGuard = isHookEnabled("hermes-routing-guard")
+    ? safeHook("hermes-routing-guard", () => createHermesRoutingGuardHook(ctx))
+    : null
+
   return {
     commentChecker,
     toolOutputTruncator,
@@ -123,5 +129,6 @@ export function createToolGuardHooks(args: {
     hashlineReadEnhancer,
     jsonErrorRecovery,
     readImageResizer,
+    hermesRoutingGuard,
   }
 }

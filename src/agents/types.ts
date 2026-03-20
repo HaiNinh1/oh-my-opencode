@@ -89,6 +89,7 @@ export function isGeminiModel(model: string): boolean {
 }
 
 export type BuiltinAgentName =
+  | "hermes"
   | "sisyphus"
   | "hephaestus"
   | "oracle"
@@ -98,6 +99,8 @@ export type BuiltinAgentName =
   | "metis"
   | "momus"
   | "atlas"
+  | "mnemosyne"
+  | "heracles"
 
 export type OverridableAgentName =
   | "build"

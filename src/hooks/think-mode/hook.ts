@@ -1,7 +1,8 @@
 import { detectThinkKeyword, extractPromptText } from "./detector"
 import { getHighVariant, isAlreadyHighVariant } from "./switcher"
 import type { ThinkModeState } from "./types"
-import { log } from "../../shared"
+import { log, isPassthroughAgent } from "../../shared"
+import { getSessionAgent } from "../../features/claude-code-session-state"
 
 const thinkModeState = new Map<string, ThinkModeState>()
 
@@ -23,6 +24,11 @@ export function createThinkModeHook() {
     ): Promise<void> => {
       const promptText = extractPromptText(output.parts)
       const sessionID = input.sessionID
+
+      const currentAgent = getSessionAgent(sessionID)
+      if (isPassthroughAgent(currentAgent)) {
+        return
+      }
 
       const state: ThinkModeState = {
         requested: false,

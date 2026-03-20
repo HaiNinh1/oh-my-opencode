@@ -1,5 +1,7 @@
-import { PROMETHEUS_AGENT } from "./constants"
+import { PLANNER_AGENTS } from "./constants"
 
 export function isPrometheusAgent(agentName: string | undefined): boolean {
-  return agentName?.toLowerCase().includes(PROMETHEUS_AGENT) ?? false
+  if (!agentName) return false
+  const lower = agentName.toLowerCase()
+  return PLANNER_AGENTS.some(name => lower.includes(name))
 }

@@ -1,6 +1,7 @@
 declare const require: (name: string) => any
 const { describe, test, expect, beforeEach, afterEach, spyOn, mock } = require("bun:test")
 import { DEFAULT_CATEGORIES, CATEGORY_PROMPT_APPENDS, CATEGORY_DESCRIPTIONS, isPlanAgent, PLAN_AGENT_NAMES, isPlanFamily, PLAN_FAMILY_NAMES } from "./constants"
+import { isMnemosyneAgent, MNEMOSYNE_AGENT_NAMES } from "./mnemosyne-plan-constants"
 import { resolveCategoryConfig } from "./tools"
 import type { CategoryConfig } from "../../config/schema"
 import type { DelegateTaskArgs } from "./types"
@@ -259,7 +260,70 @@ describe("sisyphus-task", () => {
 
     test("PLAN_FAMILY_NAMES contains plan and prometheus", () => {
       //#given / #when / #then
-      expect(PLAN_FAMILY_NAMES).toEqual(["plan", "prometheus"])
+      expect(PLAN_FAMILY_NAMES).toEqual(["plan", "prometheus", "mnemosyne"])
+    })
+  })
+
+  describe("isMnemosyneAgent", () => {
+    test("returns true for 'mnemosyne'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("mnemosyne")
+      //#then
+      expect(result).toBe(true)
+    })
+
+    test("returns true for case-insensitive match 'MNEMOSYNE'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("MNEMOSYNE")
+      //#then
+      expect(result).toBe(true)
+    })
+
+    test("returns true for 'Mnemosyne' (mixed case)", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("Mnemosyne")
+      //#then
+      expect(result).toBe(true)
+    })
+
+    test("returns false for 'plan'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("plan")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for 'prometheus'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("prometheus")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for 'oracle'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("oracle")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for undefined", () => {
+      //#given / #when
+      const result = isMnemosyneAgent(undefined)
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for empty string", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("MNEMOSYNE_AGENT_NAMES contains only mnemosyne", () => {
+      //#given / #when / #then
+      expect(MNEMOSYNE_AGENT_NAMES).toEqual(["mnemosyne"])
     })
   })
 
@@ -2794,7 +2858,7 @@ describe("sisyphus-task", () => {
 
       // then
       expect(result).toContain("<system>")
-      expect(result).toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
+      expect(result).toContain("Context Gathering Protocol")
       expect(result).toContain("### AVAILABLE CATEGORIES")
       expect(result).toContain("`deep`")
       expect(result).not.toContain("prompt-engineer")
@@ -2893,6 +2957,124 @@ describe("sisyphus-task", () => {
       // then
       expect(result).toBe(skillContent)
       expect(result).not.toContain("<system>")
+    })
+  })
+
+  describe("buildSystemContent (Mnemosyne)", () => {
+    test("prepends mnemosyne system prompt when agentName is 'mnemosyne'", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+      const { buildMnemosyneSystemPrepend } = require("./mnemosyne-plan-constants")
+
+      const availableSkills = [
+        {
+          name: "git-master",
+          description: "Atomic commits, rebase surgery.",
+          location: "plugin",
+        },
+      ]
+
+      //#when
+      const result = buildSystemContent({
+        agentName: "mnemosyne",
+        availableSkills,
+      })
+
+      //#then
+      expect(result).toContain("<system>")
+      expect(result).toContain("SYNCHRONOUS")
+      expect(result).toContain("run_in_background=false")
+      expect(result).not.toContain("### AVAILABLE CATEGORIES")
+      expect(result).toContain("### AVAILABLE SKILLS")
+      expect(result).toContain("`git-master`")
+      expect(result).toBe(buildMnemosyneSystemPrepend(availableSkills))
+    })
+
+    test("mnemosyne prepend does not include categories table", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+
+      const availableCategories = [
+        {
+          name: "deep",
+          description: "Goal-oriented autonomous problem-solving",
+          model: "openai/gpt-5.3-codex",
+        },
+      ]
+      const availableSkills = [
+        {
+          name: "playwright",
+          description: "Browser automation.",
+          location: "plugin",
+        },
+      ]
+
+      //#when
+      const result = buildSystemContent({
+        agentName: "mnemosyne",
+        availableCategories,
+        availableSkills,
+      })
+
+      //#then - categories are passed but should NOT appear in mnemosyne prepend
+      expect(result).not.toContain("`deep`")
+      expect(result).not.toContain("### AVAILABLE CATEGORIES")
+      expect(result).toContain("`playwright`")
+    })
+
+    test("combines mnemosyne prepend with skill content", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+      const { buildMnemosyneSystemPrepend } = require("./mnemosyne-plan-constants")
+      const skillContent = "You are a planning expert"
+
+      const availableSkills = [
+        {
+          name: "frontend-design",
+          description: "Create distinctive frontend interfaces.",
+          location: "user",
+        },
+      ]
+      const mnemPrepend = buildMnemosyneSystemPrepend(availableSkills)
+
+      //#when
+      const result = buildSystemContent({
+        skillContent,
+        agentName: "mnemosyne",
+        availableSkills,
+      })
+
+      //#then
+      expect(result).toContain(mnemPrepend)
+      expect(result).toContain(skillContent)
+      expect(result!.indexOf(mnemPrepend)).toBeLessThan(result!.indexOf(skillContent))
+    })
+
+    test("mnemosyne prepend contains sequential execution model", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+
+      //#when
+      const result = buildSystemContent({ agentName: "mnemosyne" })
+
+      //#then
+      expect(result).toContain("Heracles")
+      expect(result).toContain("sequentially")
+      expect(result).toContain("/execute-plan")
+      expect(result).not.toContain("Wave 1")
+      expect(result).not.toContain("Parallel Execution Graph")
+    })
+
+    test("'plan' agent does NOT get mnemosyne prepend", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+
+      //#when
+      const result = buildSystemContent({ agentName: "plan" })
+
+      //#then - plan agent gets plan prepend, not mnemosyne
+      expect(result).toContain("run_in_background=true")
+      expect(result).not.toContain("SYNCHRONOUS")
     })
   })
 

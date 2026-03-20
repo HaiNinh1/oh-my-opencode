@@ -28,6 +28,7 @@ import {
   POLLING_INTERVAL_MS,
   TASK_CLEANUP_DELAY_MS,
 } from "./constants"
+import { shouldAllowQuestion } from "../../tools/delegate-task/constants"
 
 import { subagentSessions } from "../claude-code-session-state"
 import { getTaskToastManager } from "../task-toast-manager"
@@ -357,9 +358,9 @@ export class BackgroundManager {
         system: input.skillContent,
         tools: (() => {
           const tools = {
-            task: false,
+            task: getAgentToolRestrictions(input.agent).task ?? true,
             call_omo_agent: true,
-            question: false,
+            question: shouldAllowQuestion(input.agent),
             ...getAgentToolRestrictions(input.agent),
           }
           setSessionTools(sessionID, tools)
@@ -630,9 +631,9 @@ export class BackgroundManager {
         ...(resumeVariant ? { variant: resumeVariant } : {}),
         tools: (() => {
           const tools = {
-            task: false,
+            task: getAgentToolRestrictions(existingTask.agent).task ?? true,
             call_omo_agent: true,
-            question: false,
+            question: shouldAllowQuestion(existingTask.agent),
             ...getAgentToolRestrictions(existingTask.agent),
           }
           setSessionTools(existingTask.sessionID!, tools)

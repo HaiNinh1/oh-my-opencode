@@ -4,6 +4,7 @@ import type { CategoriesConfig, GitMasterConfig, BrowserAutomationProvider, Agen
 import type {
   AvailableCategory,
   AvailableSkill,
+  AvailableToolInfo,
 } from "../../agents/dynamic-agent-prompt-builder"
 
 export type OpencodeClient = PluginInput["client"]
@@ -66,6 +67,7 @@ export interface DelegateTaskToolOptions {
   disabledSkills?: Set<string>
   availableCategories?: AvailableCategory[]
   availableSkills?: AvailableSkill[]
+  getAvailableToolInfos?: () => AvailableToolInfo[]
   agentOverrides?: AgentOverrides
   onSyncSessionCreated?: (event: SyncSessionCreatedEvent) => Promise<void>
   syncPollTimeoutMs?: number
@@ -82,4 +84,5 @@ export interface BuildSystemContentInput {
   agentName?: string
   availableCategories?: AvailableCategory[]
   availableSkills?: AvailableSkill[]
+  availableToolInfos?: AvailableToolInfo[]
 }
