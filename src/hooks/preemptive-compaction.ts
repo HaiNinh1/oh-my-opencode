@@ -1,171 +1,209 @@
-import { log } from "../shared/logger"
-import type { OhMyOpenCodeConfig } from "../config"
+import { log } from "../shared/logger";
+import type { OhMyOpenCodeConfig } from "../config";
 import {
   resolveActualContextLimit,
   type ContextLimitModelCacheState,
-} from "../shared/context-limit-resolver"
+} from "../shared/context-limit-resolver";
 
-import { resolveCompactionModel } from "./shared/compaction-model-resolver"
-const PREEMPTIVE_COMPACTION_TIMEOUT_MS = 120_000
+import { resolveCompactionModel } from "./shared/compaction-model-resolver";
 
-const PREEMPTIVE_COMPACTION_THRESHOLD = 0.78
+const PREEMPTIVE_COMPACTION_TIMEOUT_MS = 120_000;
+const COMPACTION_TOKEN_THRESHOLD = 30_000; // Trigger compaction when reaching 30k tokens to allow time for compaction before hitting limits on long responses
 
 interface TokenInfo {
-  input: number
-  output: number
-  reasoning: number
-  cache: { read: number; write: number }
+  input: number;
+  output: number;
+  reasoning: number;
+  cache: { read: number; write: number };
+  total?: number;
 }
 
-interface CachedCompactionState {
-  providerID: string
-  modelID: string
-  tokens: TokenInfo
+interface ModelLimits {
+  input: number;
+  output: number;
+  context: number;
 }
 
-async function withTimeout<TValue>(
-  promise: Promise<TValue>,
-  timeoutMs: number,
-  errorMessage: string,
-): Promise<TValue> {
-  let timeoutID: ReturnType<typeof setTimeout> | undefined
-
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    timeoutID = setTimeout(() => {
-      reject(new Error(errorMessage))
-    }, timeoutMs)
-  })
-
-  return await Promise.race([promise, timeoutPromise]).finally(() => {
-    if (timeoutID !== undefined) {
-      clearTimeout(timeoutID)
-    }
-  })
+interface CachedTokenState {
+  providerID: string;
+  modelID: string;
+  tokens: TokenInfo;
 }
 
 type PluginInput = {
   client: {
     session: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      messages: (...args: any[]) => any
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      summarize: (...args: any[]) => any
+      summarize: (...args: any[]) => any;
+    };
+  };
+  directory: string;
+};
+
+const withTimeout = async <TValue>(
+  promise: Promise<TValue>,
+  timeoutMs: number,
+  errorMessage: string,
+): Promise<TValue> => {
+  let timeoutID: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutID = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+  });
+
+  return await Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutID !== undefined) {
+      clearTimeout(timeoutID);
     }
-    tui: {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      showToast: (...args: any[]) => any
-    }
-  }
-  directory: string
-}
+  });
+};
 
 export function createPreemptiveCompactionHook(
   ctx: PluginInput,
   pluginConfig: OhMyOpenCodeConfig,
   modelCacheState?: ContextLimitModelCacheState,
 ) {
-  const compactionInProgress = new Set<string>()
-  const compactedSessions = new Set<string>()
-  const tokenCache = new Map<string, CachedCompactionState>()
+  const compacting = new Set<string>();
+  const tokens = new Map<string, CachedTokenState>();
+  const limits = new Map<string, ModelLimits>();
 
-  const toolExecuteAfter = async (
-    input: { tool: string; sessionID: string; callID: string },
-    _output: { title: string; output: string; metadata: unknown }
-  ) => {
-    const { sessionID } = input
-    if (compactedSessions.has(sessionID) || compactionInProgress.has(sessionID)) return
-
-    const cached = tokenCache.get(sessionID)
-    if (!cached) return
-
-    const actualLimit = resolveActualContextLimit(
-      cached.providerID,
-      cached.modelID,
-      modelCacheState,
+  const chatParams = async (input: unknown, _output: unknown) => {
+    const raw = input as Record<string, unknown> | undefined;
+    if (!raw) return;
+    const sessionID = raw.sessionID as string | undefined;
+    const model = raw.model as { limit?: Record<string, unknown> } | undefined;
+    if (!sessionID || !model?.limit) return;
+    const lim = model.limit;
+    if (
+      typeof lim.input !== "number" ||
+      typeof lim.output !== "number" ||
+      typeof lim.context !== "number"
     )
+      return;
+    limits.set(sessionID, {
+      input: lim.input,
+      output: lim.output,
+      context: lim.context,
+    });
+  };
 
-    if (actualLimit === null) {
-      log("[preemptive-compaction] Skipping preemptive compaction: unknown context limit for model", {
-        providerID: cached.providerID,
-        modelID: cached.modelID,
-      })
-      return
-    }
+  const event = async ({
+    event: ev,
+  }: {
+    event: { type: string; properties?: unknown };
+  }) => {
+    const props = ev.properties as Record<string, unknown> | undefined;
 
-    const lastTokens = cached.tokens
-    const totalInputTokens = (lastTokens?.input ?? 0) + (lastTokens?.cache?.read ?? 0)
-    const usageRatio = totalInputTokens / actualLimit
-
-    if (usageRatio < PREEMPTIVE_COMPACTION_THRESHOLD) return
-
-    const modelID = cached.modelID
-    if (!modelID) return
-
-    compactionInProgress.add(sessionID)
-
-    try {
-      const { providerID: targetProviderID, modelID: targetModelID } = resolveCompactionModel(
-        pluginConfig,
-        sessionID,
-        cached.providerID,
-        modelID
-      )
-
-      await withTimeout(
-        ctx.client.session.summarize({
-          path: { id: sessionID },
-          body: { providerID: targetProviderID, modelID: targetModelID, auto: true } as never,
-          query: { directory: ctx.directory },
-        }),
-        PREEMPTIVE_COMPACTION_TIMEOUT_MS,
-        `Compaction summarize timed out after ${PREEMPTIVE_COMPACTION_TIMEOUT_MS}ms`,
-      )
-
-      compactedSessions.add(sessionID)
-    } catch (error) {
-      log("[preemptive-compaction] Compaction failed", { sessionID, error: String(error) })
-    } finally {
-      compactionInProgress.delete(sessionID)
-    }
-  }
-
-  const eventHandler = async ({ event }: { event: { type: string; properties?: unknown } }) => {
-    const props = event.properties as Record<string, unknown> | undefined
-
-    if (event.type === "session.deleted") {
-      const sessionInfo = props?.info as { id?: string } | undefined
-      if (sessionInfo?.id) {
-        compactionInProgress.delete(sessionInfo.id)
-        compactedSessions.delete(sessionInfo.id)
-        tokenCache.delete(sessionInfo.id)
+    if (ev.type === "session.deleted") {
+      const info = props?.info as { id?: string } | undefined;
+      if (info?.id) {
+        compacting.delete(info.id);
+        tokens.delete(info.id);
+        limits.delete(info.id);
       }
-      return
+      return;
     }
 
-    if (event.type === "message.updated") {
-      const info = props?.info as {
-        role?: string
-        sessionID?: string
-        providerID?: string
-        modelID?: string
-        finish?: boolean
-        tokens?: TokenInfo
-      } | undefined
+    if (ev.type === "session.compacted") {
+      const sessionID = props?.sessionID as string | undefined;
+      if (sessionID) tokens.delete(sessionID);
+      return;
+    }
 
-      if (!info || info.role !== "assistant" || !info.finish) return
-      if (!info.sessionID || !info.providerID || !info.tokens) return
+    if (ev.type === "message.updated") {
+      const info = props?.info as
+        | {
+            role?: string;
+            sessionID?: string;
+            providerID?: string;
+            modelID?: string;
+            finish?: boolean;
+            summary?: boolean;
+            tokens?: TokenInfo;
+          }
+        | undefined;
 
-      tokenCache.set(info.sessionID, {
+      if (!info || info.role !== "assistant" || !info.finish || info.summary)
+        return;
+      if (!info.sessionID || !info.providerID || !info.tokens) return;
+
+      tokens.set(info.sessionID, {
         providerID: info.providerID,
         modelID: info.modelID ?? "",
         tokens: info.tokens,
-      })
-      compactedSessions.delete(info.sessionID)
+      });
+      return;
     }
-  }
+
+    if (ev.type === "session.idle") {
+      const sessionID = props?.sessionID as string | undefined;
+      if (!sessionID || compacting.has(sessionID)) return;
+
+      const cached = tokens.get(sessionID);
+      const lim = limits.get(sessionID);
+      if (!cached || !lim) return;
+
+      const actualLimit = resolveActualContextLimit(
+        cached.providerID,
+        cached.modelID,
+        modelCacheState,
+      );
+      const effectiveContextLimit = actualLimit ?? lim.context;
+
+      const count =
+        cached.tokens.total ??
+        cached.tokens.input +
+          cached.tokens.output +
+          cached.tokens.cache.read +
+          cached.tokens.cache.write;
+      const remaining = effectiveContextLimit - count;
+      const minimumRemaining = Math.max(COMPACTION_TOKEN_THRESHOLD, lim.output);
+
+      if (remaining >= minimumRemaining) return;
+
+      log("[preemptive-compaction] End-of-turn compaction", {
+        sessionID,
+        count,
+        remaining,
+        contextLimit: effectiveContextLimit,
+        configuredContextLimit: lim.context,
+        outputLimit: lim.output,
+      });
+
+      compacting.add(sessionID);
+
+      try {
+        const { providerID, modelID } = resolveCompactionModel(
+          pluginConfig,
+          sessionID,
+          cached.providerID,
+          cached.modelID,
+        );
+
+        await withTimeout(
+          ctx.client.session.summarize({
+            path: { id: sessionID },
+            body: { providerID, modelID, auto: true } as never,
+            query: { directory: ctx.directory },
+          }),
+          PREEMPTIVE_COMPACTION_TIMEOUT_MS,
+          `Compaction timed out after ${PREEMPTIVE_COMPACTION_TIMEOUT_MS}ms`,
+        );
+      } catch (error) {
+        log("[preemptive-compaction] Compaction failed", {
+          sessionID,
+          error: String(error),
+        });
+      } finally {
+        compacting.delete(sessionID);
+      }
+    }
+  };
 
   return {
-    "tool.execute.after": toolExecuteAfter,
-    event: eventHandler,
-  }
+    "chat.params": chatParams,
+    event,
+  };
 }

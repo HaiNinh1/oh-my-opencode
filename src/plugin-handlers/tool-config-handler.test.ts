@@ -21,6 +21,31 @@ function createParams(overrides: {
 }
 
 describe("applyToolConfig", () => {
+  describe("#given hermes-only tools", () => {
+    describe("#when applying tool config", () => {
+      it.each([
+        "atlas",
+        "sisyphus",
+        "hephaestus",
+        "prometheus",
+        "sisyphus-junior",
+        "mnemosyne",
+        "heracles",
+      ])("#then should deny hermes-only tools for %s agent", (agentName) => {
+        const params = createParams({ agents: [agentName] })
+
+        applyToolConfig(params)
+
+        const agent = params.agentResult[agentName] as {
+          permission: Record<string, unknown>
+        }
+        expect(agent.permission.get_agent_prompts).toBe("deny")
+        expect(agent.permission.resolve_atlas_context).toBe("deny")
+        expect(agent.permission.resolve_heracles_context).toBe("deny")
+      })
+    })
+  })
+
   describe("#given task_system is enabled", () => {
     describe("#when applying tool config", () => {
       it("#then should deny todowrite and todoread globally", () => {

@@ -1,10 +1,21 @@
 import { z } from "zod"
 import { DynamicContextPruningConfigSchema } from "./dynamic-context-pruning"
 
+export const PreemptiveCompactionConfigSchema = z.union([
+  z.boolean(),
+  z.object({
+    /** Context window usage ratio (0-1) at which preemptive compaction triggers (default: 0.78) */
+    threshold: z.number().min(0).max(1).optional(),
+  }),
+])
+
+export type PreemptiveCompactionConfig = z.infer<typeof PreemptiveCompactionConfigSchema>
+
 export const ExperimentalConfigSchema = z.object({
   aggressive_truncation: z.boolean().optional(),
   auto_resume: z.boolean().optional(),
-  preemptive_compaction: z.boolean().optional(),
+  /** Enable preemptive compaction, or pass an object to configure threshold (default threshold: 0.78) */
+  preemptive_compaction: PreemptiveCompactionConfigSchema.optional(),
   /** Truncate all tool outputs, not just whitelisted tools (default: false). Tool output truncator is enabled by default - disable via disabled_hooks. */
   truncate_all_tool_outputs: z.boolean().optional(),
   /** Dynamic context pruning configuration */

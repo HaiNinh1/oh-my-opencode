@@ -1,7 +1,7 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { detectKeywordsWithType, extractPromptText } from "./detector"
 import { isPlannerAgent } from "./constants"
-import { log } from "../../shared"
+import { log, isPassthroughAgent } from "../../shared"
 import {
   isSystemDirective,
   removeSystemReminders,
@@ -44,6 +44,11 @@ export function createKeywordDetectorHook(ctx: PluginInput, _collector?: Context
       }
 
       const currentAgent = getSessionAgent(input.sessionID) ?? input.agent
+
+      if (isPassthroughAgent(currentAgent)) {
+        log(`[keyword-detector] Skipping passthrough agent`, { sessionID: input.sessionID, agent: currentAgent })
+        return
+      }
 
       // Remove system-reminder content to prevent automated system messages from triggering mode keywords
       const cleanText = removeSystemReminders(promptText)

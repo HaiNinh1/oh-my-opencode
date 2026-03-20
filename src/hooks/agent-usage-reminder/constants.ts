@@ -26,27 +26,5 @@ export const AGENT_TOOLS = new Set([
 ]);
 
 export const REMINDER_MESSAGE = `
-[Agent Usage Reminder]
-
-You called a search/fetch tool directly without leveraging specialized agents.
-
-RECOMMENDED: Use task with explore/librarian agents for better results:
-
-\`\`\`
-// Parallel exploration - fire multiple agents simultaneously
-task(agent="explore", prompt="Find all files matching pattern X")
-task(agent="explore", prompt="Search for implementation of Y") 
-task(agent="librarian", prompt="Lookup documentation for Z")
-
-// Then continue your work while they run in background
-// System will notify you when each completes
-\`\`\`
-
-WHY:
-- Agents can perform deeper, more thorough searches
-- Background tasks run in parallel, saving time
-- Specialized agents have domain expertise
-- Reduces context window usage in main session
-
-ALWAYS prefer: Multiple parallel task calls > Direct tool calls
+[Agent Usage Reminder] You called a search/fetch tool directly. Fire parallel \`task(subagent_type="explore")\` or \`task(subagent_type="librarian")\` with \`run_in_background=true\` for deeper, context-efficient results.
 `;

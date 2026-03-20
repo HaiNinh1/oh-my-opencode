@@ -2,6 +2,7 @@ import type { ToolDefinition } from "@opencode-ai/plugin"
 
 import type {
   AvailableCategory,
+  AvailableToolInfo,
 } from "../agents/dynamic-agent-prompt-builder"
 import type { OhMyOpenCodeConfig } from "../config"
 import type { PluginContext, ToolsRecord } from "./types"
@@ -25,6 +26,8 @@ import {
   createTaskList,
   createTaskUpdateTool,
   createHashlineEditTool,
+  createResolveAtlasContextTool,
+  createResolveHeraclesContextTool,
 } from "../tools"
 import { getMainSessionID } from "../features/claude-code-session-state"
 import { filterDisabledTools } from "../shared/disabled-tools"
@@ -36,6 +39,7 @@ import { normalizeToolArgSchemas } from "./normalize-tool-arg-schemas"
 
 export type ToolRegistryResult = {
   filteredTools: ToolsRecord
+  availableToolInfos: AvailableToolInfo[]
   taskSystemEnabled: boolean
 }
 
@@ -62,6 +66,8 @@ export function createToolRegistry(args: {
   )
   const lookAt = isMultimodalLookerEnabled ? createLookAt(ctx) : null
 
+  let toolInfosHolder: AvailableToolInfo[] = []
+
   const delegateTask = createDelegateTask({
     manager: managers.backgroundManager,
     client: ctx.client,
@@ -74,6 +80,7 @@ export function createToolRegistry(args: {
     disabledSkills: skillContext.disabledSkills,
     availableCategories,
     availableSkills: skillContext.availableSkills,
+    getAvailableToolInfos: () => toolInfosHolder,
     syncPollTimeoutMs: pluginConfig.background_task?.syncPollTimeoutMs,
     onSyncSessionCreated: async (event) => {
       log("[index] onSyncSessionCreated callback", {
@@ -95,6 +102,9 @@ export function createToolRegistry(args: {
   })
 
   const getSessionIDForMcp = (): string => getMainSessionID() || ""
+
+  const resolveAtlasContextTool = createResolveAtlasContextTool(ctx.directory, getSessionIDForMcp())
+  const resolveHeraclesContextTool = createResolveHeraclesContextTool(ctx.directory, getSessionIDForMcp())
 
   const skillMcpTool = createSkillMcpTool({
     manager: managers.skillMcpManager,
@@ -140,6 +150,8 @@ export function createToolRegistry(args: {
     ...(lookAt ? { look_at: lookAt } : {}),
     task: delegateTask,
     skill_mcp: skillMcpTool,
+    resolve_atlas_context: resolveAtlasContextTool,
+    resolve_heracles_context: resolveHeraclesContextTool,
     skill: skillTool,
     interactive_bash,
     ...taskToolsRecord,
@@ -152,8 +164,16 @@ export function createToolRegistry(args: {
 
   const filteredTools = filterDisabledTools(allTools, pluginConfig.disabled_tools)
 
+  const availableToolInfos: AvailableToolInfo[] = Object.entries(filteredTools).map(([name, def]) => ({
+    name,
+    description: def.description,
+  }))
+
+  toolInfosHolder = availableToolInfos
+
   return {
     filteredTools,
+    availableToolInfos,
     taskSystemEnabled,
   }
 }

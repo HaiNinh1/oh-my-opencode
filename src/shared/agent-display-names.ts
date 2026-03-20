@@ -4,6 +4,7 @@
  * Display names include suffixes for UI/logs (e.g., "Sisyphus (Ultraworker)").
  */
 export const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  hermes: "Hermes (Task Router)",
   sisyphus: "Sisyphus (Ultraworker)",
   hephaestus: "Hephaestus (Deep Agent)",
   prometheus: "Prometheus (Plan Builder)",
@@ -15,6 +16,8 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   librarian: "librarian",
   explore: "explore",
   "multimodal-looker": "multimodal-looker",
+  mnemosyne: "Mnemosyne (Compact Planner)",
+  heracles: "Heracles (Direct Executor)",
 }
 
 /**

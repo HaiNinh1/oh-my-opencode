@@ -1,6 +1,6 @@
-import type { HookName, OhMyOpenCodeConfig } from "../../config"
-import type { ModelCacheState } from "../../plugin-state"
-import type { PluginContext } from "../types"
+import type { HookName, OhMyOpenCodeConfig } from "../../config";
+import type { ModelCacheState } from "../../plugin-state";
+import type { PluginContext } from "../types";
 
 import {
   createCommentCheckerHooks,
@@ -15,107 +15,153 @@ import {
   createReadImageResizerHook,
   createJsonErrorRecoveryHook,
   createTodoDescriptionOverrideHook,
-} from "../../hooks"
+  createHermesRoutingGuardHook,
+} from "../../hooks";
 import {
   getOpenCodeVersion,
   isOpenCodeVersionAtLeast,
   log,
   OPENCODE_NATIVE_AGENTS_INJECTION_VERSION,
-} from "../../shared"
-import { safeCreateHook } from "../../shared/safe-create-hook"
+} from "../../shared";
+import { safeCreateHook } from "../../shared/safe-create-hook";
 
 export type ToolGuardHooks = {
-  commentChecker: ReturnType<typeof createCommentCheckerHooks> | null
-  toolOutputTruncator: ReturnType<typeof createToolOutputTruncatorHook> | null
-  directoryAgentsInjector: ReturnType<typeof createDirectoryAgentsInjectorHook> | null
-  directoryReadmeInjector: ReturnType<typeof createDirectoryReadmeInjectorHook> | null
-  emptyTaskResponseDetector: ReturnType<typeof createEmptyTaskResponseDetectorHook> | null
-  rulesInjector: ReturnType<typeof createRulesInjectorHook> | null
-  tasksTodowriteDisabler: ReturnType<typeof createTasksTodowriteDisablerHook> | null
-  writeExistingFileGuard: ReturnType<typeof createWriteExistingFileGuardHook> | null
-  hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null
-  jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
-  readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
-  todoDescriptionOverride: ReturnType<typeof createTodoDescriptionOverrideHook> | null
-}
+  commentChecker: ReturnType<typeof createCommentCheckerHooks> | null;
+  toolOutputTruncator: ReturnType<typeof createToolOutputTruncatorHook> | null;
+  directoryAgentsInjector: ReturnType<
+    typeof createDirectoryAgentsInjectorHook
+  > | null;
+  directoryReadmeInjector: ReturnType<
+    typeof createDirectoryReadmeInjectorHook
+  > | null;
+  emptyTaskResponseDetector: ReturnType<
+    typeof createEmptyTaskResponseDetectorHook
+  > | null;
+  rulesInjector: ReturnType<typeof createRulesInjectorHook> | null;
+  tasksTodowriteDisabler: ReturnType<
+    typeof createTasksTodowriteDisablerHook
+  > | null;
+  writeExistingFileGuard: ReturnType<
+    typeof createWriteExistingFileGuardHook
+  > | null;
+  hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null;
+  jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null;
+  readImageResizer: ReturnType<typeof createReadImageResizerHook> | null;
+  todoDescriptionOverride: ReturnType<
+    typeof createTodoDescriptionOverrideHook
+  > | null;
+  hermesRoutingGuard: ReturnType<typeof createHermesRoutingGuardHook> | null;
+};
 
 export function createToolGuardHooks(args: {
-  ctx: PluginContext
-  pluginConfig: OhMyOpenCodeConfig
-  modelCacheState: ModelCacheState
-  isHookEnabled: (hookName: HookName) => boolean
-  safeHookEnabled: boolean
+  ctx: PluginContext;
+  pluginConfig: OhMyOpenCodeConfig;
+  modelCacheState: ModelCacheState;
+  isHookEnabled: (hookName: HookName) => boolean;
+  safeHookEnabled: boolean;
 }): ToolGuardHooks {
-  const { ctx, pluginConfig, modelCacheState, isHookEnabled, safeHookEnabled } = args
+  const {
+    ctx,
+    pluginConfig,
+    modelCacheState,
+    isHookEnabled,
+    safeHookEnabled,
+  } = args;
   const safeHook = <T>(hookName: HookName, factory: () => T): T | null =>
-    safeCreateHook(hookName, factory, { enabled: safeHookEnabled })
+    safeCreateHook(hookName, factory, { enabled: safeHookEnabled });
 
   const commentChecker = isHookEnabled("comment-checker")
-    ? safeHook("comment-checker", () => createCommentCheckerHooks(pluginConfig.comment_checker))
-    : null
+    ? safeHook("comment-checker", () =>
+        createCommentCheckerHooks(pluginConfig.comment_checker),
+      )
+    : null;
 
   const toolOutputTruncator = isHookEnabled("tool-output-truncator")
     ? safeHook("tool-output-truncator", () =>
         createToolOutputTruncatorHook(ctx, {
           modelCacheState,
           experimental: pluginConfig.experimental,
-        }))
-    : null
+        }),
+      )
+    : null;
 
-  let directoryAgentsInjector: ReturnType<typeof createDirectoryAgentsInjectorHook> | null = null
+  let directoryAgentsInjector: ReturnType<
+    typeof createDirectoryAgentsInjectorHook
+  > | null = null;
   if (isHookEnabled("directory-agents-injector")) {
-    const currentVersion = getOpenCodeVersion()
+    const currentVersion = getOpenCodeVersion();
     const hasNativeSupport =
-      currentVersion !== null && isOpenCodeVersionAtLeast(OPENCODE_NATIVE_AGENTS_INJECTION_VERSION)
+      currentVersion !== null &&
+      isOpenCodeVersionAtLeast(OPENCODE_NATIVE_AGENTS_INJECTION_VERSION);
     if (hasNativeSupport) {
       log("directory-agents-injector auto-disabled due to native OpenCode support", {
         currentVersion,
         nativeVersion: OPENCODE_NATIVE_AGENTS_INJECTION_VERSION,
-      })
+      });
     } else {
       directoryAgentsInjector = safeHook("directory-agents-injector", () =>
-        createDirectoryAgentsInjectorHook(ctx, modelCacheState))
+        createDirectoryAgentsInjectorHook(ctx, modelCacheState),
+      );
     }
   }
 
   const directoryReadmeInjector = isHookEnabled("directory-readme-injector")
     ? safeHook("directory-readme-injector", () =>
-        createDirectoryReadmeInjectorHook(ctx, modelCacheState))
-    : null
+        createDirectoryReadmeInjectorHook(ctx, modelCacheState),
+      )
+    : null;
 
   const emptyTaskResponseDetector = isHookEnabled("empty-task-response-detector")
-    ? safeHook("empty-task-response-detector", () => createEmptyTaskResponseDetectorHook(ctx))
-    : null
+    ? safeHook("empty-task-response-detector", () =>
+        createEmptyTaskResponseDetectorHook(ctx),
+      )
+    : null;
 
   const rulesInjector = isHookEnabled("rules-injector")
     ? safeHook("rules-injector", () =>
-        createRulesInjectorHook(ctx, modelCacheState))
-    : null
+        createRulesInjectorHook(ctx, modelCacheState),
+      )
+    : null;
 
   const tasksTodowriteDisabler = isHookEnabled("tasks-todowrite-disabler")
     ? safeHook("tasks-todowrite-disabler", () =>
-        createTasksTodowriteDisablerHook({ experimental: pluginConfig.experimental }))
-    : null
+        createTasksTodowriteDisablerHook({
+          experimental: pluginConfig.experimental,
+        }),
+      )
+    : null;
 
   const writeExistingFileGuard = isHookEnabled("write-existing-file-guard")
-    ? safeHook("write-existing-file-guard", () => createWriteExistingFileGuardHook(ctx))
-    : null
+    ? safeHook("write-existing-file-guard", () =>
+        createWriteExistingFileGuardHook(ctx),
+      )
+    : null;
 
   const hashlineReadEnhancer = isHookEnabled("hashline-read-enhancer")
-    ? safeHook("hashline-read-enhancer", () => createHashlineReadEnhancerHook(ctx, { hashline_edit: { enabled: pluginConfig.hashline_edit ?? false } }))
-    : null
+    ? safeHook("hashline-read-enhancer", () =>
+        createHashlineReadEnhancerHook(ctx, {
+          hashline_edit: { enabled: pluginConfig.hashline_edit ?? false },
+        }),
+      )
+    : null;
 
   const jsonErrorRecovery = isHookEnabled("json-error-recovery")
     ? safeHook("json-error-recovery", () => createJsonErrorRecoveryHook(ctx))
-    : null
+    : null;
 
   const readImageResizer = isHookEnabled("read-image-resizer")
     ? safeHook("read-image-resizer", () => createReadImageResizerHook(ctx))
-    : null
+    : null;
 
   const todoDescriptionOverride = isHookEnabled("todo-description-override")
-    ? safeHook("todo-description-override", () => createTodoDescriptionOverrideHook())
-    : null
+    ? safeHook("todo-description-override", () =>
+        createTodoDescriptionOverrideHook(),
+      )
+    : null;
+
+  const hermesRoutingGuard = isHookEnabled("hermes-routing-guard")
+    ? safeHook("hermes-routing-guard", () => createHermesRoutingGuardHook(ctx))
+    : null;
 
   return {
     commentChecker,
@@ -130,5 +176,6 @@ export function createToolGuardHooks(args: {
     jsonErrorRecovery,
     readImageResizer,
     todoDescriptionOverride,
-  }
+    hermesRoutingGuard,
+  };
 }

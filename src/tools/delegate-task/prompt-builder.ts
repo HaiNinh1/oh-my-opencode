@@ -1,5 +1,6 @@
 import type { BuildSystemContentInput } from "./types"
 import { buildPlanAgentSystemPrepend, isPlanAgent } from "./constants"
+import { buildMnemosyneSystemPrepend, isMnemosyneAgent } from "./mnemosyne-plan-constants"
 import { buildSystemContentWithTokenLimit } from "./token-limiter"
 
 const FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT = 24000
@@ -40,11 +41,14 @@ export function buildSystemContent(input: BuildSystemContentInput): string | und
     agentName,
     availableCategories,
     availableSkills,
+    availableToolInfos,
   } = input
 
   const planAgentPrepend = isPlanAgent(agentName)
     ? buildPlanAgentSystemPrepend(availableCategories, availableSkills)
-    : ""
+    : isMnemosyneAgent(agentName)
+      ? buildMnemosyneSystemPrepend(availableSkills, availableToolInfos)
+      : ""
 
   const effectiveMaxPromptTokens = maxPromptTokens
     ?? (usesFreeOrLocalModel(model) ? FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT : undefined)

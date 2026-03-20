@@ -4,6 +4,7 @@ import { subagentSessions, syncSubagentSessions } from "../../features/claude-co
 import { clearSessionFallbackChain, setSessionFallbackChain } from "../../hooks/model-fallback/hook"
 import { getAgentToolRestrictions, log } from "../../shared"
 import type { FallbackEntry } from "../../shared/model-requirements"
+import { shouldAllowQuestion } from "../delegate-task/constants"
 import { waitForCompletion } from "./completion-poller"
 import { processMessages } from "./message-processor"
 import { createOrGetSession } from "./session-creator"
@@ -85,7 +86,7 @@ export async function executeSync(
           tools: {
             ...getAgentToolRestrictions(args.subagent_type),
             task: false,
-            question: false,
+            question: shouldAllowQuestion(args.subagent_type),
           },
           parts: [{ type: "text", text: args.prompt }],
         },

@@ -1,6 +1,6 @@
 import type { DelegateTaskArgs, OpencodeClient } from "./types"
-import { isPlanFamily } from "./constants"
 import { buildTaskPrompt } from "./prompt-builder"
+import { shouldAllowQuestion } from "./constants"
 import {
   promptSyncWithModelSuggestionRetry,
   promptWithModelSuggestionRetry,
@@ -9,6 +9,7 @@ import { formatDetailedError } from "./error-formatting"
 import { getAgentToolRestrictions } from "../../shared/agent-tool-restrictions"
 import { setSessionTools } from "../../shared/session-tools-store"
 import { createInternalAgentTextPart } from "../../shared/internal-initiator-marker"
+import { isHermesAgent } from "../../hooks/hermes-routing-guard/agent-matcher"
 
 type SendSyncPromptDeps = {
   promptWithModelSuggestionRetry: typeof promptWithModelSuggestionRetry
@@ -40,16 +41,18 @@ export async function sendSyncPrompt(
     categoryModel: { providerID: string; modelID: string; variant?: string } | undefined
     toastManager: { removeTask: (id: string) => void } | null | undefined
     taskId: string | undefined
+    parentAgent?: string
   },
   deps: SendSyncPromptDeps = sendSyncPromptDeps
 ): Promise<string | null> {
-  const allowTask = isPlanFamily(input.agentToUse)
   const effectivePrompt = buildTaskPrompt(input.args.prompt, input.agentToUse)
+  const agentRestrictions = getAgentToolRestrictions(input.agentToUse)
+  const allowQuestion = shouldAllowQuestion(input.agentToUse)
   const tools = {
-    task: allowTask,
+    task: agentRestrictions.task ?? true,
     call_omo_agent: true,
-    question: false,
-    ...getAgentToolRestrictions(input.agentToUse),
+    question: allowQuestion,
+    ...agentRestrictions,
   }
   setSessionTools(input.sessionID, tools)
 
@@ -59,7 +62,9 @@ export async function sendSyncPrompt(
       agent: input.agentToUse,
       system: input.systemContent,
       tools,
-      parts: [createInternalAgentTextPart(effectivePrompt)],
+      parts: [isHermesAgent(input.parentAgent)
+        ? { type: "text" as const, text: effectivePrompt }
+        : createInternalAgentTextPart(effectivePrompt)],
       ...(input.categoryModel
         ? { model: { providerID: input.categoryModel.providerID, modelID: input.categoryModel.modelID } }
         : {}),

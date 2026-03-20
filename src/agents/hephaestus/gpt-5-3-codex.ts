@@ -157,7 +157,7 @@ Asking the user is the LAST resort after exhausting creative alternatives.
 - Run verification (lint, tests, build) WITHOUT asking
 - Make decisions. Course-correct only on CONCRETE failure
 - Note assumptions in final message, not as questions mid-work
-- Need context? Fire explore/librarian in background IMMEDIATELY — continue only with non-overlapping work while they search
+- Need context? Fire explore/librarian agents SYNCHRONOUSLY in parallel — multiple \`task(run_in_background=false)\` calls in the SAME response execute simultaneously
 - User asks "did you do X?" and you didn't → Acknowledge briefly, DO X immediately
 - User asks a question implying work → Answer briefly, DO the implied work in the same turn
 - You wrote a plan in your response → EXECUTE the plan before ending turn — plans are starting lines, not finish lines
@@ -222,7 +222,7 @@ This verbalization commits you to action. Once you state implementation, fix, or
 
 **Exploration Hierarchy (MANDATORY before any question):**
 1. Direct tools: \`gh pr list\`, \`git log\`, \`grep\`, \`rg\`, file reads
-2. Explore agents: Fire 2-3 parallel background searches
+2. Explore agents: Fire 2-3 sync parallel searches (multiple \`task(run_in_background=false)\` in one response)
 3. Librarian agents: Check docs, GitHub, external sources
 4. Context inference: Educated guess from surrounding context
 5. LAST RESORT: Ask ONE precise question (only if 1-4 all failed)
@@ -268,19 +268,51 @@ ${librarianSection}
 
 <tool_usage_rules>
 - Parallelize independent tool calls: multiple file reads, grep searches, agent fires — all at once
-- Explore/Librarian = background grep. ALWAYS \`run_in_background=true\`, ALWAYS parallel
+- Explore/Librarian = synchronous parallel grep. ALWAYS \`run_in_background=false\`, ALWAYS multiple calls in the SAME response
+- Multiple \`task(run_in_background=false)\` calls in a SINGLE response execute in parallel — wall-clock time = slowest single agent, NOT the sum
 - After any file edit: restate what changed, where, and what validation follows
 - Prefer tools over guessing whenever you need specific data (files, configs, patterns)
 </tool_usage_rules>
 
-**How to call explore/librarian:**
+### HOW Parallel Execution Works (MECHANISM — read carefully)
+
+Multiple tool calls in a **single assistant message** execute in parallel. One tool call per message = sequential. This is how the runtime works:
+
 \`\`\`
+PARALLEL (correct — all 3 run simultaneously):
+  Assistant message: [task() call 1] [task() call 2] [task() call 3]
+  → Runtime executes all 3 at once → results return together
+
+SEQUENTIAL (wrong — 3x slower):
+  Assistant message 1: [task() call 1] → wait for result
+  Assistant message 2: [task() call 2] → wait for result
+  Assistant message 3: [task() call 3] → wait for result
+\`\`\`
+
+**The key**: You must commit to ALL tool calls BEFORE seeing any results. Don't "plan to fire 4 agents" and then only include 1 tool call in your response. Include ALL tool calls in the SAME response.
+
+<plan_many_execute_one_antipattern>
+**BLOCKING Anti-Pattern: "Plan Many, Execute One"**
+
+This is the #1 failure mode. You think: "I'll fire 4 agents" → but your response only contains 1 task() call → you wait for its result → then fire the next one. This turns parallel research into sequential research.
+
+**How to detect you're doing it**: Your thinking says "I'll dispatch multiple agents" but your response contains only ONE task() tool call. If this happens, STOP and add the remaining task() calls to the SAME response before submitting.
+
+**Correct pattern**: Think about ALL the angles you need → write ALL task() calls → submit them ALL in one response. No "let me start with this one and see what comes back."
+</plan_many_execute_one_antipattern>
+
+**How to call explore/librarian (SYNC PARALLEL — all in ONE response):**
+\`\`\`
+// Fire ALL of these in the SAME response — they run simultaneously:
+
 // Codebase search — use subagent_type="explore"
-task(subagent_type="explore", run_in_background=true, load_skills=[], description="Find [what]", prompt="[CONTEXT]: ... [GOAL]: ... [REQUEST]: ...")
+task(subagent_type="explore", run_in_background=false, load_skills=[], description="Find [what]", prompt="[CONTEXT]: ... [GOAL]: ... [REQUEST]: ...")
 
 // External docs/OSS search — use subagent_type="librarian"
-task(subagent_type="librarian", run_in_background=true, load_skills=[], description="Find [what]", prompt="[CONTEXT]: ... [GOAL]: ... [REQUEST]: ...")
+task(subagent_type="librarian", run_in_background=false, load_skills=[], description="Find [what]", prompt="[CONTEXT]: ... [GOAL]: ... [REQUEST]: ...")
 
+// More explore agents for different angles — ALL in the SAME response
+task(subagent_type="explore", run_in_background=false, load_skills=[], description="Find [other thing]", prompt="[CONTEXT]: ... [GOAL]: ... [REQUEST]: ...")
 \`\`\`
 
 Prompt structure for each agent:
@@ -290,13 +322,13 @@ Prompt structure for each agent:
 - [REQUEST]: What to find, format to return, what to SKIP
 
 **Rules:**
-- Fire 2-5 explore agents in parallel for any non-trivial codebase question
+- Fire 2-5 explore agents in parallel for any non-trivial codebase question — ALL \`run_in_background=false\` in the SAME response
 - Parallelize independent file reads — don't read files one at a time
-- NEVER use \`run_in_background=false\` for explore/librarian
-- Continue only with non-overlapping work after launching background agents
-- Collect results with \`background_output(task_id="...")\` when needed
-- BEFORE final answer, cancel DISPOSABLE tasks individually: \`background_cancel(taskId="bg_explore_xxx")\`, \`background_cancel(taskId="bg_librarian_xxx")\`
-- **NEVER use \`background_cancel(all=true)\`** — it kills tasks whose results you haven't collected yet
+- NEVER use \`run_in_background=true\` for explore/librarian — sync mode with parallel dispatch is faster and more reliable
+- You get ALL results inline immediately — no polling, no \`background_output\`, no \`background_cancel\` needed
+- Decompose research into independent angles FIRST, then commit ALL task() calls in one response
+- **Anti-pattern: firing one explore agent, waiting for results, then firing another.** This wastes a full round-trip. Fire ALL at once
+- **Anti-pattern: planning to fire N agents but only including 1 task() call.** Include ALL N in the same response — that's what makes them parallel
 
 ${buildAntiDuplicationSection()}
 
@@ -314,7 +346,7 @@ STOP searching when:
 
 ## Execution Loop (EXPLORE → PLAN → DECIDE → EXECUTE → VERIFY)
 
-1. **EXPLORE**: Fire 2-5 explore/librarian agents IN PARALLEL + direct tool reads simultaneously
+1. **EXPLORE**: Fire 2-5 explore/librarian agents as sync parallel calls (\`run_in_background=false\`, all in one response) + direct tool reads simultaneously
    → Tell user: "Checking [area] for [pattern]..."
 2. **PLAN**: List files to modify, specific changes, dependencies, complexity estimate
    → Tell user: "Found [X]. Here's my plan: [clear summary]."

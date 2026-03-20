@@ -2,9 +2,11 @@ import type { BackgroundTask, LaunchInput, ResumeInput } from "./types"
 import type { OpencodeClient, OnSubagentSessionCreated, QueueItem } from "./constants"
 import { TMUX_CALLBACK_DELAY_MS } from "./constants"
 import { log, getAgentToolRestrictions, promptWithModelSuggestionRetry, createInternalAgentTextPart } from "../../shared"
+import { shouldAllowQuestion } from "../../tools/delegate-task/constants"
 import { subagentSessions } from "../claude-code-session-state"
 import { getTaskToastManager } from "../task-toast-manager"
 import { isInsideTmux } from "../../shared/tmux"
+import { isHermesAgent } from "../../hooks/hermes-routing-guard/agent-matcher"
 import type { ConcurrencyManager } from "./concurrency"
 
 export interface SpawnerContext {
@@ -140,12 +142,14 @@ export async function startTask(
       ...(launchVariant ? { variant: launchVariant } : {}),
       system: input.skillContent,
       tools: {
-        task: false,
+        task: getAgentToolRestrictions(input.agent).task ?? true,
         call_omo_agent: true,
-        question: false,
+        question: shouldAllowQuestion(input.agent),
         ...getAgentToolRestrictions(input.agent),
       },
-      parts: [createInternalAgentTextPart(input.prompt)],
+      parts: [isHermesAgent(input.parentAgent)
+        ? { type: "text" as const, text: input.prompt }
+        : createInternalAgentTextPart(input.prompt)],
     },
   }).catch((error) => {
     log("[background-agent] promptAsync error:", error)
@@ -224,9 +228,9 @@ export async function resumeTask(
       ...(resumeModel ? { model: resumeModel } : {}),
       ...(resumeVariant ? { variant: resumeVariant } : {}),
       tools: {
-        task: false,
+        task: getAgentToolRestrictions(task.agent).task ?? true,
         call_omo_agent: true,
-        question: false,
+        question: shouldAllowQuestion(task.agent),
         ...getAgentToolRestrictions(task.agent),
       },
       parts: [createInternalAgentTextPart(input.prompt)],

@@ -6,7 +6,7 @@ const {
 } = require("bun:test")
 
 bunDescribe("sendSyncPrompt", () => {
-  bunTest("passes question=false via tools parameter", async () => {
+  bunTest("passes question=false for non-plan-family agents", async () => {
     //#given
     const { sendSyncPrompt } = require("./sync-prompt-sender")
 
@@ -43,6 +43,86 @@ bunDescribe("sendSyncPrompt", () => {
     //#then
     bunExpect(promptAsync).toHaveBeenCalled()
     bunExpect(promptArgs.body.tools.question).toBe(false)
+  })
+
+  bunTest("passes question=true for prometheus agent (plan family)", async () => {
+    //#given
+    const { sendSyncPrompt } = require("./sync-prompt-sender")
+
+    let promptArgs: any
+    const promptAsync = bunMock(async (input: any) => {
+      promptArgs = input
+      return { data: {} }
+    })
+
+    const mockClient = {
+      session: {
+        promptAsync,
+      },
+    }
+
+    const input = {
+      sessionID: "test-session",
+      agentToUse: "prometheus",
+      args: {
+        description: "test plan",
+        prompt: "create a plan",
+        run_in_background: false,
+        load_skills: [],
+      },
+      systemContent: undefined,
+      categoryModel: undefined,
+      toastManager: null,
+      taskId: undefined,
+    }
+
+    //#when
+    await sendSyncPrompt(mockClient, input)
+
+    //#then
+    bunExpect(promptAsync).toHaveBeenCalled()
+    bunExpect(promptArgs.body.tools.question).toBe(true)
+    bunExpect(promptArgs.body.tools.task).toBe(true)
+  })
+
+  bunTest("passes question=true for plan agent (plan family)", async () => {
+    //#given
+    const { sendSyncPrompt } = require("./sync-prompt-sender")
+
+    let promptArgs: any
+    const promptAsync = bunMock(async (input: any) => {
+      promptArgs = input
+      return { data: {} }
+    })
+
+    const mockClient = {
+      session: {
+        promptAsync,
+      },
+    }
+
+    const input = {
+      sessionID: "test-session",
+      agentToUse: "plan",
+      args: {
+        description: "test plan",
+        prompt: "create a plan",
+        run_in_background: false,
+        load_skills: [],
+      },
+      systemContent: undefined,
+      categoryModel: undefined,
+      toastManager: null,
+      taskId: undefined,
+    }
+
+    //#when
+    await sendSyncPrompt(mockClient, input)
+
+    //#then
+    bunExpect(promptAsync).toHaveBeenCalled()
+    bunExpect(promptArgs.body.tools.question).toBe(true)
+    bunExpect(promptArgs.body.tools.task).toBe(true)
   })
 
   bunTest("applies agent tool restrictions for explore agent", async () => {

@@ -29,6 +29,12 @@ export function applyToolConfig(params: {
     ? { todowrite: "deny", todoread: "deny" }
     : {}
 
+  const denyHermesOnlyTools = {
+    get_agent_prompts: "deny",
+    resolve_atlas_context: "deny",
+    resolve_heracles_context: "deny",
+  }
+
   params.config.tools = {
     ...(params.config.tools as Record<string, unknown>),
     "grep_app_*": false,
@@ -65,6 +71,7 @@ export function applyToolConfig(params: {
       call_omo_agent: "deny",
       "task_*": "allow",
       teammate: "allow",
+      ...denyHermesOnlyTools,
       ...denyTodoTools,
     };
   }
@@ -77,6 +84,7 @@ export function applyToolConfig(params: {
       question: questionPermission,
       "task_*": "allow",
       teammate: "allow",
+      ...denyHermesOnlyTools,
       ...denyTodoTools,
     };
   }
@@ -87,6 +95,7 @@ export function applyToolConfig(params: {
       call_omo_agent: "deny",
       task: "allow",
       question: questionPermission,
+      ...denyHermesOnlyTools,
       ...denyTodoTools,
     };
   }
@@ -99,6 +108,7 @@ export function applyToolConfig(params: {
       question: questionPermission,
       "task_*": "allow",
       teammate: "allow",
+      ...denyHermesOnlyTools,
       ...denyTodoTools,
     };
   }
@@ -109,6 +119,33 @@ export function applyToolConfig(params: {
       task: "allow",
       "task_*": "allow",
       teammate: "allow",
+      ...denyHermesOnlyTools,
+      ...denyTodoTools,
+    };
+  }
+  const mnemosyne = agentByKey(params.agentResult, "mnemosyne");
+  if (mnemosyne) {
+    mnemosyne.permission = {
+      ...mnemosyne.permission,
+      call_omo_agent: "deny",
+      task: "allow",
+      question: questionPermission,
+      "task_*": "allow",
+      teammate: "allow",
+      ...denyHermesOnlyTools,
+      ...denyTodoTools,
+    };
+  }
+  const heracles = agentByKey(params.agentResult, "heracles");
+  if (heracles) {
+    heracles.permission = {
+      ...heracles.permission,
+      call_omo_agent: "deny",
+      task: "allow",
+      question: questionPermission,
+      "task_*": "allow",
+      teammate: "allow",
+      ...denyHermesOnlyTools,
       ...denyTodoTools,
     };
   }

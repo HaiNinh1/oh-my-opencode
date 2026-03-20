@@ -1,296 +1,434 @@
 /// <reference types="bun-types" />
 
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test"
+import { describe, it, expect, mock, beforeEach } from "bun:test";
 
-const ANTHROPIC_CONTEXT_ENV_KEY = "ANTHROPIC_1M_CONTEXT"
-const VERTEX_CONTEXT_ENV_KEY = "VERTEX_ANTHROPIC_1M_CONTEXT"
-
-const originalAnthropicContextEnv = process.env[ANTHROPIC_CONTEXT_ENV_KEY]
-const originalVertexContextEnv = process.env[VERTEX_CONTEXT_ENV_KEY]
-
-function resetContextLimitEnv(): void {
-  if (originalAnthropicContextEnv === undefined) {
-    delete process.env[ANTHROPIC_CONTEXT_ENV_KEY]
-  } else {
-    process.env[ANTHROPIC_CONTEXT_ENV_KEY] = originalAnthropicContextEnv
-  }
-
-  if (originalVertexContextEnv === undefined) {
-    delete process.env[VERTEX_CONTEXT_ENV_KEY]
-  } else {
-    process.env[VERTEX_CONTEXT_ENV_KEY] = originalVertexContextEnv
-  }
-}
-
-const logMock = mock(() => {})
+const logMock = mock(() => {});
 
 mock.module("../shared/logger", () => ({
   log: logMock,
-}))
+}));
 
-const { createPreemptiveCompactionHook } = await import("./preemptive-compaction")
+const { createPreemptiveCompactionHook } =
+  await import("./preemptive-compaction");
 
 function createMockCtx() {
   return {
     client: {
       session: {
-        messages: mock(() => Promise.resolve({ data: [] })),
         summarize: mock(() => Promise.resolve({})),
-      },
-      tui: {
-        showToast: mock(() => Promise.resolve()),
       },
     },
     directory: "/tmp/test",
-  }
+  };
 }
 
 function setupImmediateTimeouts(): () => void {
-  const originalSetTimeout = globalThis.setTimeout
-  const originalClearTimeout = globalThis.clearTimeout
+  const originalSetTimeout = globalThis.setTimeout;
+  const originalClearTimeout = globalThis.clearTimeout;
 
-  globalThis.setTimeout = ((callback: (...args: unknown[]) => void, _delay?: number, ...args: unknown[]) => {
-    callback(...args)
-    return 1 as unknown as ReturnType<typeof setTimeout>
-  }) as typeof setTimeout
+  globalThis.setTimeout = ((
+    callback: (...args: unknown[]) => void,
+    _delay?: number,
+    ...args: unknown[]
+  ) => {
+    callback(...args);
+    return 1 as unknown as ReturnType<typeof setTimeout>;
+  }) as typeof setTimeout;
 
-  globalThis.clearTimeout = (() => {}) as typeof clearTimeout
+  globalThis.clearTimeout = (() => {}) as typeof clearTimeout;
 
   return () => {
-    globalThis.setTimeout = originalSetTimeout
-    globalThis.clearTimeout = originalClearTimeout
-  }
+    globalThis.setTimeout = originalSetTimeout;
+    globalThis.clearTimeout = originalClearTimeout;
+  };
+}
+
+// Helper: emit chat.params to cache model limits for a session
+async function cacheModelLimits(
+  hook: ReturnType<typeof createPreemptiveCompactionHook>,
+  sessionID: string,
+  limits: { input: number; output: number; context: number },
+) {
+  await hook["chat.params"]({ sessionID, model: { limit: limits } }, {});
+}
+
+// Helper: emit message.updated for a finished assistant message
+async function emitAssistantFinished(
+  hook: ReturnType<typeof createPreemptiveCompactionHook>,
+  opts: {
+    sessionID: string;
+    providerID?: string;
+    modelID?: string;
+    tokens: {
+      input: number;
+      output: number;
+      reasoning: number;
+      cache: { read: number; write: number };
+    };
+  },
+) {
+  await hook.event({
+    event: {
+      type: "message.updated",
+      properties: {
+        info: {
+          role: "assistant",
+          sessionID: opts.sessionID,
+          providerID: opts.providerID ?? "anthropic",
+          modelID: opts.modelID ?? "claude-sonnet-4-6",
+          finish: true,
+          tokens: opts.tokens,
+        },
+      },
+    },
+  });
+}
+
+// Helper: emit session.idle
+async function emitIdle(
+  hook: ReturnType<typeof createPreemptiveCompactionHook>,
+  sessionID: string,
+) {
+  await hook.event({
+    event: {
+      type: "session.idle",
+      properties: { sessionID },
+    },
+  });
 }
 
 describe("preemptive-compaction", () => {
-  let ctx: ReturnType<typeof createMockCtx>
+  let ctx: ReturnType<typeof createMockCtx>;
 
   beforeEach(() => {
-    ctx = createMockCtx()
-    logMock.mockClear()
-    delete process.env[ANTHROPIC_CONTEXT_ENV_KEY]
-    delete process.env[VERTEX_CONTEXT_ENV_KEY]
-  })
+    ctx = createMockCtx();
+    logMock.mockClear();
+  });
 
-  afterEach(() => {
-    resetContextLimitEnv()
-  })
-
-  // #given event caches token info from message.updated
-  // #when tool.execute.after is called
-  // #then session.messages() should NOT be called
-  it("should use cached token info instead of fetching session.messages()", async () => {
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_test1"
-
-    // Simulate message.updated with token info below threshold
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: {
-              input: 50000,
-              output: 1000,
-              reasoning: 0,
-              cache: { read: 5000, write: 0 },
-            },
-          },
-        },
-      },
-    })
-
-    const output = { title: "", output: "test", metadata: null }
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      output
-    )
-
-    expect(ctx.client.session.messages).not.toHaveBeenCalled()
-  })
-
-  // #given no cached token info
-  // #when tool.execute.after is called
-  // #then should skip without fetching
-  it("should skip gracefully when no cached token info exists", async () => {
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-
-    const output = { title: "", output: "test", metadata: null }
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID: "ses_none", callID: "call_1" },
-      output
-    )
-
-    expect(ctx.client.session.messages).not.toHaveBeenCalled()
-  })
-
-  // #given usage above 78% threshold
-  // #when tool.execute.after runs
+  // #given token count leaves less room than output limit
+  // #when session.idle fires
   // #then should trigger summarize
-  it("should trigger compaction when usage exceeds threshold", async () => {
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_high"
+  it("should trigger compaction when remaining context < output limit", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_compact";
 
-    // 170K input + 10K cache = 180K → 90% of 200K
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: {
-              input: 170000,
-              output: 1000,
-              reasoning: 0,
-              cache: { read: 10000, write: 0 },
-            },
-          },
-        },
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    // 180K total tokens → remaining = 200K - 180K = 20K < 32K output
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 160_000,
+        output: 10_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
       },
-    })
+    });
 
-    const output = { title: "", output: "test", metadata: null }
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      output
-    )
+    await emitIdle(hook, sessionID);
 
-    expect(ctx.client.session.messages).not.toHaveBeenCalled()
-    expect(ctx.client.session.summarize).toHaveBeenCalled()
-  })
+    expect(ctx.client.session.summarize).toHaveBeenCalled();
+  });
 
-  it("should trigger compaction for google-vertex-anthropic provider", async () => {
-    //#given google-vertex-anthropic usage above threshold
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_vertex_anthropic_high"
+  // #given token count leaves enough room for output
+  // #when session.idle fires
+  // #then should NOT trigger summarize
+  it("should not trigger compaction when remaining context >= output limit", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_ok";
 
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "google-vertex-anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: {
-              input: 170000,
-              output: 1000,
-              reasoning: 0,
-              cache: { read: 10000, write: 0 },
-            },
-          },
-        },
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    // 100K total → remaining = 200K - 100K = 100K >= 32K
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 80_000,
+        output: 10_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
       },
-    })
+    });
 
-    //#when tool.execute.after runs
-    const output = { title: "", output: "test", metadata: null }
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      output
-    )
+    await emitIdle(hook, sessionID);
 
-    //#then summarize should be triggered
-    expect(ctx.client.session.summarize).toHaveBeenCalled()
-  })
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
+
+  // #given no model limits cached (chat.params never fired)
+  // #when session.idle fires
+  // #then should skip without triggering
+  it("should skip when no model limits are cached", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_no_limits";
+
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 190_000,
+        output: 5_000,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+    });
+
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
+
+  // #given no token info cached (no assistant message finished)
+  // #when session.idle fires
+  // #then should skip
+  it("should skip when no token info is cached", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_no_tokens";
+
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
+
+  // #given session.compacted fires after compaction
+  // #then token cache should be cleared, preventing double-trigger
+  it("should clear token cache on session.compacted", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_compacted";
+
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 170_000,
+        output: 10_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
+      },
+    });
+
+    // Simulate compaction completed
+    await hook.event({
+      event: { type: "session.compacted", properties: { sessionID } },
+    });
+
+    // session.idle should NOT trigger because token cache was cleared
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
 
   // #given session deleted
-  // #then cache should be cleaned up
-  it("should clean up cache on session.deleted", async () => {
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_del"
+  // #then all caches should be cleaned up
+  it("should clean up all caches on session.deleted", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_del";
 
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: { input: 180000, output: 0, reasoning: 0, cache: { read: 10000, write: 0 } },
-          },
-        },
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 180_000,
+        output: 10_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
       },
-    })
+    });
 
     await hook.event({
       event: {
         type: "session.deleted",
         properties: { info: { id: sessionID } },
       },
-    })
+    });
 
-    const output = { title: "", output: "test", metadata: null }
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      output
-    )
+    await emitIdle(hook, sessionID);
 
-    expect(ctx.client.session.summarize).not.toHaveBeenCalled()
-  })
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
 
-  it("should log summarize errors instead of swallowing them", async () => {
-    //#given
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_log_error"
-    const summarizeError = new Error("summarize failed")
-    ctx.client.session.summarize.mockRejectedValueOnce(summarizeError)
+  // #given summarize fails
+  // #then should log error and allow retry on next idle
+  it("should log summarize errors and allow retry", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_error";
+    const error = new Error("summarize failed");
+    ctx.client.session.summarize.mockRejectedValueOnce(error);
 
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: {
-              input: 170000,
-              output: 0,
-              reasoning: 0,
-              cache: { read: 10000, write: 0 },
-            },
-          },
-        },
-      },
-    })
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
 
-    //#when
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_log" },
-      { title: "", output: "test", metadata: null }
-    )
-
-    //#then
-    expect(logMock).toHaveBeenCalledWith("[preemptive-compaction] Compaction failed", {
+    await emitAssistantFinished(hook, {
       sessionID,
-      error: String(summarizeError),
-    })
-  })
+      tokens: {
+        input: 170_000,
+        output: 10_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
+      },
+    });
 
-  it("should use 1M limit when model cache flag is enabled", async () => {
-    //#given
-    const hook = createPreemptiveCompactionHook(ctx as never, {}, {
-      anthropicContext1MEnabled: true,
-    })
-    const sessionID = "ses_1m_flag"
+    await emitIdle(hook, sessionID);
 
+    expect(logMock).toHaveBeenCalledWith(
+      "[preemptive-compaction] Compaction failed",
+      {
+        sessionID,
+        error: String(error),
+      },
+    );
+
+    // Should allow retry on next idle (compacting lock released)
+    ctx.client.session.summarize.mockResolvedValueOnce({});
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).toHaveBeenCalledTimes(2);
+  });
+
+  // #given first compaction succeeded and context grew again
+  // #when new high-token message arrives and idle fires
+  // #then should trigger compaction again
+  it("should allow re-compaction when context grows after successful compaction", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_recompact";
+
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    // First compaction cycle
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 170_000,
+        output: 5_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
+      },
+    });
+    await emitIdle(hook, sessionID);
+    expect(ctx.client.session.summarize).toHaveBeenCalledTimes(1);
+
+    // session.compacted clears token cache
+    await hook.event({
+      event: { type: "session.compacted", properties: { sessionID } },
+    });
+
+    // Context grew again after compaction
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 175_000,
+        output: 3_000,
+        reasoning: 0,
+        cache: { read: 5_000, write: 0 },
+      },
+    });
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).toHaveBeenCalledTimes(2);
+  });
+
+  // #given model with large output limit (100k)
+  // #when remaining is 50k (less than output)
+  // #then should trigger
+  it("should respect model-specific output limit", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_large_output";
+
+    // o3-style model: 200K context, 100K output
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 100_000,
+      context: 200_000,
+    });
+
+    // 160K total → remaining = 40K < 100K output
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 140_000,
+        output: 15_000,
+        reasoning: 0,
+        cache: { read: 5_000, write: 0 },
+      },
+    });
+
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).toHaveBeenCalled();
+  });
+
+  // #given model with 1M context
+  // #when remaining is well above output
+  // #then should NOT trigger
+  it("should work correctly with large context models", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_1m";
+
+    await cacheModelLimits(hook, sessionID, {
+      input: 1_000_000,
+      output: 32_000,
+      context: 1_000_000,
+    });
+
+    // 200K total → remaining = 800K, well above 32K output
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 180_000,
+        output: 10_000,
+        reasoning: 0,
+        cache: { read: 10_000, write: 0 },
+      },
+    });
+
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
+
+  // #given summary/compaction assistant message
+  // #then should NOT cache its tokens (prevents compaction loop)
+  it("should ignore summary assistant messages", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_summary";
+
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    // Summary message with high tokens — should be ignored
     await hook.event({
       event: {
         type: "message.updated",
@@ -301,128 +439,108 @@ describe("preemptive-compaction", () => {
             providerID: "anthropic",
             modelID: "claude-sonnet-4-6",
             finish: true,
+            summary: true,
             tokens: {
-              input: 300000,
-              output: 1000,
+              input: 195_000,
+              output: 3_000,
               reasoning: 0,
               cache: { read: 0, write: 0 },
             },
           },
         },
       },
-    })
+    });
 
-    //#when
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      { title: "", output: "test", metadata: null }
-    )
+    await emitIdle(hook, sessionID);
 
-    //#then
-    expect(ctx.client.session.summarize).not.toHaveBeenCalled()
-  })
-
-  it("should keep env var fallback when model cache flag is disabled", async () => {
-    //#given
-    process.env[ANTHROPIC_CONTEXT_ENV_KEY] = "true"
-    const hook = createPreemptiveCompactionHook(ctx as never, {}, {
-      anthropicContext1MEnabled: false,
-    })
-    const sessionID = "ses_env_fallback"
-
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: {
-              input: 300000,
-              output: 1000,
-              reasoning: 0,
-              cache: { read: 0, write: 0 },
-            },
-          },
-        },
-      },
-    })
-
-    //#when
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      { title: "", output: "test", metadata: null }
-    )
-
-    //#then
-    expect(ctx.client.session.summarize).not.toHaveBeenCalled()
-  })
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
 
   it("should clear in-progress lock when summarize times out", async () => {
-    //#given
-    const restoreTimeouts = setupImmediateTimeouts()
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_timeout"
+    const restoreTimeouts = setupImmediateTimeouts();
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_timeout";
 
     ctx.client.session.summarize
       .mockImplementationOnce(() => new Promise(() => {}))
-      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
 
     try {
-      await hook.event({
-        event: {
-          type: "message.updated",
-          properties: {
-            info: {
-              role: "assistant",
-              sessionID,
-              providerID: "anthropic",
-              modelID: "claude-sonnet-4-6",
-              finish: true,
-              tokens: {
-                input: 170000,
-                output: 0,
-                reasoning: 0,
-                cache: { read: 10000, write: 0 },
-              },
-            },
-          },
-        },
-      })
+      await cacheModelLimits(hook, sessionID, {
+        input: 200_000,
+        output: 32_000,
+        context: 200_000,
+      });
 
-      //#when
-      await hook["tool.execute.after"](
-        { tool: "bash", sessionID, callID: "call_timeout_1" },
-        { title: "", output: "test", metadata: null },
-      )
-
-      await hook["tool.execute.after"](
-        { tool: "bash", sessionID, callID: "call_timeout_2" },
-        { title: "", output: "test", metadata: null },
-      )
-
-      //#then
-      expect(ctx.client.session.summarize).toHaveBeenCalledTimes(2)
-      expect(logMock).toHaveBeenCalledWith("[preemptive-compaction] Compaction failed", {
+      await emitAssistantFinished(hook, {
         sessionID,
-        error: expect.stringContaining("Compaction summarize timed out"),
-      })
+        tokens: {
+          input: 170_000,
+          output: 10_000,
+          reasoning: 0,
+          cache: { read: 10_000, write: 0 },
+        },
+      });
+
+      // First idle: summarize hangs → times out
+      await emitIdle(hook, sessionID);
+
+      // Second idle: lock released, should retry
+      await emitIdle(hook, sessionID);
+
+      expect(ctx.client.session.summarize).toHaveBeenCalledTimes(2);
+      expect(logMock).toHaveBeenCalledWith(
+        "[preemptive-compaction] Compaction failed",
+        {
+          sessionID,
+          error: expect.stringContaining("Compaction timed out"),
+        },
+      );
     } finally {
-      restoreTimeouts()
+      restoreTimeouts();
     }
-  })
+  });
 
-  // #given first compaction succeeded and context grew again
-  // #when tool.execute.after runs after new high-token message
-  // #then should trigger compaction again (re-compaction)
-  it("should allow re-compaction when context grows after successful compaction", async () => {
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never)
-    const sessionID = "ses_recompact"
+  // #given chat.params called with model missing limit.input
+  // #then should not cache (user guarantees input exists, but defensive)
+  it("should handle chat.params with missing model limits gracefully", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_no_input";
 
-    // given - first compaction cycle
+    // Model without limit.input — should not cache
+    await hook["chat.params"](
+      { sessionID, model: { limit: { context: 200_000, output: 32_000 } } },
+      {},
+    );
+
+    await emitAssistantFinished(hook, {
+      sessionID,
+      tokens: {
+        input: 195_000,
+        output: 3_000,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+    });
+
+    await emitIdle(hook, sessionID);
+
+    expect(ctx.client.session.summarize).not.toHaveBeenCalled();
+  });
+
+  // #given tokens.total is present
+  // #then should use it instead of summing components
+  it("should prefer tokens.total when available", async () => {
+    const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
+    const sessionID = "ses_total";
+
+    await cacheModelLimits(hook, sessionID, {
+      input: 200_000,
+      output: 32_000,
+      context: 200_000,
+    });
+
+    // Components sum to 100K, but total says 185K (provider-reported)
     await hook.event({
       event: {
         type: "message.updated",
@@ -434,137 +552,20 @@ describe("preemptive-compaction", () => {
             modelID: "claude-sonnet-4-6",
             finish: true,
             tokens: {
-              input: 170000,
-              output: 0,
+              total: 185_000,
+              input: 80_000,
+              output: 10_000,
               reasoning: 0,
-              cache: { read: 10000, write: 0 },
+              cache: { read: 10_000, write: 0 },
             },
           },
         },
       },
-    })
+    });
 
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      { title: "", output: "test", metadata: null }
-    )
+    await emitIdle(hook, sessionID);
 
-    expect(ctx.client.session.summarize).toHaveBeenCalledTimes(1)
-
-    // when - new message with high tokens (context grew after compaction)
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "anthropic",
-            modelID: "claude-sonnet-4-6",
-            finish: true,
-            tokens: {
-              input: 170000,
-              output: 0,
-              reasoning: 0,
-              cache: { read: 10000, write: 0 },
-            },
-          },
-        },
-      },
-    })
-
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_2" },
-      { title: "", output: "test", metadata: null }
-    )
-
-    // then - summarize should fire again
-    expect(ctx.client.session.summarize).toHaveBeenCalledTimes(2)
-  })
-
-  // #given modelContextLimitsCache has model-specific limit (256k)
-  // #when tokens are above default 78% of 200k but below 78% of 256k
-  // #then should NOT trigger compaction
-  it("should use model-specific context limit from modelContextLimitsCache", async () => {
-    const modelContextLimitsCache = new Map<string, number>()
-    modelContextLimitsCache.set("opencode/kimi-k2.5-free", 262144)
-
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never, {
-      anthropicContext1MEnabled: false,
-      modelContextLimitsCache,
-    })
-    const sessionID = "ses_kimi_limit"
-
-    // 180k total tokens — above 78% of 200k (156k) but below 78% of 256k (204k)
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "opencode",
-            modelID: "kimi-k2.5-free",
-            finish: true,
-            tokens: {
-              input: 170000,
-              output: 0,
-              reasoning: 0,
-              cache: { read: 10000, write: 0 },
-            },
-          },
-        },
-      },
-    })
-
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      { title: "", output: "test", metadata: null }
-    )
-
-    expect(ctx.client.session.summarize).not.toHaveBeenCalled()
-  })
-
-  // #given modelContextLimitsCache has model-specific limit (256k)
-  // #when tokens exceed 78% of model-specific limit
-  // #then should trigger compaction
-  it("should trigger compaction at model-specific threshold", async () => {
-    const modelContextLimitsCache = new Map<string, number>()
-    modelContextLimitsCache.set("opencode/kimi-k2.5-free", 262144)
-
-    const hook = createPreemptiveCompactionHook(ctx as never, {} as never, {
-      anthropicContext1MEnabled: false,
-      modelContextLimitsCache,
-    })
-    const sessionID = "ses_kimi_trigger"
-
-    // 210k total — above 78% of 256k (≈204k)
-    await hook.event({
-      event: {
-        type: "message.updated",
-        properties: {
-          info: {
-            role: "assistant",
-            sessionID,
-            providerID: "opencode",
-            modelID: "kimi-k2.5-free",
-            finish: true,
-            tokens: {
-              input: 200000,
-              output: 0,
-              reasoning: 0,
-              cache: { read: 10000, write: 0 },
-            },
-          },
-        },
-      },
-    })
-
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      { title: "", output: "test", metadata: null }
-    )
-
-    expect(ctx.client.session.summarize).toHaveBeenCalled()
-  })
-})
+    // remaining = 200K - 185K = 15K < 32K → should compact
+    expect(ctx.client.session.summarize).toHaveBeenCalled();
+  });
+});

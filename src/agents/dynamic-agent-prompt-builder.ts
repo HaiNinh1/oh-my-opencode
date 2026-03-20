@@ -23,6 +23,11 @@ export interface AvailableCategory {
   model?: string
 }
 
+export interface AvailableToolInfo {
+  name: string
+  description: string
+}
+
 export function categorizeTools(toolNames: string[]): AvailableTool[] {
   return toolNames.map((name) => {
     let category: AvailableTool["category"] = "other"
@@ -102,7 +107,7 @@ export function buildToolSelectionTable(
   }
 
   rows.push("")
-  rows.push("**Default flow**: explore/librarian (background) + tools → oracle (if required)")
+  rows.push("**Default flow**: explore/librarian + tools → oracle (if required)")
 
   return rows.join("\n")
 }
@@ -183,100 +188,36 @@ export function buildCategorySkillsDelegationGuide(categories: AvailableCategory
     skillsSection = `#### Available Skills (via \`skill\` tool)
 
 **Built-in**: ${builtinNames}
-**⚡ YOUR SKILLS (PRIORITY)**: ${customNames}
+**Your Skills**: ${customNames}
 
-> User-installed skills OVERRIDE built-in defaults. ALWAYS prefer YOUR SKILLS when domain matches.
-> Full skill descriptions → use the \`skill\` tool to check before EVERY delegation.`
+> Load skills via \`skill\` tool when their domain matches your current task.`
   } else if (customSkills.length > 0) {
     skillsSection = `#### Available Skills (via \`skill\` tool)
 
-**⚡ YOUR SKILLS (PRIORITY)**: ${customNames}
+**Your Skills**: ${customNames}
 
-> User-installed skills OVERRIDE built-in defaults. ALWAYS prefer YOUR SKILLS when domain matches.
-> Full skill descriptions → use the \`skill\` tool to check before EVERY delegation.`
+> Load skills via \`skill\` tool when their domain matches your current task.`
   } else if (builtinSkills.length > 0) {
     skillsSection = `#### Available Skills (via \`skill\` tool)
 
 **Built-in**: ${builtinNames}
 
-> Full skill descriptions → use the \`skill\` tool to check before EVERY delegation.`
+> Load skills via \`skill\` tool when their domain matches your current task.`
   } else {
     skillsSection = ""
   }
 
-  return `### Category + Skills Delegation System
+  return `### Category + Skills System (Available for Delegation)
 
-**task() combines categories and skills for optimal task execution.**
+When you choose to delegate via \`task()\`, categories and skills are available:
 
-#### Available Categories (Domain-Optimized Models)
-
-Each category is configured with a model optimized for that domain. Read the description to understand when to use it.
+#### Available Categories
 
 ${categoryRows.join("\n")}
 
 ${skillsSection}
 
----
-
-### MANDATORY: Category + Skill Selection Protocol
-
-**STEP 1: Select Category**
-- Read each category's description
-- Match task requirements to category domain
-- Select the category whose domain BEST fits the task
-
-**STEP 2: Evaluate ALL Skills**
-Check the \`skill\` tool for available skills and their descriptions. For EVERY skill, ask:
-> "Does this skill's expertise domain overlap with my task?"
-
-- If YES → INCLUDE in \`load_skills=[...]\`
-- If NO → OMIT (no justification needed)
-${customSkills.length > 0 ? `
-> **User-installed skills get PRIORITY.** When in doubt, INCLUDE rather than omit.` : ""}
-
----
-
-### Delegation Pattern
-
-\`\`\`typescript
-task(
-  category="[selected-category]",
-  load_skills=["skill-1", "skill-2"],  // Include ALL relevant skills — ESPECIALLY user-installed ones
-  prompt="..."
-)
-\`\`\`
-
-**ANTI-PATTERN (will produce poor results):**
-\`\`\`typescript
-task(category="...", load_skills=[], run_in_background=false, prompt="...")  // Empty load_skills without justification
-\`\`\`
-
----
-
-### Category Domain Matching (ZERO TOLERANCE)
-
-Every delegation MUST use the category that matches the task's domain. Mismatched categories produce measurably worse output because each category runs on a model optimized for that specific domain.
-
-**VISUAL WORK = ALWAYS \`visual-engineering\`. NO EXCEPTIONS.**
-
-Any task involving UI, UX, CSS, styling, layout, animation, design, or frontend components MUST go to \`visual-engineering\`. Never delegate visual work to \`quick\`, \`unspecified-*\`, or any other category.
-
-\`\`\`typescript
-// CORRECT: Visual work → visual-engineering category
-task(category="visual-engineering", load_skills=["frontend-ui-ux"], prompt="Redesign the sidebar layout with new spacing...")
-
-// WRONG: Visual work in wrong category — WILL PRODUCE INFERIOR RESULTS
-task(category="quick", load_skills=[], prompt="Redesign the sidebar layout with new spacing...")
-\`\`\`
-
-| Task Domain | MUST Use Category |
-|---|---|
-| UI, styling, animations, layout, design | \`visual-engineering\` |
-| Hard logic, architecture decisions, algorithms | \`ultrabrain\` |
-| Autonomous research + end-to-end implementation | \`deep\` |
-| Single-file typo, trivial config change | \`quick\` |
-
-**When in doubt about category, it is almost never \`quick\` or \`unspecified-*\`. Match the domain.**`
+To delegate: \`task(category="...", load_skills=["..."], prompt="...")\``
 }
 
 export function buildOracleSection(agents: AvailableAgent[]): string {
@@ -289,7 +230,7 @@ export function buildOracleSection(agents: AvailableAgent[]): string {
   return `<Oracle_Usage>
 ## Oracle — Read-Only High-IQ Consultant
 
-Oracle is a read-only, expensive, high-quality reasoning model for debugging and architecture. Consultation only.
+Oracle is a read-only, high-quality reasoning model for debugging and architecture. Consultation only — Oracle advises, you decide and act.
 
 ### WHEN to Consult (Oracle FIRST, then implement):
 
@@ -299,18 +240,36 @@ ${useWhen.map((w) => `- ${w}`).join("\n")}
 
 ${avoidWhen.map((w) => `- ${w}`).join("\n")}
 
-### Usage Pattern:
+### How to Consult Oracle:
+
 Briefly announce "Consulting Oracle for [reason]" before invocation.
 
 **Exception**: This is the ONLY case where you announce before acting. For all other work, start immediately without status updates.
 
-### Oracle Background Task Policy:
+Always call Oracle synchronously with \`run_in_background=false\`. Oracle results return inline — no polling, no background management needed.
 
-**Collect Oracle results before your final answer. No exceptions.**
+**Every Oracle call MUST include a structured payload:**
 
-- Oracle takes minutes. When done with your own work: **end your response** — wait for the \`<system-reminder>\`.
-- Do NOT poll \`background_output\` on a running Oracle. The notification will come.
-- Never cancel Oracle.
+\`\`\`
+task(subagent_type="oracle", run_in_background=false, load_skills=[], description="Consult Oracle on [topic]", prompt="
+  PROBLEM: [What you're stuck on — 1-2 sentences]
+  EVIDENCE: [What you found from explore/librarian/tools — concrete findings, not vague summaries]
+  FAILED ATTEMPTS: [What you already tried and why it didn't work — include specific errors or reasoning]
+  HYPOTHESES: [Your current competing theories — what you think might be going on]
+  QUESTION: [One precise question Oracle can answer with read-only analysis]
+")
+\`\`\`
+
+**Vague Oracle calls = wasted consultation.** "Help me with X" is not a valid Oracle prompt. Be specific about what you tried, what you found, and what decision you need Oracle to make.
+
+### After Oracle Returns:
+
+**Immediately resume control.** Oracle advises — you decide and execute.
+
+1. Summarize Oracle's answer in 1-2 bullets (for your own reasoning, not as output to user)
+2. Decide the next concrete action based on Oracle's analysis
+3. Execute that action immediately — do NOT end your turn after receiving Oracle's response
+4. If Oracle's advice conflicts with your evidence, follow up with Oracle using \`session_id\` from the previous result — share the conflicting evidence and ask Oracle to reconcile
 </Oracle_Usage>`
 }
 
@@ -321,7 +280,6 @@ export function buildHardBlocksSection(): string {
     "- Speculate about unread code — **Never**",
     "- Leave code in broken state after failures — **Never**",
     "- `background_cancel(all=true)` — **Never.** Always cancel individually by taskId.",
-    "- Delivering final answer before collecting Oracle result — **Never.**",
   ]
 
   return `## Hard Blocks (NEVER violate)
@@ -336,9 +294,8 @@ export function buildAntiPatternsSection(): string {
     "- **Testing**: Deleting failing tests to \"pass\"",
     "- **Search**: Firing agents for single-line typos or obvious syntax errors",
     "- **Debugging**: Shotgun debugging, random changes",
-    "- **Background Tasks**: Polling `background_output` on running tasks — end response and wait for notification",
+    "- **Sequential Research**: Firing one explore/librarian agent, waiting for results, then firing the next — fire ALL in parallel in the same response",
     "- **Delegation Duplication**: Delegating exploration to explore/librarian and then manually doing the same search yourself",
-    "- **Oracle**: Delivering answer without collecting Oracle results",
   ]
 
   return `## Anti-Patterns (BLOCKING violations)

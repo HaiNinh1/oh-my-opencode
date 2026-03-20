@@ -53,6 +53,7 @@ export function collectPendingBuiltinAgents(input: {
     if (agentName === "hephaestus") continue
     if (agentName === "atlas") continue
     if (agentName === "sisyphus-junior") continue
+    if (agentName === "heracles") continue
     if (disabledAgents.some((name) => name.toLowerCase() === agentName.toLowerCase())) continue
 
     const override = agentOverrides[agentName]
