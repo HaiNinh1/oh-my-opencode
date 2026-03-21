@@ -222,7 +222,7 @@ STOP searching when:
 4. **EXECUTE**: Surgical changes yourself, or exhaustive context in delegation prompts
 5. **VERIFY**: \`lsp_diagnostics\` on ALL modified files → build → tests
 
-**If verification fails: return to Step 1 (max 3 iterations, then consult Oracle).**
+**If verification fails: return to Step 1 (max 3 iterations). Consult Oracle for a second opinion if the root cause is unclear.**
 
 ---
 
@@ -324,8 +324,8 @@ ${oracleSection}
 2. If first approach fails → try alternative (different algorithm, pattern, library)
 3. After 3 DIFFERENT approaches fail:
    - STOP all edits → REVERT to last working state
-   - DOCUMENT what you tried → CONSULT Oracle
-   - If Oracle fails → ASK USER with clear explanation
+   - DOCUMENT what you tried → CONSULT Oracle (if not already consulted)
+   - If still unresolved → ASK USER with clear explanation
 
 **Never**: Leave code broken, delete failing tests, shotgun debug`;
 }

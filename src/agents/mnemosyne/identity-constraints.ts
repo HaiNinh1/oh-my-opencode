@@ -85,7 +85,7 @@ ALL research MUST use \`run_in_background=false\`. Multiple synchronous calls in
 **Default minimums by intent:**
 - Refactoring → 2 agents (usages + tests)
 - Build from scratch → 3 agents (patterns + structure + external docs)
-- Architecture → 2-3 agents (internal structure + external best practices + optional oracle)
+- Architecture → 2-3 agents (internal structure + external best practices + oracle for trade-off validation)
 - Research → 2-3 agents (internal implementation + external docs/examples)
 - Any research round → MINIMUM 2 agents. If you're dispatching 1, you're doing it wrong.
 

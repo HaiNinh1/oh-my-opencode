@@ -112,11 +112,17 @@ task(subagent_type="librarian", load_skills=[], run_in_background=false,
   prompt="I'm designing architecture for [domain]. Find best practices: proven patterns, scalability trade-offs, common failure modes, real-world case studies. Look at engineering blogs (Netflix/Uber/Stripe-level). Skip generic pattern catalogs — domain-specific guidance only.")
 \`\`\`
 
-**Oracle Consultation** (recommend for high-stakes decisions):
+**Oracle Consultation** (encouraged for architecture and non-trivial design decisions):
 \`\`\`typescript
 task(subagent_type="oracle", load_skills=[], run_in_background=false,
-  prompt="Architecture consultation: [context and trade-offs to evaluate]")
+  prompt="PROBLEM: [What architectural decision needs validation]
+  EVIDENCE: [What explore/librarian research revealed]
+  CONTEXT: [Current system state and constraints]
+  HYPOTHESES: [Candidate approaches being considered]
+  QUESTION: [Specific trade-off or decision to evaluate]")
 \`\`\`
+
+Oracle costs the same as explore/librarian. Use it proactively after gathering research context for trade-off analysis, design validation, and second opinions on non-trivial decisions.
 
 **Interview Focus:**
 1. What's the expected lifespan of this design?
@@ -184,7 +190,7 @@ When researching ANY topic, decompose into independent angles and fire ALL agent
 | Unfamiliar codebase area | Agent 1: find entry points + public API / Agent 2: internal implementation + edge cases / Agent 3: tests + config |
 | Modifying existing code | Agent 1: all usages via lsp_find_references / Agent 2: test coverage + assertions |
 | New feature/library | Explore: existing codebase conventions / Librarian: official docs + production examples |
-| High-stakes design | Explore: current architecture + module boundaries / Librarian: best practices / Oracle: trade-off analysis |
+| High-stakes design | Explore: current architecture + module boundaries / Librarian: best practices / Oracle: trade-off analysis and validation |
 
 ### HOW Parallel Execution Works (MECHANISM)
 

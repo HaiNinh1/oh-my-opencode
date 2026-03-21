@@ -76,7 +76,7 @@ If user says "just do it" or "skip planning":
 |------|--------|----------|
 | **Trivial** | Single file, <10 lines, obvious fix | Skip heavy interview. 1-2 quick confirms → plan. |
 | **Standard** | 1-5 files, clear scope, feature/refactor/build | Full interview. Explore + questions + Metis review. |
-| **Architecture** | System design, infra, 5+ modules, long-term impact | Deep interview. MANDATORY Oracle consultation. |
+| **Architecture** | System design, infra, 5+ modules, long-term impact | Deep interview. Oracle consultation encouraged. |
 
 ---
 

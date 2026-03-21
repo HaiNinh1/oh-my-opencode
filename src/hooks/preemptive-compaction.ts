@@ -8,7 +8,7 @@ import {
 import { resolveCompactionModel } from "./shared/compaction-model-resolver";
 
 const PREEMPTIVE_COMPACTION_TIMEOUT_MS = 120_000;
-const COMPACTION_TOKEN_THRESHOLD = 30_000; // Trigger compaction when reaching 30k tokens to allow time for compaction before hitting limits on long responses
+const COMPACTION_TOKEN_THRESHOLD = 25_000; // Trigger compaction when reaching 25k tokens to allow time for compaction before hitting limits on long responses
 
 interface TokenInfo {
   input: number;
@@ -150,7 +150,7 @@ export function createPreemptiveCompactionHook(
         cached.modelID,
         modelCacheState,
       );
-      const effectiveContextLimit = actualLimit ?? lim.context;
+      const effectiveInputLimit = actualLimit ?? lim.input;
 
       const count =
         cached.tokens.total ??
@@ -158,17 +158,16 @@ export function createPreemptiveCompactionHook(
           cached.tokens.output +
           cached.tokens.cache.read +
           cached.tokens.cache.write;
-      const remaining = effectiveContextLimit - count;
-      const minimumRemaining = Math.max(COMPACTION_TOKEN_THRESHOLD, lim.output);
+      const remaining = effectiveInputLimit - count;
 
-      if (remaining >= minimumRemaining) return;
+      if (remaining >= COMPACTION_TOKEN_THRESHOLD) return;
 
       log("[preemptive-compaction] End-of-turn compaction", {
         sessionID,
         count,
         remaining,
-        contextLimit: effectiveContextLimit,
-        configuredContextLimit: lim.context,
+        inputLimit: effectiveInputLimit,
+        configuredInputLimit: lim.input,
         outputLimit: lim.output,
       });
 
