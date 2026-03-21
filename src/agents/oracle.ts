@@ -7,27 +7,39 @@ const MODE: AgentMode = "subagent"
 
 export const ORACLE_PROMPT_METADATA: AgentPromptMetadata = {
   category: "advisor",
-  cost: "EXPENSIVE",
+  cost: "CHEAP",
   promptAlias: "Oracle",
   triggers: [
-    { domain: "Architecture decisions", trigger: "Multi-system tradeoffs, unfamiliar patterns" },
-    { domain: "Self-review", trigger: "After completing significant implementation" },
-    { domain: "Hard debugging", trigger: "After 2+ failed fix attempts" },
+    {
+      domain: "Architecture decisions",
+      trigger: "Multi-system tradeoffs, unfamiliar patterns",
+    },
+    {
+      domain: "Self-review",
+      trigger: "After completing significant implementation",
+    },
+    {
+      domain: "Complex debugging",
+      trigger: "Non-obvious root cause, competing hypotheses",
+    },
+    {
+      domain: "Design validation",
+      trigger: "Evaluating approach before committing to implementation",
+    },
   ],
   useWhen: [
-    "Complex architecture design",
-    "After completing significant work",
-    "2+ failed fix attempts",
-    "Unfamiliar code patterns",
+    "Architecture design or multi-system tradeoffs",
+    "After completing significant work (self-review)",
+    "Complex debugging with non-obvious root cause",
+    "Unfamiliar code patterns or domain logic",
     "Security/performance concerns",
-    "Multi-system tradeoffs",
+    "Evaluating competing approaches before committing",
+    "Any decision where a second opinion would improve confidence",
   ],
   avoidWhen: [
+    "Before doing any research (gather context first so Oracle has material to reason about)",
     "Simple file operations (use direct tools)",
-    "First attempt at any fix (try yourself first)",
-    "Questions answerable from code you've read",
     "Trivial decisions (variable names, formatting)",
-    "Things you can infer from existing code patterns",
   ],
 }
 

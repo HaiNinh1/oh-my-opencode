@@ -107,7 +107,7 @@ export function buildToolSelectionTable(
   }
 
   rows.push("")
-  rows.push("**Default flow**: explore/librarian + tools → oracle (if required)")
+  rows.push("**Default flow**: explore/librarian + tools → oracle (after research, for validation/second opinion)")
 
   return rows.join("\n")
 }
@@ -228,13 +228,21 @@ export function buildOracleSection(agents: AvailableAgent[]): string {
   return `<Oracle_Usage>
 ## Oracle — Read-Only High-IQ Consultant
 
-Oracle is a read-only, high-quality reasoning model for debugging and architecture. Consultation only — Oracle advises, you decide and act.
+Oracle is a read-only, high-quality reasoning model. Consultation only — Oracle advises, you decide and act.
 
-### WHEN to Consult (Oracle FIRST, then implement):
+**Oracle is encouraged, not rationed.** It costs the same as explore/librarian. Use it whenever a second opinion would improve your confidence or catch blind spots. The only prerequisite: do your research first so Oracle has concrete material to reason about.
+
+### WHEN to Consult:
 
 ${useWhen.map((w) => `- ${w}`).join("\n")}
 
-### WHEN NOT to Consult:
+### Prerequisites (do these FIRST so Oracle can be effective):
+
+1. **Gather context** — read relevant files, run explore/librarian agents, understand the landscape
+2. **Form your own view** — have findings, a hypothesis, or candidate approaches ready
+3. **Know your question** — what specific decision or validation do you need from Oracle?
+
+### WHEN to SKIP Oracle:
 
 ${avoidWhen.map((w) => `- ${w}`).join("\n")}
 
@@ -242,23 +250,21 @@ ${avoidWhen.map((w) => `- ${w}`).join("\n")}
 
 Briefly announce "Consulting Oracle for [reason]" before invocation.
 
-**Exception**: This is the ONLY case where you announce before acting. For all other work, start immediately without status updates.
-
 Always call Oracle synchronously with \`run_in_background=false\`. Oracle results return inline — no polling, no background management needed.
 
 **Every Oracle call MUST include a structured payload:**
 
 \`\`\`
 task(subagent_type="oracle", run_in_background=false, load_skills=[], description="Consult Oracle on [topic]", prompt="
-  PROBLEM: [What you're stuck on — 1-2 sentences]
+  PROBLEM: [What you're solving or deciding — 1-2 sentences]
   EVIDENCE: [What you found from explore/librarian/tools — concrete findings, not vague summaries]
-  FAILED ATTEMPTS: [What you already tried and why it didn't work — include specific errors or reasoning]
-  HYPOTHESES: [Your current competing theories — what you think might be going on]
+  CONTEXT: [What you already tried or considered, if applicable]
+  HYPOTHESES: [Your current competing theories or candidate approaches]
   QUESTION: [One precise question Oracle can answer with read-only analysis]
 ")
 \`\`\`
 
-**Vague Oracle calls = wasted consultation.** "Help me with X" is not a valid Oracle prompt. Be specific about what you tried, what you found, and what decision you need Oracle to make.
+**Give Oracle rich context.** The better the evidence and hypotheses you provide, the more useful Oracle's analysis will be.
 
 ### After Oracle Returns:
 

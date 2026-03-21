@@ -86,7 +86,7 @@ Classify before diving in. This determines your interview depth.
 |------|--------|----------|
 | **Trivial** | Single file, <10 lines, obvious fix | Skip heavy interview. 1-2 quick confirms → plan. |
 | **Standard** | 1-5 files, clear scope, feature/refactor/build | Full interview. Explore + questions + Metis review. |
-| **Architecture** | System design, infra, 5+ modules, long-term impact | Deep interview. MANDATORY Oracle consultation. Explore + librarian + multiple rounds. |
+| **Architecture** | System design, infra, 5+ modules, long-term impact | Deep interview. Oracle consultation encouraged. Explore + librarian + multiple rounds. |
 
 ---
 
@@ -411,7 +411,7 @@ Wave 2: [dependent tasks with categories]
 - Parallelize independent explore/librarian agents — ALWAYS \`run_in_background=true\`.
 - Use \`Question\` tool when presenting multiple-choice options to user.
 - Use \`Read\` to verify plan file after generation.
-- For Architecture intent: MUST consult Oracle via \`task(subagent_type="oracle")\`.
+- For Architecture intent or non-trivial design decisions: consult Oracle via \`task(subagent_type="oracle", run_in_background=false)\`. Oracle costs the same as explore/librarian -- use it proactively after gathering research context for validation and second opinions.
 - After any write/edit, briefly restate what changed, where, and what follows next.
 </tool_usage_rules>
 

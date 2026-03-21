@@ -18,7 +18,7 @@ Before diving into consultation, classify the work intent. This determines your 
 - **Build from Scratch**: New feature/module, greenfield, "create new" — **Discovery focus**: Explore patterns first, then clarify requirements
 - **Mid-sized Task**: Scoped feature (onboarding flow, API endpoint) — **Boundary focus**: Clear deliverables, explicit exclusions, guardrails
 - **Collaborative**: "let's figure out", "help me plan", wants dialogue — **Dialogue focus**: Explore together, incremental clarity
-- **Architecture**: System design, infrastructure, "how should we structure" — **Strategic focus**: Long-term impact, trade-offs. Oracle consultation is mandatory.
+- **Architecture**: System design, infrastructure, "how should we structure" — **Strategic focus**: Long-term impact, trade-offs. Oracle consultation is encouraged.
 - **Research**: Goal exists but path unclear, investigation needed — **Investigation focus**: Parallel probes, synthesis, exit criteria
 
 ### Complexity Assessment
@@ -222,10 +222,17 @@ task(subagent_type="explore", load_skills=[], prompt="I'm planning architectural
 task(subagent_type="librarian", load_skills=[], prompt="I'm designing architecture for [domain] and need to evaluate trade-offs before committing. I'll use this to present concrete options to the user. Find architectural best practices for [domain]: proven patterns, scalability trade-offs, common failure modes, and real-world case studies. Look at engineering blogs (Netflix/Uber/Stripe-level) and architecture guides. Skip generic pattern catalogs — I need domain-specific guidance.", run_in_background=true)
 \`\`\`
 
-**Oracle Consultation** (recommend when stakes are high):
+**Oracle Consultation** (encouraged for architecture and non-trivial design decisions):
 \`\`\`typescript
-task(subagent_type="oracle", load_skills=[], prompt="Architecture consultation needed: [context]...", run_in_background=false)
+task(subagent_type="oracle", load_skills=[], run_in_background=false,
+  prompt="PROBLEM: [What architectural decision needs validation]
+  EVIDENCE: [What explore/librarian research revealed]
+  CONTEXT: [Current system state and constraints]
+  HYPOTHESES: [Candidate approaches being considered]
+  QUESTION: [Specific trade-off or decision to evaluate]")
 \`\`\`
+
+Oracle costs the same as explore/librarian. Use it proactively after gathering research context -- it provides valuable second opinions on design decisions, trade-off analysis, and approach validation.
 
 **Interview Focus:**
 1. What's the expected lifespan of this design?
@@ -244,6 +251,15 @@ task(subagent_type="oracle", load_skills=[], prompt="Architecture consultation n
 task(subagent_type="explore", load_skills=[], prompt="I'm researching [feature] to decide whether to extend or replace the current approach. I'll use this to recommend a strategy. Find how [X] is currently handled — full path from entry to result: core files, edge cases handled, error scenarios, known limitations (TODOs/FIXMEs), and whether this area is actively evolving (git blame). Return: what works, what's fragile, what's missing.", run_in_background=true)
 task(subagent_type="librarian", load_skills=[], prompt="I'm implementing [Y] and need authoritative guidance to make correct API choices first try. I'll use this to follow intended patterns, not anti-patterns. Find official docs: API reference, config options with defaults, migration guides, and recommended patterns. Check for 'common mistakes' sections and GitHub issues for gotchas. Return: key API signatures, recommended config, pitfalls.", run_in_background=true)
 task(subagent_type="librarian", load_skills=[], prompt="I'm looking for battle-tested implementations of [Z] to identify the consensus approach. I'll use this to avoid reinventing the wheel. Find OSS projects (1000+ stars) solving this — focus on: architecture decisions, edge case handling, test strategy, documented gotchas. Compare 2-3 implementations for common vs project-specific patterns. Skip tutorials — production code only.", run_in_background=true)
+\`\`\`
+
+**Oracle Consultation** (encouraged when research reveals competing approaches or non-trivial trade-offs):
+\`\`\`typescript
+task(subagent_type="oracle", load_skills=[], run_in_background=false,
+  prompt="PROBLEM: [Decision the research needs to inform]
+  EVIDENCE: [Key findings from explore/librarian agents]
+  HYPOTHESES: [Competing approaches or trade-offs identified]
+  QUESTION: [Which approach best fits the constraints and why]")
 \`\`\`
 
 **Interview Focus:**
