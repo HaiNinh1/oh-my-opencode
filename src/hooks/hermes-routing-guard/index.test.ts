@@ -346,6 +346,128 @@ describe("hermes-routing-guard", () => {
         ).rejects.toThrow("NOT in your routing table")
       })
     })
+
+    describe("#when subagent_type uses prefix (first 3+ chars) of agent name", () => {
+      test("#then should allow 'sis' by resolving to sisyphus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "sis", prompt: "Fix bug" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'sisy' (4-char prefix) by resolving to sisyphus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "sisy", prompt: "Deploy" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'hep' by resolving to hephaestus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "hep", prompt: "Deep work" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'atl' by resolving to atlas", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "atl", prompt: "Execute plan" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'pro' by resolving to prometheus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "pro", prompt: "Plan feature" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'mne' by resolving to mnemosyne", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "mne", prompt: "Compact plan" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'her' by resolving to heracles", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "her", prompt: "Execute" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow uppercase prefix like 'SIS'", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "SIS", prompt: "Work" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should block prefixes shorter than 3 chars", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "si", prompt: "Work" } },
+          )
+        ).rejects.toThrow("NOT in your routing table")
+      })
+
+      test("#then should still block prefixes that don't match any agent", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "orc", prompt: "Consult" } },
+          )
+        ).rejects.toThrow("NOT in your routing table")
+      })
+    })
   })
 
   describe("#given non-hermes agent session", () => {

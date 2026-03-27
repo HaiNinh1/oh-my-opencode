@@ -15,6 +15,24 @@ export const HERMES_ALLOWED_SUBAGENT_TYPES = [
   "sisyphus",
 ] as const
 
+const MIN_PREFIX_LENGTH = 3
+
+/**
+ * Resolve an agent name prefix to a canonical agent key.
+ * Any input of 3+ characters that is a unique prefix of an allowed agent name resolves to that agent.
+ * e.g. "sis" → "sisyphus", "hep" → "hephaestus", "pro" → "prometheus"
+ */
+export function resolveAgentAbbreviation(input: string): string {
+  const lowered = input.toLowerCase()
+  if (lowered.length < MIN_PREFIX_LENGTH) return input
+
+  const matches = HERMES_ALLOWED_SUBAGENT_TYPES.filter((agent) =>
+    agent.startsWith(lowered)
+  )
+
+  return matches.length === 1 ? matches[0] : input
+}
+
 export function buildCategoryViolationMessage(category: string): string {
   const allowedList = HERMES_ALLOWED_SUBAGENT_TYPES.join(", ")
   return `[${HOOK_NAME}] Hermes CANNOT use category-based routing (attempted category: "${category}").
