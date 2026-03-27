@@ -15,11 +15,7 @@ function createMockCtx() {
   return {
     client: {
       session: {
-        messages: mock(() => Promise.resolve({ data: [] })),
         summarize: mock(() => Promise.resolve({})),
-      },
-      tui: {
-        showToast: mock(() => Promise.resolve()),
       },
     },
     directory: "/tmp/test",
@@ -49,6 +45,14 @@ describe("preemptive-compaction context-limit cache invalidation", () => {
     })
 
     const hook = createPreemptiveCompactionHook(ctx as never, {} as never, modelCacheState)
+
+    // set model limits via chat.params
+    await hook["chat.params"]({
+      sessionID,
+      model: {
+        limit: { input: 200000, output: 8192, context: 200000 },
+      },
+    }, undefined)
 
     await hook.event({
       event: {
@@ -82,11 +86,13 @@ describe("preemptive-compaction context-limit cache invalidation", () => {
       modelCacheState,
     })
 
-    // when
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_1" },
-      { title: "", output: "test", metadata: null },
-    )
+    // when - trigger compaction check via session.idle
+    await hook.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID },
+      },
+    })
 
     // then
     expect(ctx.client.session.summarize).not.toHaveBeenCalled()

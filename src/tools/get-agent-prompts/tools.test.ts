@@ -10,7 +10,7 @@ describe("get_agent_prompts", () => {
 
   test("returns plan agent system prepend for prometheus", async () => {
     const result = await get_agent_prompts.execute({ agent: "prometheus" }, {} as any)
-    expect(result).toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
+    expect(result).toContain("Context Gathering Protocol")
     expect(result).toContain("Task Dependency Graph")
     expect(result).toContain("Parallel Execution Graph")
   })

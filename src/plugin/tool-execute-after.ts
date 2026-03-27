@@ -130,8 +130,8 @@ export function createToolExecuteAfterHandler(args: {
     }
 
     const runToolExecuteAfterHooks = async (): Promise<void> => {
-      await hooks.claudeCodeHooks?.["tool.execute.after"]?.(input, output);
       await hooks.toolOutputTruncator?.["tool.execute.after"]?.(input, output);
+      await hooks.claudeCodeHooks?.["tool.execute.after"]?.(input, output);
       await hooks.contextWindowMonitor?.["tool.execute.after"]?.(input, output);
       await hooks.commentChecker?.["tool.execute.after"]?.(input, output);
       await hooks.directoryAgentsInjector?.["tool.execute.after"]?.(

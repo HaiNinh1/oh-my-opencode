@@ -358,27 +358,29 @@ describe("preemptive-compaction", () => {
   });
 
   // #given model with large output limit (100k)
-  // #when remaining is 50k (less than output)
+  // #when remaining is 50k (less than threshold)
   // #then should trigger
   it("should respect model-specific output limit", async () => {
     const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
     const sessionID = "ses_large_output";
 
-    // o3-style model: 200K context, 100K output
+    // o3-style model: 200K context, 100K output (use openai to avoid context limit override)
     await cacheModelLimits(hook, sessionID, {
       input: 200_000,
       output: 100_000,
       context: 200_000,
     });
 
-    // 160K total → remaining = 40K < 100K output
+    // 185K total → remaining = 15K < 25K threshold
     await emitAssistantFinished(hook, {
       sessionID,
+      providerID: "openai",
+      modelID: "gpt-5.4",
       tokens: {
-        input: 140_000,
+        input: 160_000,
         output: 15_000,
         reasoning: 0,
-        cache: { read: 5_000, write: 0 },
+        cache: { read: 10_000, write: 0 },
       },
     });
 
@@ -388,7 +390,7 @@ describe("preemptive-compaction", () => {
   });
 
   // #given model with 1M context
-  // #when remaining is well above output
+  // #when remaining is well above threshold
   // #then should NOT trigger
   it("should work correctly with large context models", async () => {
     const hook = createPreemptiveCompactionHook(ctx as never, {} as never);
@@ -400,9 +402,11 @@ describe("preemptive-compaction", () => {
       context: 1_000_000,
     });
 
-    // 200K total → remaining = 800K, well above 32K output
+    // 200K total → remaining = 800K, well above 25K threshold (use openai to avoid context limit override)
     await emitAssistantFinished(hook, {
       sessionID,
+      providerID: "openai",
+      modelID: "gpt-5.4",
       tokens: {
         input: 180_000,
         output: 10_000,

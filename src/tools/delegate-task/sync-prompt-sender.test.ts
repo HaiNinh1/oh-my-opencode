@@ -6,7 +6,7 @@ const {
 } = require("bun:test")
 
 bunDescribe("sendSyncPrompt", () => {
-  bunTest("passes question=false for non-plan-family agents", async () => {
+  bunTest("passes question=false for read-only agents", async () => {
     //#given
     const { sendSyncPrompt } = require("./sync-prompt-sender")
 
@@ -24,7 +24,7 @@ bunDescribe("sendSyncPrompt", () => {
 
     const input = {
       sessionID: "test-session",
-      agentToUse: "sisyphus-junior",
+      agentToUse: "explore",
       args: {
         description: "test task",
         prompt: "test prompt",
