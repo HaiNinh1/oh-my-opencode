@@ -1,5 +1,5 @@
 import type { DelegateTaskArgs, ToolContextWithMetadata } from "./types"
-import type { ExecutorContext, SessionMessage } from "./executor-types"
+import type { ExecutorContext, ParentContext, SessionMessage } from "./executor-types"
 import { shouldAllowQuestion } from "./constants"
 import { storeToolMetadata } from "../../features/tool-metadata-store"
 import { getTaskToastManager } from "../../features/task-toast-manager"
@@ -12,11 +12,13 @@ import { syncContinuationDeps, type SyncContinuationDeps } from "./sync-continua
 import { setSessionTools } from "../../shared/session-tools-store"
 import { normalizeSDKResponse } from "../../shared"
 import { buildTaskPrompt } from "./prompt-builder"
+import { getTaskOutputContent } from "./task-output-pruner"
 
 export async function executeSyncContinuation(
   args: DelegateTaskArgs,
   ctx: ToolContextWithMetadata,
   executorCtx: ExecutorContext,
+  parentContext?: ParentContext,
   deps: SyncContinuationDeps = syncContinuationDeps
 ): Promise<string> {
   const { client, syncPollTimeoutMs } = executorCtx
@@ -134,7 +136,7 @@ export async function executeSyncContinuation(
 
 ---
 
-${result.textContent || "(No text output)"}
+${getTaskOutputContent(result.textContent, parentContext?.agent)}
 
 <task_metadata>
 session_id: ${args.session_id}

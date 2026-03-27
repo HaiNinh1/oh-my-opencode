@@ -15,5 +15,5 @@ export function buildReminderMessage(availableSkills: AvailableSkill[]): string 
   const builtinText = formatSkillNames(builtinSkills, 8)
   const customText = formatSkillNames(customSkills, 8)
 
-  return `\n[Explore/Librarian Reminder] You're doing search/exploration directly. Fire parallel \`task(subagent_type="explore/librarian", run_in_background=true)\` calls for deeper, context-efficient results. Skills available — Built-in: ${builtinText} | Yours: ${customText}\n`
+  return `\n[Explore/Librarian Reminder] You're doing search/exploration directly. Fire parallel \`task(subagent_type="explore/librarian", run_in_background=false)\` calls — multiple sync calls in one response run in parallel automatically. Skills available — Built-in: ${builtinText} | Yours: ${customText}\n`
 }

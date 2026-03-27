@@ -26,5 +26,5 @@ export const AGENT_TOOLS = new Set([
 ]);
 
 export const REMINDER_MESSAGE = `
-[Agent Usage Reminder] You called a search/fetch tool directly. Fire parallel \`task(subagent_type="explore")\` or \`task(subagent_type="librarian")\` with \`run_in_background=true\` for deeper, context-efficient results.
+[Agent Usage Reminder] You called a search/fetch tool directly. Fire parallel \`task(subagent_type="explore", run_in_background=false)\` or \`task(subagent_type="librarian", run_in_background=false)\` calls — multiple sync calls in one response run in parallel automatically. Deeper, context-efficient results.
 `;

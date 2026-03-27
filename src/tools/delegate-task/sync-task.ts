@@ -8,6 +8,7 @@ import { log } from "../../shared/logger"
 import { SessionCategoryRegistry } from "../../shared/session-category-registry"
 import { formatDuration } from "./time-formatter"
 import { formatDetailedError } from "./error-formatting"
+import { getTaskOutputContent } from "./task-output-pruner"
 import { syncTaskDeps, type SyncTaskDeps } from "./sync-task-deps"
 import { setSessionFallbackChain, clearSessionFallbackChain } from "../../hooks/model-fallback/hook"
 
@@ -156,7 +157,7 @@ Agent: ${agentToUse}${args.category ? ` (category: ${args.category})` : ""}
 
 ---
 
-${result.textContent || "(No text output)"}
+${getTaskOutputContent(result.textContent, parentContext.agent)}
 
 <task_metadata>
 session_id: ${sessionID}

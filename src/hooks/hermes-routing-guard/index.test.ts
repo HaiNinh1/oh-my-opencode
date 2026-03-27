@@ -260,6 +260,92 @@ describe("hermes-routing-guard", () => {
         ).rejects.toThrow("NOT in your routing table")
       })
     })
+
+    describe("#when subagent_type uses display name instead of config key", () => {
+      test("#then should allow 'Sisyphus (Ultraworker)' by resolving to sisyphus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Sisyphus (Ultraworker)", prompt: "Deploy system" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'Atlas (Plan Executor)' by resolving to atlas", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Atlas (Plan Executor)", prompt: "Execute plan" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'Hephaestus (Deep Agent)' by resolving to hephaestus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Hephaestus (Deep Agent)", prompt: "Deep work" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'Prometheus (Plan Builder)' by resolving to prometheus", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Prometheus (Plan Builder)", prompt: "Plan migration" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'Mnemosyne (Compact Planner)' by resolving to mnemosyne", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Mnemosyne (Compact Planner)", prompt: "Compact plan" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow 'Heracles (Direct Executor)' by resolving to heracles", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Heracles (Direct Executor)", prompt: "Execute" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should still block display names of unauthorized agents", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Sisyphus-Junior", prompt: "Do work" } },
+          )
+        ).rejects.toThrow("NOT in your routing table")
+      })
+    })
   })
 
   describe("#given non-hermes agent session", () => {

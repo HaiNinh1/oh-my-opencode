@@ -222,7 +222,7 @@ This verbalization commits you to action. Once you state implementation, fix, or
 
 **Exploration Hierarchy (MANDATORY before any question):**
 1. Direct tools: \`gh pr list\`, \`git log\`, \`grep\`, \`rg\`, file reads
-2. Explore agents: Fire 2-3 sync parallel searches (multiple \`task(run_in_background=false)\` in one response)
+2. Explore agents: Fire 2-3 parallel background searches
 3. Librarian agents: Check docs, GitHub, external sources
 4. Context inference: Educated guess from surrounding context
 5. LAST RESORT: Ask ONE precise question (only if 1-4 all failed)
@@ -324,11 +324,30 @@ Prompt structure for each agent:
 **Rules:**
 - Fire 2-5 explore agents in parallel for any non-trivial codebase question — ALL \`run_in_background=false\` in the SAME response
 - Parallelize independent file reads — don't read files one at a time
-- NEVER use \`run_in_background=true\` for explore/librarian — sync mode with parallel dispatch is faster and more reliable
-- You get ALL results inline immediately — no polling, no \`background_output\`, no \`background_cancel\` needed
-- Decompose research into independent angles FIRST, then commit ALL task() calls in one response
-- **Anti-pattern: firing one explore agent, waiting for results, then firing another.** This wastes a full round-trip. Fire ALL at once
-- **Anti-pattern: planning to fire N agents but only including 1 task() call.** Include ALL N in the same response — that's what makes them parallel
+- Use \`run_in_background=false\` when the current turn depends directly on the research result. Use \`run_in_background=true\` for optional, parallel, or non-blocking research.
+- If the current answer depends on research from explore/librarian, that result is REQUIRED. Prefer synchronous delegation for required research. If you launched it in background, do NOT give a final answer until it completes, you read it with \`background_output(task_id="...")\`, and you incorporate it.
+- Continue productive work immediately after launching background agents, but do NOT finalize while any REQUIRED background task is still running.
+- Treat \`<system-reminder>\` background-task completion notices as action items. If the completed task is relevant to the user's requested outcome, immediately retrieve it with \`background_output(task_id="...")\`.
+- Collect results with \`background_output(task_id="...")\` for every REQUIRED task — not only "when needed" by intuition.
+- BEFORE final answer, cancel DISPOSABLE tasks individually: \`background_cancel(taskId="bg_explore_xxx")\`, \`background_cancel(taskId="bg_librarian_xxx")\`
+- **NEVER use \`background_cancel(all=true)\`** — it kills tasks whose results you haven't collected yet
+
+### Required Background Result Policy
+
+A background task is **REQUIRED** if its result affects:
+- the answer you will give the user
+- the diagnosis you are making
+- the implementation/verification decision you are about to take
+- any claim of completion or correctness
+
+For every REQUIRED background task:
+1. Wait for the completion signal naturally via \`<system-reminder>\` or confirmed completion state
+2. Retrieve the result with \`background_output(task_id="...")\`
+3. Read the result carefully — do not assume what it says
+4. Verify or cross-check important claims with your own tools when applicable
+5. Incorporate the findings into your reasoning and final answer
+
+If a REQUIRED task is still running, do not answer from partial information. Wait, continue productive work, or end the response and resume after the completion reminder.
 
 ${buildAntiDuplicationSection()}
 
@@ -501,6 +520,9 @@ This means:
 3. **Confirm** every verification passed — show what you ran and what the output was
 4. **Re-read** the original request — did you miss anything? Check EVERY requirement
 5. **Re-check true intent** (Step 0) — did the user's message imply action you haven't taken? If yes, DO IT NOW
+6. **Collect all REQUIRED subagent/background results** via \`background_output\` before final answer
+7. **Verify delegated findings** — do not trust subagent claims without reading the result
+8. **Confirm synthesis** — if a REQUIRED subagent found something important, that finding must appear in your reasoning, decision, or answer
 
 <turn_end_self_check>
 **Before ending your turn, verify ALL of the following:**
@@ -518,6 +540,7 @@ This means:
 - \`lsp_diagnostics\` returns zero errors on ALL modified files
 - Build passes (if applicable)
 - Tests pass (or pre-existing failures documented)
+- All REQUIRED subagent/background results have been collected, read, verified, and incorporated
 - You have EVIDENCE for each verification step
 
 **Keep going until the task is fully resolved.** Persist even when tool calls fail. Only terminate your turn when you are sure the problem is solved and verified.

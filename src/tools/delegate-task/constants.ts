@@ -290,9 +290,9 @@ export const PLAN_AGENT_SYSTEM_PREPEND_STATIC_BEFORE_SKILLS = `<system>
 BEFORE you begin planning, you MUST first understand the user's request deeply.
 
 Context Gathering Protocol:
-1. Launch background agents to gather context:
-   - call_omo_agent(description="Explore codebase patterns", subagent_type="explore", run_in_background=true, prompt="<search for relevant patterns, files, and implementations related to user's request>")
-   - call_omo_agent(description="Research documentation", subagent_type="librarian", run_in_background=true, prompt="<search for external documentation, examples, and best practices related to user's request>")
+1. Launch agents to gather context (multiple sync calls in one response run in parallel automatically):
+   - call_omo_agent(description="Explore codebase patterns", subagent_type="explore", run_in_background=false, prompt="<search for relevant patterns, files, and implementations related to user's request>")
+   - call_omo_agent(description="Research documentation", subagent_type="librarian", run_in_background=false, prompt="<search for external documentation, examples, and best practices related to user's request>")
 
 2. After gathering context, present:
    - **User Request Summary**: Concise restatement of what the user is asking for

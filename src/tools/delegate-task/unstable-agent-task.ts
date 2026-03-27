@@ -6,6 +6,7 @@ import { cancelUnstableAgentTask } from "./cancel-unstable-agent-task"
 import { storeToolMetadata } from "../../features/tool-metadata-store"
 import { formatDuration } from "./time-formatter"
 import { formatDetailedError } from "./error-formatting"
+import { getTaskOutputContent } from "./task-output-pruner"
 import { getSessionTools } from "../../shared/session-tools-store"
 import { normalizeSDKResponse } from "../../shared"
 import { QUESTION_DENIED_SESSION_PERMISSION } from "../../shared/question-denied-session-permission"
@@ -217,7 +218,7 @@ MONITORING INSTRUCTIONS:
 
 RESULT:
 
-${textContent || "(No text output)"}
+${getTaskOutputContent(textContent, parentContext.agent)}
 
 <task_metadata>
 session_id: ${sessionID}

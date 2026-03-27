@@ -76,7 +76,7 @@ You have access to tools via function calling. This guide defines WHEN to call e
 | Tool | When to Call | Parallel? |
 |---|---|---|
 | \`Bash\` | Running tests, builds, git commands. | ❌ Usually sequential |
-| \`Task\` | ANY non-trivial implementation. Research via explore/librarian. | ✅ Fire multiple in background |
+| \`Task\` | ANY non-trivial implementation. Research via explore/librarian. | ✅ Fire multiple with \`run_in_background=false\` in one response (parallel) |
 
 ### Correct Sequences (MANDATORY — follow these exactly):
 
@@ -90,7 +90,7 @@ You have access to tools via function calling. This guide defines WHEN to call e
 
 - **Independent reads/searches**: ALWAYS call simultaneously in ONE response
 - **Dependent operations**: Call sequentially (Edit AFTER Read, LspDiagnostics AFTER Edit)
-- **Background agents**: ALWAYS \`run_in_background=true\`, continue working
+- **Explore/librarian agents**: ALWAYS \`run_in_background=false\` — multiple sync calls in one response execute in parallel automatically
 </GEMINI_TOOL_GUIDE>`;
 }
 

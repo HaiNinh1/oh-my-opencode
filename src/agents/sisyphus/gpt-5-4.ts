@@ -37,7 +37,6 @@ import {
   buildOracleSection,
   buildHardBlocksSection,
   buildAntiPatternsSection,
-  buildAntiDuplicationSection,
   buildNonClaudePlannerSection,
   categorizeTools,
 } from "../dynamic-agent-prompt-builder";
@@ -191,6 +190,14 @@ Proceed unless:
 (c) critical information is missing that would materially change the outcome.
 If proceeding, briefly state what you did and what remains.
 </ask_gate>
+
+Step 3 — Parallel Dispatch Gate (HARD BLOCK — enforced before ANY task() calls for research):
+Before writing task() calls in your response, execute this checklist:
+1. List every independent research angle.
+2. Count the angles. Count the task() calls you are about to include in your response.
+3. If angles > 1 but task() calls = 1 → STOP. You are serializing or bundling. Split into one task() call per angle. Each angle = its own subagent with its own prompt.
+4. Confirm ALL task() calls are in THIS response — not "planned for next turn."
+Failing this gate = wasting the user's time with sequential research. Multiple task() calls with \`run_in_background=false\` in the same response run in parallel (wall-clock = slowest agent, not the sum).
 </intent>`;
 
   const exploreBlock = `<explore>
@@ -237,24 +244,13 @@ ${librarianSection}
 - When delegating AND doing direct work: do only non-overlapping work simultaneously.
 </tool_method>
 
-Explore and Librarian agents are background grep — always \`run_in_background=true\`, always parallel.
+Explore and Librarian agents are synchronous parallel grep — always \`run_in_background=false\`, fire multiple in the SAME response. All execute simultaneously; results return inline together. No polling, no background management needed.
 
 Each agent prompt should include:
 - [CONTEXT]: What task, which modules, what approach
 - [GOAL]: What decision the results will unblock
 - [DOWNSTREAM]: How you'll use the results
 - [REQUEST]: What to find, what format, what to skip
-
-Background result collection:
-1. Launch parallel agents → receive task_ids
-2. Continue only with non-overlapping work
-   - If you have DIFFERENT independent work → do it now
-   - Otherwise → **END YOUR RESPONSE.**
-3. System sends \`<system-reminder>\` on completion → triggers your next turn
-4. Collect via \`background_output(task_id="...")\`
-5. Cancel disposable tasks individually via \`background_cancel(taskId="...")\`
-
-${buildAntiDuplicationSection()}
 
 Stop searching when: you have enough context, same info repeating, 2 iterations with no new data, or direct answer found.
 </explore>`;

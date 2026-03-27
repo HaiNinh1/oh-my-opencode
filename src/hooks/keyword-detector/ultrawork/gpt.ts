@@ -2,10 +2,9 @@
  * Ultrawork message optimized for GPT 5.4 series models.
  *
  * Design principles:
- * - Expert coding agent framing with approach-first mentality
- * - Prose-first output (do not default to bullets)
- * - Two-track parallel context gathering (Direct tools + Background agents)
- * - Deterministic tool usage and explicit decision criteria
+ * - Two-track parallel context gathering (Direct tools + Synchronous parallel agents)
+ * - Fire sync agents in same response, then use direct tools alongside
+ * - Explicit complexity-based decision criteria
  */
 
 export const ULTRAWORK_GPT_MESSAGE = `<ultrawork-mode>
@@ -55,13 +54,13 @@ export const ULTRAWORK_GPT_MESSAGE = `<ultrawork-mode>
 | **Trivial** | <10 lines, single file, obvious pattern | **DO IT YOURSELF** |
 | **Moderate** | Single domain, clear pattern, <100 lines | **DO IT YOURSELF** (faster than delegation overhead) |
 | **Complex** | Multi-file, unfamiliar domain, >100 lines, needs specialized expertise | **DELEGATE** to appropriate category+skills |
-| **Research** | Need broad codebase context or external docs | **DELEGATE** to explore/librarian (background, parallel) |
+| **Research** | Need broad codebase context or external docs | **DELEGATE** to explore/librarian (synchronous parallel, multiple \`run_in_background=false\` in one response) |
 
 **Decision Factors:**
 - Delegation overhead ≈ 10-15 seconds. If task takes less, do it yourself.
 - If you already have full context loaded, do it yourself.
 - If task requires specialized expertise (frontend-ui-ux, git operations), delegate.
-- If you need information from multiple sources, fire parallel background agents.
+- If you need information from multiple sources, fire parallel synchronous agents (multiple \`run_in_background=false\` calls in one response).
 
 ## AVAILABLE RESOURCES
 
@@ -69,8 +68,8 @@ Use these when they provide clear value based on the decision framework above:
 
 | Resource | When to Use | How to Use |
 |----------|-------------|------------|
-| explore agent | Need codebase patterns you don't have | \`task(subagent_type="explore", load_skills=[], run_in_background=true, ...)\` |
-| librarian agent | External library docs, OSS examples | \`task(subagent_type="librarian", load_skills=[], run_in_background=true, ...)\` |
+| explore agent | Need codebase patterns you don't have | \`task(subagent_type="explore", load_skills=[], run_in_background=false, ...)\` |
+| librarian agent | External library docs, OSS examples | \`task(subagent_type="librarian", load_skills=[], run_in_background=false, ...)\` |
 | oracle agent | Stuck on architecture/debugging after 2+ attempts | \`task(subagent_type="oracle", load_skills=[], ...)\` |
 | plan agent | Complex multi-step with dependencies (5+ steps) | \`task(subagent_type="plan", load_skills=[], ...)\` |
 | task category | Specialized work matching a category | \`task(category="...", load_skills=[...])\` |
@@ -88,22 +87,19 @@ Use these when they provide clear value based on the decision framework above:
 | Track | Tools | Speed | Purpose |
 |-------|-------|-------|---------|
 | **Direct** | Grep, Read, LSP, AST-grep | Instant | Quick wins, known locations |
-| **Background** | explore, librarian agents | Async | Deep search, external docs |
+| **Sync Parallel** | explore, librarian agents | Inline | Deep search, external docs |
 
 **ALWAYS run both tracks in parallel:**
 \`\`\`
-// Fire background agents for deep exploration
-task(subagent_type="explore", load_skills=[], prompt="I'm implementing [TASK] and need to understand [KNOWLEDGE GAP]. Find [X] patterns in the codebase — file paths, implementation approach, conventions used, and how modules connect. I'll use this to [DOWNSTREAM DECISION]. Focus on production code in src/. Return file paths with brief descriptions.", run_in_background=true)
-task(subagent_type="librarian", load_skills=[], prompt="I'm working with [TECHNOLOGY] and need [SPECIFIC INFO]. Find official docs and production examples for [Y] — API reference, configuration, recommended patterns, and pitfalls. Skip tutorials. I'll use this to [DECISION THIS INFORMS].", run_in_background=true)
+// Fire synchronous parallel agents for deep exploration (multiple run_in_background=false in one response = parallel execution)
+task(subagent_type="explore", load_skills=[], prompt="I'm implementing [TASK] and need to understand [KNOWLEDGE GAP]. Find [X] patterns in the codebase — file paths, implementation approach, conventions used, and how modules connect. I'll use this to [DOWNSTREAM DECISION]. Focus on production code in src/. Return file paths with brief descriptions.", run_in_background=false)
+task(subagent_type="librarian", load_skills=[], prompt="I'm working with [TECHNOLOGY] and need [SPECIFIC INFO]. Find official docs and production examples for [Y] — API reference, configuration, recommended patterns, and pitfalls. Skip tutorials. I'll use this to [DECISION THIS INFORMS].", run_in_background=false)
 
-// WHILE THEY RUN - use direct tools for immediate context
+// ALSO fire direct tools in the same response for immediate context
 grep(pattern="relevant_pattern", path="src/")
 read_file(filePath="known/important/file.ts")
 
-// Collect background results when ready
-deep_context = background_output(task_id=...)
-
-// Merge ALL findings for comprehensive understanding
+// All results return together — synthesize ALL findings
 \`\`\`
 
 **Plan agent (complex tasks only):**

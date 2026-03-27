@@ -71,7 +71,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
   
   **CORRECT - Using subagent_type:**
   \`\`\`
-  task(subagent_type="explore", load_skills=[], description="Find patterns", prompt="...", run_in_background=true)
+  task(subagent_type="explore", load_skills=[], description="Find patterns", prompt="...", run_in_background=false)
   \`\`\`
   
   REQUIRED: Provide ONE of:
@@ -85,7 +85,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
     Available categories:
   ${categoryList}
   - subagent_type: Use specific agent directly (explore, librarian, oracle, metis, momus)
-  - run_in_background: REQUIRED. true=async (returns task_id), false=sync (waits). Use background=true ONLY for parallel exploration with 5+ independent queries.
+  - run_in_background: REQUIRED. true=async (returns task_id), false=sync (waits). Use run_in_background=false for explore/librarian/oracle — multiple sync calls in one response execute in parallel automatically.
   - session_id: Existing Task session to continue (from previous task output). Continues agent with FULL CONTEXT PRESERVED - saves tokens, maintains continuity.
   - command: The command that triggered this task (optional, for slash command tracking).
   
@@ -125,7 +125,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       })
 
       if (args.run_in_background === undefined) {
-        throw new Error(`Invalid arguments: 'run_in_background' parameter is REQUIRED. Specify run_in_background=false for task delegation, or run_in_background=true for parallel exploration.`)
+        throw new Error(`Invalid arguments: 'run_in_background' parameter is REQUIRED. Use run_in_background=false for explore/librarian/oracle and task delegation.`)
       }
       if (typeof args.load_skills === "string") {
         try {
@@ -160,7 +160,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         if (runInBackground) {
           return executeBackgroundContinuation(args, ctx, options, parentContext)
         }
-        return executeSyncContinuation(args, ctx, options)
+        return executeSyncContinuation(args, ctx, options, parentContext)
       }
 
       if (!args.category && !args.subagent_type) {

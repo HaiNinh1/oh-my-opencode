@@ -7,6 +7,7 @@ import {
 } from "./constants"
 import { isHermesAgent } from "./agent-matcher"
 import { getAgentFromSession } from "../prometheus-md-only/agent-resolution"
+import { getAgentConfigKey } from "../../shared/agent-display-names"
 import { log } from "../../shared/logger"
 
 export function createHermesRoutingGuardHook(ctx: PluginInput) {
@@ -41,7 +42,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
         return
       }
 
-      const normalizedType = subagentType.toLowerCase().trim()
+      const normalizedType = getAgentConfigKey(subagentType.trim())
       const isAllowed = HERMES_ALLOWED_SUBAGENT_TYPES.some(
         allowed => normalizedType === allowed
       )
