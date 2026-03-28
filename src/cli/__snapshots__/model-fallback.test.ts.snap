@@ -13,10 +13,16 @@ exports[`generateModelConfig no providers available returns ULTIMATE_FALLBACK fo
     "hephaestus": {
       "model": "opencode/gpt-5-nano",
     },
+    "heracles": {
+      "model": "opencode/gpt-5-nano",
+    },
     "librarian": {
       "model": "opencode/gpt-5-nano",
     },
     "metis": {
+      "model": "opencode/gpt-5-nano",
+    },
+    "mnemosyne": {
       "model": "opencode/gpt-5-nano",
     },
     "momus": {
@@ -74,7 +80,15 @@ exports[`generateModelConfig single native provider uses Claude models when only
     "explore": {
       "model": "anthropic/claude-haiku-4-5",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -136,7 +150,15 @@ exports[`generateModelConfig single native provider uses Claude models with isMa
     "explore": {
       "model": "anthropic/claude-haiku-4-5",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -205,12 +227,20 @@ exports[`generateModelConfig single native provider uses OpenAI models when only
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "openai/gpt-5.2",
+      "variant": "high",
+    },
     "librarian": {
       "model": "openai/gpt-5.4",
       "variant": "medium",
     },
     "metis": {
       "model": "openai/gpt-5.4",
+      "variant": "high",
+    },
+    "mnemosyne": {
+      "model": "openai/gpt-5.2",
       "variant": "high",
     },
     "momus": {
@@ -290,12 +320,20 @@ exports[`generateModelConfig single native provider uses OpenAI models with isMa
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "openai/gpt-5.2",
+      "variant": "high",
+    },
     "librarian": {
       "model": "openai/gpt-5.4",
       "variant": "medium",
     },
     "metis": {
       "model": "openai/gpt-5.4",
+      "variant": "high",
+    },
+    "mnemosyne": {
+      "model": "openai/gpt-5.2",
       "variant": "high",
     },
     "momus": {
@@ -369,8 +407,14 @@ exports[`generateModelConfig single native provider uses Gemini models when only
     "explore": {
       "model": "opencode/gpt-5-nano",
     },
+    "heracles": {
+      "model": "opencode/gpt-5-nano",
+    },
     "metis": {
       "model": "opencode/gpt-5-nano",
+    },
+    "mnemosyne": {
+      "model": "google/gemini-3.1-pro-preview",
     },
     "momus": {
       "model": "google/gemini-3.1-pro-preview",
@@ -429,8 +473,14 @@ exports[`generateModelConfig single native provider uses Gemini models with isMa
     "explore": {
       "model": "opencode/gpt-5-nano",
     },
+    "heracles": {
+      "model": "opencode/gpt-5-nano",
+    },
     "metis": {
       "model": "opencode/gpt-5-nano",
+    },
+    "mnemosyne": {
+      "model": "google/gemini-3.1-pro-preview",
     },
     "momus": {
       "model": "google/gemini-3.1-pro-preview",
@@ -493,7 +543,15 @@ exports[`generateModelConfig all native providers uses preferred models from fal
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -568,7 +626,15 @@ exports[`generateModelConfig all native providers uses preferred models with isM
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -644,7 +710,15 @@ exports[`generateModelConfig fallback providers uses OpenCode Zen models when on
       "model": "opencode/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "opencode/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "opencode/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "opencode/claude-opus-4-6",
       "variant": "max",
     },
@@ -719,7 +793,15 @@ exports[`generateModelConfig fallback providers uses OpenCode Zen models with is
       "model": "opencode/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "opencode/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "opencode/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "opencode/claude-opus-4-6",
       "variant": "max",
     },
@@ -795,7 +877,15 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models when 
       "model": "github-copilot/gpt-5.4",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "github-copilot/claude-opus-4.6",
       "variant": "max",
     },
@@ -865,7 +955,15 @@ exports[`generateModelConfig fallback providers uses GitHub Copilot models with 
       "model": "github-copilot/gpt-5.4",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "github-copilot/claude-opus-4.6",
       "variant": "max",
     },
@@ -932,10 +1030,16 @@ exports[`generateModelConfig fallback providers uses ZAI model for librarian whe
     "explore": {
       "model": "opencode/gpt-5-nano",
     },
+    "heracles": {
+      "model": "opencode/gpt-5-nano",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
     "metis": {
+      "model": "opencode/gpt-5-nano",
+    },
+    "mnemosyne": {
       "model": "opencode/gpt-5-nano",
     },
     "momus": {
@@ -990,10 +1094,16 @@ exports[`generateModelConfig fallback providers uses ZAI model for librarian wit
     "explore": {
       "model": "opencode/gpt-5-nano",
     },
+    "heracles": {
+      "model": "opencode/gpt-5-nano",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
     "metis": {
+      "model": "opencode/gpt-5-nano",
+    },
+    "mnemosyne": {
       "model": "opencode/gpt-5-nano",
     },
     "momus": {
@@ -1052,7 +1162,15 @@ exports[`generateModelConfig mixed provider scenarios uses Claude + OpenCode Zen
       "model": "opencode/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -1127,7 +1245,15 @@ exports[`generateModelConfig mixed provider scenarios uses OpenAI + Copilot comb
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "github-copilot/claude-opus-4.6",
       "variant": "max",
     },
@@ -1198,10 +1324,18 @@ exports[`generateModelConfig mixed provider scenarios uses Claude + ZAI combinat
     "explore": {
       "model": "anthropic/claude-haiku-4-5",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -1262,7 +1396,15 @@ exports[`generateModelConfig mixed provider scenarios uses Gemini + Claude combi
     "explore": {
       "model": "anthropic/claude-haiku-4-5",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -1332,10 +1474,18 @@ exports[`generateModelConfig mixed provider scenarios uses all fallback provider
       "model": "opencode/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
     "metis": {
+      "model": "github-copilot/claude-opus-4.6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "github-copilot/claude-opus-4.6",
       "variant": "max",
     },
@@ -1410,10 +1560,18 @@ exports[`generateModelConfig mixed provider scenarios uses all providers togethe
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },
@@ -1488,10 +1646,18 @@ exports[`generateModelConfig mixed provider scenarios uses all providers with is
       "model": "openai/gpt-5.3-codex",
       "variant": "medium",
     },
+    "heracles": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
     "librarian": {
       "model": "zai-coding-plan/glm-4.7",
     },
     "metis": {
+      "model": "anthropic/claude-opus-4-6",
+      "variant": "max",
+    },
+    "mnemosyne": {
       "model": "anthropic/claude-opus-4-6",
       "variant": "max",
     },

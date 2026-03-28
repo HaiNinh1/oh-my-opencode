@@ -52,8 +52,8 @@ describe("delegation trust prompt rules", () => {
     const prompt = agent.prompt
 
     // then
-    expect(prompt).toContain("Continue only with non-overlapping work")
-    expect(prompt).toContain("DO NOT perform the same search yourself")
+    expect(prompt).toContain("non-overlapping work")
+    expect(prompt).toContain("Delegation Trust Rule")
   })
 
   test("Hephaestus prompt forbids duplicate delegated exploration", () => {
@@ -64,7 +64,7 @@ describe("delegation trust prompt rules", () => {
     const prompt = agent.prompt
 
     // then
-    expect(prompt).toContain("Continue only with non-overlapping work after launching background agents")
+    expect(prompt).toContain("non-overlapping work")
     expect(prompt).toContain("DO NOT perform the same search yourself")
   })
 
@@ -76,9 +76,9 @@ describe("delegation trust prompt rules", () => {
     const prompt = agent.prompt
 
     // then
-    expect(prompt).toContain("continue only with non-overlapping work while they search")
-    expect(prompt).toContain("Continue only with non-overlapping work after launching background agents")
+    expect(prompt).toContain("non-overlapping work")
     expect(prompt).toContain("DO NOT perform the same search yourself")
+    expect(prompt).toContain("Anti-Duplication Rule")
   })
 
   test("Hephaestus GPT-5.3 Codex prompt forbids duplicate delegated exploration", () => {
@@ -89,9 +89,9 @@ describe("delegation trust prompt rules", () => {
     const prompt = agent.prompt
 
     // then
-    expect(prompt).toContain("continue only with non-overlapping work while they search")
-    expect(prompt).toContain("Continue only with non-overlapping work after launching background agents")
+    expect(prompt).toContain("non-overlapping work")
     expect(prompt).toContain("DO NOT perform the same search yourself")
+    expect(prompt).toContain("Anti-Duplication Rule")
   })
 
   test("Sisyphus-Junior GPT prompt forbids duplicate delegated exploration", () => {
@@ -112,8 +112,7 @@ describe("delegation trust prompt rules", () => {
 
     // then
     expect(prompt).toContain("do only non-overlapping work simultaneously")
-    expect(prompt).toContain("Continue only with non-overlapping work")
-    expect(prompt).toContain("DO NOT perform the same search yourself")
+    expect(prompt).toContain("Delegation Trust Rule")
   })
 
   test("Sisyphus-Junior GPT-5.4 prompt forbids duplicate delegated exploration", () => {

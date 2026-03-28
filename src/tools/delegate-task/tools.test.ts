@@ -3228,8 +3228,8 @@ describe("sisyphus-task", () => {
 
       //#then
       expect(result).toContain("<system>")
-      expect(result).toContain("SYNCHRONOUS")
-      expect(result).toContain("run_in_background=false")
+      expect(result).toContain("sequential")
+      expect(result).toContain("IN ORDER")
       expect(result).not.toContain("### AVAILABLE CATEGORIES")
       expect(result).toContain("### AVAILABLE SKILLS")
       expect(result).toContain("`git-master`")
@@ -3319,8 +3319,8 @@ describe("sisyphus-task", () => {
       const result = buildSystemContent({ agentName: "plan" })
 
       //#then - plan agent gets plan prepend, not mnemosyne
-      expect(result).toContain("run_in_background=true")
-      expect(result).not.toContain("SYNCHRONOUS")
+      expect(result).toContain("Parallel Execution Graph")
+      expect(result).not.toContain("Heracles")
     })
   })
 

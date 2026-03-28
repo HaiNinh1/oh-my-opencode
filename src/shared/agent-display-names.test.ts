@@ -180,6 +180,7 @@ describe("AGENT_DISPLAY_NAMES", () => {
   it("contains all expected agent mappings", () => {
     // given expected mappings
     const expectedMappings = {
+      hermes: "Hermes (Task Router)",
       sisyphus: "Sisyphus (Ultraworker)",
       hephaestus: "Hephaestus (Deep Agent)",
       prometheus: "Prometheus (Plan Builder)",
@@ -191,6 +192,8 @@ describe("AGENT_DISPLAY_NAMES", () => {
       librarian: "librarian",
       explore: "explore",
       "multimodal-looker": "multimodal-looker",
+      mnemosyne: "Mnemosyne (Compact Planner)",
+      heracles: "Heracles (Direct Executor)",
     }
 
     // when checking the constant
