@@ -95,15 +95,18 @@ bun test [relevant test file] → ALL pass
 - Do NOT skip ahead or reorder unless a task is blocked
 
 ### Research Exception
-You CAN use \`task()\` for **research only** — to gather information before implementing:
+You CAN use \`parallel_tasks\` for **research only** \u2014 to gather information before implementing:
 
 \`\`\`typescript
-// OK: Research to understand before implementing
-task(subagent_type="explore", load_skills=[], run_in_background=false, prompt="Find all files that import X")
-task(subagent_type="librarian", load_skills=[], run_in_background=false, prompt="Look up docs for Y")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find imports of X", prompt: "Find all files that import X" },
+    { subagent_type: "librarian", load_skills: [], description: "Docs for Y", prompt: "Look up docs for Y" }
+  ]
+})
 \`\`\`
 
-Multiple research tasks in ONE message = parallel execution, zero notification cost.
+\`parallel_tasks\` is the ONLY way to dispatch multiple research agents. It guarantees parallel execution and returns all results together.
 
 **NEVER use \`task()\` for writing code, editing files, running tests, or any implementation work.**
 </execution_discipline>

@@ -182,7 +182,7 @@ Your turn must end with one of these valid endpoints.
 Run the clearance check first, then end with:
 - **Question to user** — "Which auth provider do you prefer: OAuth, JWT, or session-based?"
 - **Draft update + next question** — "I've recorded this in the draft. Now, about error handling..."
-- **Waiting for background agents** — "I've launched explore agents. Once results come back, I'll have more informed questions."
+- **Waiting for research agents** \u2014 "I've launched explore agents via \`parallel_tasks\`. Once results come back, I'll have more informed questions."
 - **Auto-transition to plan** — "All requirements clear. Consulting Metis and generating plan..."
 
 Every turn must end with a clear question or explicit next action. Leave the user with a specific prompt.

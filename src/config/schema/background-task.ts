@@ -20,6 +20,8 @@ export const BackgroundTaskConfigSchema = z.object({
   /** Maximum tool calls per subagent task before circuit breaker triggers (default: 200, minimum: 10). Prevents runaway loops from burning unlimited tokens. */
   maxToolCalls: z.number().int().min(10).optional(),
   circuitBreaker: CircuitBreakerConfigSchema.optional(),
+  /** When enabled, forces all task() calls to run synchronously regardless of run_in_background parameter. Background tools (background_output, background_cancel) are auto-disabled. Use parallel_tasks tool for guaranteed parallel sync execution. */
+  force_sync: z.boolean().optional(),
 })
 
 export type BackgroundTaskConfig = z.infer<typeof BackgroundTaskConfigSchema>

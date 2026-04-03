@@ -2,7 +2,7 @@
  * Mnemosyne Interview Mode
  *
  * Phase 1: Intent classification, research protocol, interview principles.
- * Optimized for Mnemosyne's synchronous research model (run_in_background=false).
+ * Optimized for Mnemosyne's synchronous research model (parallel_tasks only).
  */
 
 export const MNEMOSYNE_INTERVIEW_MODE = `# PHASE 1: INTERVIEW MODE (DEFAULT)
@@ -38,12 +38,16 @@ Classify every request to determine interview depth and research strategy.
 
 ### REFACTORING — Safety Focus
 
-**Research First (synchronous):**
+**Research First (use \`parallel_tasks\` for guaranteed parallel execution):**
 \`\`\`typescript
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm refactoring [target]. Find all usages via lsp_find_references — call sites, how return values are consumed, type flow, patterns that would break on signature changes. Also check for dynamic access. Return: file path, usage pattern, risk level per call site.")
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm modifying [affected code]. Find all test files exercising this code — what each asserts, inputs used, public API vs internals. Identify coverage gaps: behaviors used in production but untested. Return: tested vs untested behaviors.")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Map refactoring impact",
+      prompt: "I'm refactoring [target]. Find all usages via lsp_find_references \u2014 call sites, how return values are consumed, type flow, patterns that would break on signature changes. Also check for dynamic access. Return: file path, usage pattern, risk level per call site." },
+    { subagent_type: "explore", load_skills: [], description: "Find test coverage",
+      prompt: "I'm modifying [affected code]. Find all test files exercising this code \u2014 what each asserts, inputs used, public API vs internals. Identify coverage gaps: behaviors used in production but untested. Return: tested vs untested behaviors." }
+  ]
+})
 \`\`\`
 
 **Interview Focus:**
@@ -56,14 +60,18 @@ task(subagent_type="explore", load_skills=[], run_in_background=false,
 
 ### BUILD FROM SCRATCH — Discovery Focus
 
-**Pre-Interview Research (run BEFORE asking user questions):**
+**Pre-Interview Research (use \`parallel_tasks\` \u2014 run BEFORE asking user questions):**
 \`\`\`typescript
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm building [feature] from scratch. Find 2-3 most similar implementations — document: directory structure, naming pattern, public API exports, shared utilities, error handling, registration/wiring steps. Return concrete file paths and patterns.")
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm adding [feature type]. Find how similar features are organized: nesting depth, index.ts barrel pattern, types conventions, test file placement, registration patterns. Compare 2-3 feature directories. Return canonical structure as a file tree.")
-task(subagent_type="librarian", load_skills=[], run_in_background=false,
-  prompt="I'm implementing [technology] in production. Find official docs: setup, project structure, API reference, pitfalls, migration gotchas. Also find 1-2 production-quality OSS examples (not tutorials). Skip beginner guides — production patterns only.")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find similar implementations",
+      prompt: "I'm building [feature] from scratch. Find 2-3 most similar implementations \u2014 document: directory structure, naming pattern, public API exports, shared utilities, error handling, registration/wiring steps. Return concrete file paths and patterns." },
+    { subagent_type: "explore", load_skills: [], description: "Find organizational conventions",
+      prompt: "I'm adding [feature type]. Find how similar features are organized: nesting depth, index.ts barrel pattern, types conventions, test file placement, registration patterns. Compare 2-3 feature directories. Return canonical structure as a file tree." },
+    { subagent_type: "librarian", load_skills: [], description: "Find production patterns",
+      prompt: "I'm implementing [technology] in production. Find official docs: setup, project structure, API reference, pitfalls, migration gotchas. Also find 1-2 production-quality OSS examples (not tutorials). Skip beginner guides \u2014 production patterns only." }
+  ]
+})
 \`\`\`
 
 **Interview Focus** (AFTER research):
@@ -104,12 +112,16 @@ task(subagent_type="librarian", load_skills=[], run_in_background=false,
 
 ### ARCHITECTURE — Strategic Focus
 
-**Research First (synchronous):**
+**Research First (use \`parallel_tasks\`):**
 \`\`\`typescript
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm planning architectural changes. Find: module boundaries (imports), dependency direction, data flow patterns, key abstractions, any ADRs. Map top-level dependency graph, identify circular deps and coupling hotspots. Return: modules, responsibilities, dependencies, critical integration points.")
-task(subagent_type="librarian", load_skills=[], run_in_background=false,
-  prompt="I'm designing architecture for [domain]. Find best practices: proven patterns, scalability trade-offs, common failure modes, real-world case studies. Look at engineering blogs (Netflix/Uber/Stripe-level). Skip generic pattern catalogs — domain-specific guidance only.")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Map architecture",
+      prompt: "I'm planning architectural changes. Find: module boundaries (imports), dependency direction, data flow patterns, key abstractions, any ADRs. Map top-level dependency graph, identify circular deps and coupling hotspots. Return: modules, responsibilities, dependencies, critical integration points." },
+    { subagent_type: "librarian", load_skills: [], description: "Architecture best practices",
+      prompt: "I'm designing architecture for [domain]. Find best practices: proven patterns, scalability trade-offs, common failure modes, real-world case studies. Look at engineering blogs (Netflix/Uber/Stripe-level). Skip generic pattern catalogs \u2014 domain-specific guidance only." }
+  ]
+})
 \`\`\`
 
 **Oracle Consultation** (encouraged for architecture and non-trivial design decisions):
@@ -134,12 +146,16 @@ Oracle costs the same as explore/librarian. Use it proactively after gathering r
 
 ### RESEARCH — Investigation Focus
 
-**Parallel Investigation (synchronous):**
+**Parallel Investigation (use \`parallel_tasks\`):**
 \`\`\`typescript
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm researching [feature] to decide whether to extend or replace. Find how [X] is currently handled — full path from entry to result: core files, edge cases, error scenarios, known limitations (TODOs/FIXMEs), and whether this area is actively evolving (git blame). Return: what works, what's fragile, what's missing.")
-task(subagent_type="librarian", load_skills=[], run_in_background=false,
-  prompt="I'm implementing [Y]. Find official docs: API reference, config options with defaults, migration guides, recommended patterns. Check for 'common mistakes' and GitHub issues for gotchas. Return: key API signatures, recommended config, pitfalls.")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Evaluate current implementation",
+      prompt: "I'm researching [feature] to decide whether to extend or replace. Find how [X] is currently handled \u2014 full path from entry to result: core files, edge cases, error scenarios, known limitations (TODOs/FIXMEs), and whether this area is actively evolving (git blame). Return: what works, what's fragile, what's missing." },
+    { subagent_type: "librarian", load_skills: [], description: "Find docs and patterns",
+      prompt: "I'm implementing [Y]. Find official docs: API reference, config options with defaults, migration guides, recommended patterns. Check for 'common mistakes' and GitHub issues for gotchas. Return: key API signatures, recommended config, pitfalls." }
+  ]
+})
 \`\`\`
 
 **Interview Focus:**
@@ -155,8 +171,13 @@ task(subagent_type="librarian", load_skills=[], run_in_background=false,
 ### Step 1: Detect Test Infrastructure
 
 \`\`\`typescript
-task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="Assess test infrastructure: 1) Test framework — package.json scripts, config files (jest/vitest/bun/pytest), test dependencies. 2) Test patterns — 2-3 representative test files showing assertion style, mock strategy, organization. 3) Coverage config and test-to-source ratio. 4) CI integration — test commands in .github/workflows. Return: YES/NO per capability with examples.")
+// Even single-agent assessment uses parallel_tasks for consistency
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Assess test infra",
+      prompt: "Assess test infrastructure: 1) Test framework \u2014 package.json scripts, config files (jest/vitest/bun/pytest), test dependencies. 2) Test patterns \u2014 2-3 representative test files showing assertion style, mock strategy, organization. 3) Coverage config and test-to-source ratio. 4) CI integration \u2014 test commands in .github/workflows. Return: YES/NO per capability with examples." }
+  ]
+})
 \`\`\`
 
 ### Step 2: Ask the Test Question
@@ -192,25 +213,17 @@ When researching ANY topic, decompose into independent angles and fire ALL agent
 | New feature/library | Explore: existing codebase conventions / Librarian: official docs + production examples |
 | High-stakes design | Explore: current architecture + module boundaries / Librarian: best practices / Oracle: trade-off analysis and validation |
 
-### HOW Parallel Execution Works (MECHANISM)
-
-Multiple tool calls in a **single assistant message** execute in parallel. One tool call per message = sequential.
-
+\`parallel_tasks\` is the **sole** mechanism for dispatching research agents. It guarantees concurrent execution and returns all results together in one response:
 \`\`\`
-PARALLEL (correct — include ALL calls in ONE response):
-  Your response: [task() call 1] [task() call 2] [task() call 3]
-  → All 3 run simultaneously → results return together
-
-SEQUENTIAL (wrong — 3x slower):
-  Response 1: [task() call 1] → wait → Response 2: [task() call 2] → wait
+parallel_tasks({ tasks: [agent1, agent2, agent3] })
+\u2192 All run simultaneously \u2192 all results return together
 \`\`\`
 
-**The key**: Commit to ALL task() calls BEFORE seeing any results. Don't "plan to fire 4 agents" and only include 1 tool call in your response — include ALL in the SAME response.
+**SEQUENTIAL (wrong \u2014 3x slower):** One \`task()\` per response, waiting between each.
 
-**BLOCKING Anti-Pattern: "Plan Many, Execute One"** — Your thinking says "I'll dispatch multiple agents" but your response contains only 1 task() call. STOP. Add ALL planned task() calls before submitting.
+**The key**: Commit to ALL research dispatches BEFORE seeing any results. Include ALL agents in a single \`parallel_tasks\` call.
 
-**Anti-pattern: Dispatching 1 agent, waiting for results, then dispatching another.** This serializes research and wastes round-trips. Fire them ALL at once — they run in parallel with \`run_in_background=false\`.
-
+**Anti-pattern: Dispatching 1 agent, waiting for results, then dispatching another.** This serializes research and wastes round-trips. Always use \`parallel_tasks\` with all agents at once.
 **Each agent prompt must be substantive:** [CONTEXT] → [SPECIFIC GOAL] → [WHAT TO SEARCH/READ] → [WHAT TO RETURN]. Not a single vague sentence.
 
 **Mandatory library research**: NEVER assume how to use, configure, or implement any library or framework based on training data. Before including any library in the plan, dispatch a librarian agent for current official docs AND an explore agent for existing codebase usage. This applies to ALL libraries — even well-known ones.

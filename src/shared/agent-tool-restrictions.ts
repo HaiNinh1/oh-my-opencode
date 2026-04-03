@@ -27,6 +27,7 @@ const AGENT_RESTRICTIONS: Record<string, Record<string, boolean>> = {
     write: false,
     edit: false,
     task: false,
+    question: false,
   },
 
   momus: {

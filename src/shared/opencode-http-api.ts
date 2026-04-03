@@ -3,6 +3,7 @@ import { log } from "./logger"
 import { isRecord } from "./record-type-guard"
 
 type UnknownRecord = Record<string, unknown>
+type ClientFetch = (request: Request) => Promise<Response>
 
 function getInternalClient(client: unknown): UnknownRecord | null {
   if (!isRecord(client)) {
@@ -11,6 +12,20 @@ function getInternalClient(client: unknown): UnknownRecord | null {
 
   const internal = client["_client"]
   return isRecord(internal) ? internal : null
+}
+
+function getClientFetch(client: unknown): ClientFetch | null {
+  const internal = getInternalClient(client)
+  if (!internal) return null
+
+  const getConfig = internal["getConfig"]
+  if (typeof getConfig !== "function") return null
+
+  const config = getConfig()
+  if (!isRecord(config)) return null
+
+  const fetchFn = config["fetch"]
+  return typeof fetchFn === "function" ? (fetchFn as ClientFetch) : null
 }
 
 export function getServerBaseUrl(client: unknown): string | null {
@@ -65,15 +80,30 @@ export async function patchPart(
     return false
   }
 
-  const auth = getServerBasicAuthHeader()
-  if (!auth) {
-    log("[opencode-http-api] No auth header available")
-    return false
-  }
-
+  const clientFetch = getClientFetch(client)
   const url = `${baseUrl}/session/${encodeURIComponent(sessionID)}/message/${encodeURIComponent(messageID)}/part/${encodeURIComponent(partID)}`
 
   try {
+    if (clientFetch) {
+      const request = new Request(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const response = await clientFetch(request)
+      if (!response.ok) {
+        log("[opencode-http-api] PATCH failed (client fetch)", { status: response.status, url })
+        return false
+      }
+      return true
+    }
+
+    const auth = getServerBasicAuthHeader()
+    if (!auth) {
+      log("[opencode-http-api] No auth header available and no client fetch found")
+      return false
+    }
+
     const response = await fetch(url, {
       method: "PATCH",
       headers: {
@@ -109,15 +139,28 @@ export async function deletePart(
     return false
   }
 
-  const auth = getServerBasicAuthHeader()
-  if (!auth) {
-    log("[opencode-http-api] No auth header available")
-    return false
-  }
-
+  const clientFetch = getClientFetch(client)
   const url = `${baseUrl}/session/${encodeURIComponent(sessionID)}/message/${encodeURIComponent(messageID)}/part/${encodeURIComponent(partID)}`
 
   try {
+    if (clientFetch) {
+      const request = new Request(url, {
+        method: "DELETE",
+      })
+      const response = await clientFetch(request)
+      if (!response.ok) {
+        log("[opencode-http-api] DELETE failed (client fetch)", { status: response.status, url })
+        return false
+      }
+      return true
+    }
+
+    const auth = getServerBasicAuthHeader()
+    if (!auth) {
+      log("[opencode-http-api] No auth header available and no client fetch found")
+      return false
+    }
+
     const response = await fetch(url, {
       method: "DELETE",
       headers: {

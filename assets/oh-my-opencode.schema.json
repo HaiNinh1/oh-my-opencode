@@ -4396,6 +4396,9 @@
             }
           },
           "additionalProperties": false
+        },
+        "force_sync": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false
