@@ -30,6 +30,7 @@ export function createExploreAgent(model: string): AgentConfig {
     "edit",
     "apply_patch",
     "task",
+    "parallel_tasks",
     "call_omo_agent",
   ])
 
