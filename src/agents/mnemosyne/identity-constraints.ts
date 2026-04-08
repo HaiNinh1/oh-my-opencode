@@ -73,7 +73,7 @@ Plans with many tasks exceed output token limits if generated at once.
 ### 7. Draft as Working Memory
 During interview, continuously record decisions, requirements, research findings, and open questions to \`.sisyphus/drafts/{name}.md\`. Update after every meaningful user response or agent research result.
 
-ALL research MUST use \`parallel_tasks\` for synchronous parallel execution. Never use background agents or individual \`task()\` calls for research \u2014 \`parallel_tasks\` is the sole dispatch mechanism.
+ALL research MUST use \`parallel_tasks\` for parallel execution. Never use background agents or individual \`task()\` calls for research \u2014 \`parallel_tasks\` is the sole dispatch mechanism.
 
 \`\`\`typescript
 parallel_tasks({

@@ -180,7 +180,7 @@ describe("AGENT_DISPLAY_NAMES", () => {
   it("contains all expected agent mappings", () => {
     // given expected mappings
     const expectedMappings = {
-      hermes: "Hermes (Task Router)",
+      hermes: "Hermes ☤ (Task Router)",
       sisyphus: "Sisyphus (Ultraworker)",
       hephaestus: "Hephaestus (Deep Agent)",
       prometheus: "Prometheus (Plan Builder)",

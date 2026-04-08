@@ -316,32 +316,39 @@ task(subagent_type="oracle", load_skills=[], run_in_background=false,
 
 ### When to Use Research Agents
 
-- **User mentions unfamiliar technology** — \`librarian\`: Find official docs and best practices.
-- **User wants to modify existing code** — \`explore\`: Find current implementation and patterns.
-- **User asks "how should I..."** — Both: Find examples + best practices.
-- **User describes new feature** — \`explore\`: Find similar features in codebase.
+- **User mentions unfamiliar technology** \u2014 \`librarian\`: Find official docs and best practices.
+- **User wants to modify existing code** \u2014 \`explore\`: Find current implementation and patterns.
+- **User asks "how should I..."** \u2014 Both: Find examples + best practices.
+- **User describes new feature** \u2014 \`explore\`: Find similar features in codebase.
+
+When 2+ of these apply simultaneously, always combine them into a single \`parallel_tasks\` call.
 
 ### Research Patterns
 
-**For Understanding Codebase:**
+**Combined research (preferred \u2014 use \`parallel_tasks\` for guaranteed parallel execution):**
+\`\`\`typescript
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [],
+      description: "Understand codebase structure",
+      prompt: "I'm working on [topic] and need to understand how it's organized before making changes. I'll use this to match existing conventions. Find all related files \u2014 directory structure, naming patterns, export conventions, how modules connect. Compare 2-3 similar modules to identify the canonical pattern. Return file paths with descriptions and the recommended pattern to follow." },
+    { subagent_type: "librarian", load_skills: [],
+      description: "Find official docs",
+      prompt: "I'm integrating [library] and need to understand [specific feature] for correct first-try implementation. I'll use this to follow recommended patterns. Find official docs: API surface, config options with defaults, TypeScript types, recommended usage, and breaking changes in recent versions. Check changelog if our version differs from latest. Return: API signatures, config snippets, pitfalls." },
+    { subagent_type: "librarian", load_skills: [],
+      description: "Find OSS implementations",
+      prompt: "I'm implementing [feature] and want to learn from production OSS before designing our approach. I'll use this to identify consensus patterns. Find 2-3 established implementations (1000+ stars) \u2014 focus on: architecture choices, edge case handling, test strategies, documented trade-offs. Skip tutorials \u2014 I need real implementations with proper error handling." }
+  ]
+})
+\`\`\`
+
+**Single-agent research (only when a single angle suffices):**
 \`\`\`typescript
 task(subagent_type="explore", load_skills=[], run_in_background=false,
-  prompt="I'm working on [topic] and need to understand how it's organized before making changes. I'll use this to match existing conventions. Find all related files \u2014 directory structure, naming patterns, export conventions, how modules connect. Compare 2-3 similar modules to identify the canonical pattern. Return file paths with descriptions and the recommended pattern to follow.")
+  prompt="I'm working on [topic] and need to understand how it's organized before making changes. ...")
 \`\`\`
 
-**For External Knowledge:**
-\`\`\`typescript
-task(subagent_type="librarian", load_skills=[], run_in_background=false,
-  prompt="I'm integrating [library] and need to understand [specific feature] for correct first-try implementation. I'll use this to follow recommended patterns. Find official docs: API surface, config options with defaults, TypeScript types, recommended usage, and breaking changes in recent versions. Check changelog if our version differs from latest. Return: API signatures, config snippets, pitfalls.")
-\`\`\`
-
-**For Implementation Examples:**
-\`\`\`typescript
-task(subagent_type="librarian", load_skills=[], run_in_background=false,
-  prompt="I'm implementing [feature] and want to learn from production OSS before designing our approach. I'll use this to identify consensus patterns. Find 2-3 established implementations (1000+ stars) \u2014 focus on: architecture choices, edge case handling, test strategies, documented trade-offs. Skip tutorials \u2014 I need real implementations with proper error handling.")
-\`\`\`
-
-**Tip**: When you need 2+ of these simultaneously, use \`parallel_tasks({ tasks: [...] })\` \u2014 it is the ONLY way to guarantee parallel execution.
+**Tip**: \`parallel_tasks\` is the ONLY way to guarantee parallel execution. Individual \`task()\` calls may run sequentially.
 
 ## Interview Best Practices
 

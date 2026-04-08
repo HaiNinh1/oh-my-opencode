@@ -234,7 +234,16 @@ Oracle is a read-only, high-quality reasoning model. Consultation only — Oracl
 
 **Oracle is encouraged, not rationed.** It costs the same as explore/librarian. Use it whenever a second opinion would improve your confidence or catch blind spots. The only prerequisite: do your research first so Oracle has concrete material to reason about.
 
-### WHEN to Consult:
+### MANDATORY Oracle Consultation (ALWAYS — no exceptions):
+
+You MUST consult Oracle BEFORE starting work when the user asks you to:
+- **Implement** anything ("implement X", "add Y", "create Z", "build W")
+- **Create a plan** ("plan for X", "create a plan", "make a strategy", "design a plan")
+- **Design** anything ("design X", "architect Y", "how should we structure Z")
+
+This is NON-NEGOTIABLE. Even if the task seems straightforward, consult Oracle first. Oracle catches blind spots, validates your approach, and prevents wasted effort. Do your research (explore/librarian) first, then consult Oracle with your findings and proposed approach BEFORE writing any code or finalizing any plan.
+
+### WHEN to Consult (recommended):
 
 ${useWhen.map((w) => `- ${w}`).join("\n")}
 

@@ -126,14 +126,22 @@ TASK VERIFICATION:
 [ ] Commit created (if task specifies)
 \`\`\`
 
-### After ALL Tasks — Final Verification
-Execute the plan's **Final Verification** checklist yourself:
+### After ALL Tasks — Final Verification Wave
 
-1. **Plan Compliance**: Read the Work Objectives — verify every must-have is present, every must-NOT-have is absent
-2. **Build & Tests**: Run full build + full test suite
-3. **Code Quality**: Grep for anti-patterns (\`as any\`, \`@ts-ignore\`, empty catches, console.log)
-4. **QA Evidence**: Verify all evidence files exist at specified paths
-5. **Scope Fidelity**: For each task, verify the diff matches spec — nothing missing, nothing extra
+Dispatch ALL 4 review agents in parallel using \`parallel_tasks\`:
+\`\`\`
+parallel_tasks({
+  tasks: [
+    { subagent_type: "oracle", load_skills: [], description: "F1 Plan Compliance", prompt: "[paste F1 instructions from plan]" },
+    { category: "unspecified-high", load_skills: [], description: "F2 Code Quality", prompt: "[paste F2 instructions]" },
+    { category: "unspecified-high", load_skills: [], description: "F3 QA Scenarios", prompt: "[paste F3 instructions]" },
+    { category: "deep", load_skills: [], description: "F4 Scope Fidelity", prompt: "[paste F4 instructions]" }
+  ]
+})
+\`\`\`
+ALL must return \`VERDICT: APPROVE\`. If any REJECT: fix issues, re-run that reviewer.
+Present consolidated results to user — wait for explicit "okay" before completing.
+Never mark F1-F4 as checked before getting user's okay.
 
 ### Evidence Collection
 When QA Scenarios specify evidence paths:
