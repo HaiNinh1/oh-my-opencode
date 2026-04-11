@@ -7,10 +7,6 @@ const FREE_OR_LOCAL_PROMPT_TOKEN_LIMIT = 24000
 const PLAN_AGENT_PROMPT_APPEND = `
 
 Additional requirements for this planning request:
-- Answer in English.
-- Write the plan in English.
-- Plan well for ultrawork execution.
-- Use TDD-oriented planning.
 - Include a clear atomic commit strategy.`
 
 function usesFreeOrLocalModel(model: { providerID: string; modelID: string; variant?: string } | undefined): boolean {

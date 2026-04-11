@@ -1,4 +1,4 @@
-import type { ParallelTaskItem, ParallelTasksToolOptions, ToolContextWithMetadata } from "./types"
+import type { ParallelTaskItem, ParallelTasksToolOptions, TaskResult, ToolContextWithMetadata } from "./types"
 import type { ResolvedTask } from "./task-resolver"
 import { resolveParentContext, executeSyncTask } from "../delegate-task/executor"
 import { resolveAllTasks } from "./task-resolver"
@@ -84,8 +84,8 @@ export async function executeParallelTasks(
     failed: errors.length,
   })
 
-  const results = await Promise.allSettled(
-    resolved.map(async (task) => {
+  const taskResults: TaskResult[] = await Promise.all(
+    resolved.map(async (task): Promise<TaskResult> => {
       const partId = createPartId()
       const taskStartTime = Date.now()
       let childSessionId: string | undefined
@@ -119,8 +119,9 @@ export async function executeParallelTasks(
           task.fallbackChain,
         )
 
+        let emitted = false
         if (partCtx && childSessionId) {
-          await emitCompletedPart(
+          emitted = await emitCompletedPart(
             partCtx,
             partId,
             taskInput,
@@ -128,20 +129,44 @@ export async function executeParallelTasks(
             result,
             taskStartTime,
             task.categoryModel,
-          ).catch((err) => log("[parallel_tasks] Failed to emit completed part", { error: String(err) }))
+          ).catch((err) => {
+            log("[parallel_tasks] Failed to emit completed part", { error: String(err) })
+            return false
+          })
         }
 
-        return result
+        return {
+          index: task.index,
+          description: task.item.description,
+          output: result,
+          errorMessage: null,
+          emitted,
+          childSessionId,
+          agent: task.agentToUse,
+        }
       } catch (error) {
+        let emitted = false
         if (partCtx) {
           const errorMsg = error instanceof Error ? error.message : String(error)
-          await emitErrorPart(partCtx, partId, taskInput, errorMsg, taskStartTime)
-            .catch((err) => log("[parallel_tasks] Failed to emit error part", { error: String(err) }))
+          emitted = await emitErrorPart(partCtx, partId, taskInput, errorMsg, taskStartTime)
+            .catch((err) => {
+              log("[parallel_tasks] Failed to emit error part", { error: String(err) })
+              return false
+            })
         }
-        throw error
+
+        return {
+          index: task.index,
+          description: task.item.description,
+          output: null,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          emitted,
+          childSessionId,
+          agent: task.agentToUse,
+        }
       }
     }),
   )
 
-  return formatResults(items, resolved, results, errors, startTime)
+  return formatResults(taskResults, errors, startTime, items.length)
 }
