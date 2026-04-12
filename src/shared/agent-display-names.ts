@@ -18,6 +18,7 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   "multimodal-looker": "multimodal-looker",
   mnemosyne: "Mnemosyne (Compact Planner)",
   heracles: "Heracles (Direct Executor)",
+  enhancer: "enhancer",
 }
 
 /**

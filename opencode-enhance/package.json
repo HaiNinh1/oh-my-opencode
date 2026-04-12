@@ -1,0 +1,18 @@
+{
+  "name": "opencode-enhance",
+  "version": "0.1.0",
+  "description": "OpenCode TUI plugin — enhance prompts with AI before sending",
+  "type": "module",
+  "exports": {
+    "./tui": "./tui.tsx"
+  },
+  "files": [
+    "tui.tsx"
+  ],
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=0.13.7",
+    "solid-js": "*",
+    "@opentui/core": "*",
+    "@opentui/solid": "*"
+  }
+}
