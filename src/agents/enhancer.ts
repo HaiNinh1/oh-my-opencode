@@ -13,8 +13,10 @@ Rules:
 - Improve clarity, coherence, specificity, and structure
 - Keep the enhanced prompt concise unless the original is detailed
 - Do not add additional instructions about tools, workflows, or agent behavior or custom title to the prompt
+- Do not add additional implementation details, code, or assumptions not explicitly stated in the original prompt
 - Return ONLY the improved prompt text, nothing else
-- No preamble, no explanation, no markdown wrapping`;
+- No preamble, no explanation, no markdown wrapping
+- If session context is provided in <session_context> tags, use it to resolve references and understand the user's current work, but do not assume the user wants to continue in the same direction. If the prompt signals a pivot, enhance it on its own terms.`;
 
 export function createEnhancerAgent(model: string): AgentConfig {
   return {
