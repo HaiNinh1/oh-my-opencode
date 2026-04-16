@@ -1,7 +1,6 @@
 import { spawn } from "bun"
 import {
   resolveGrepCli,
-  type ResolvedCli,
   type GrepBackend,
   DEFAULT_MAX_DEPTH,
   DEFAULT_MAX_FILESIZE,
@@ -102,8 +101,7 @@ function parseOutput(output: string, filesOnly = false): GrepMatch[] {
   const matches: GrepMatch[] = []
   const lines = output.split("\n")
 
-  for (let line of lines) {
-    line = line.replace(/\r$/, "")
+  for (const line of lines) {
     if (!line.trim()) continue
 
     if (filesOnly) {
@@ -116,8 +114,7 @@ function parseOutput(output: string, filesOnly = false): GrepMatch[] {
       continue
     }
 
-    // Handle Windows drive-letter paths (e.g. C:\path\file.ts:42:content)
-    const match = line.match(/^([A-Za-z]:[\\\/].*?|.+?):(\d+):(.*)$/)
+    const match = line.match(/^(.+?):(\d+):(.*)$/)
     if (match) {
       matches.push({
         file: match[1],
@@ -136,11 +133,10 @@ function parseCountOutput(output: string): CountResult[] {
   const results: CountResult[] = []
   const lines = output.split("\n")
 
-  for (let line of lines) {
-    line = line.replace(/\r$/, "")
+  for (const line of lines) {
     if (!line.trim()) continue
 
-    const match = line.match(/^([A-Za-z]:[\\\/].*?|.+?):(\d+)$/)
+    const match = line.match(/^(.+?):(\d+)$/)
     if (match) {
       results.push({
         file: match[1],
@@ -152,17 +148,17 @@ function parseCountOutput(output: string): CountResult[] {
   return results
 }
 
-export async function runRg(options: GrepOptions, resolvedCli?: ResolvedCli): Promise<GrepResult> {
+export async function runRg(options: GrepOptions): Promise<GrepResult> {
   await rgSemaphore.acquire()
   try {
-    return await runRgInternal(options, resolvedCli)
+    return await runRgInternal(options)
   } finally {
     rgSemaphore.release()
   }
 }
 
-async function runRgInternal(options: GrepOptions, resolvedCli?: ResolvedCli): Promise<GrepResult> {
-  const cli = resolvedCli ?? resolveGrepCli()
+async function runRgInternal(options: GrepOptions): Promise<GrepResult> {
+  const cli = resolveGrepCli()
   const args = buildArgs(options, cli.backend)
   const timeout = Math.min(options.timeout ?? DEFAULT_TIMEOUT_MS, DEFAULT_TIMEOUT_MS)
 
@@ -228,23 +224,17 @@ async function runRgInternal(options: GrepOptions, resolvedCli?: ResolvedCli): P
   }
 }
 
-export async function runRgCount(
-  options: Omit<GrepOptions, "context">,
-  resolvedCli?: ResolvedCli
-): Promise<CountResult[]> {
+export async function runRgCount(options: Omit<GrepOptions, "context">): Promise<CountResult[]> {
   await rgSemaphore.acquire()
   try {
-    return await runRgCountInternal(options, resolvedCli)
+    return await runRgCountInternal(options)
   } finally {
     rgSemaphore.release()
   }
 }
 
-async function runRgCountInternal(
-  options: Omit<GrepOptions, "context">,
-  resolvedCli?: ResolvedCli
-): Promise<CountResult[]> {
-  const cli = resolvedCli ?? resolveGrepCli()
+async function runRgCountInternal(options: Omit<GrepOptions, "context">): Promise<CountResult[]> {
+  const cli = resolveGrepCli()
   const args = buildArgs({ ...options, context: 0 }, cli.backend)
 
   if (cli.backend === "rg") {

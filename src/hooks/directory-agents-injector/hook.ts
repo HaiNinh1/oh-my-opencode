@@ -16,10 +16,8 @@ interface ToolExecuteOutput {
   metadata: unknown;
 }
 
-interface DirectoryAgentsInjectorHook {
-  "tool.execute.before"?: (input: ToolExecuteInput, output: { args: unknown }) => Promise<void>;
-  "tool.execute.after": (input: ToolExecuteInput, output: ToolExecuteOutput) => Promise<void>;
-  event: (input: EventInput) => Promise<void>;
+interface ToolExecuteBeforeOutput {
+  args: unknown;
 }
 
 interface EventInput {
@@ -32,7 +30,7 @@ interface EventInput {
 export function createDirectoryAgentsInjectorHook(
   ctx: PluginInput,
   modelCacheState?: { anthropicContext1MEnabled: boolean },
-): DirectoryAgentsInjectorHook {
+) {
   const sessionCaches = new Map<string, Set<string>>();
   const truncator = createDynamicTruncator(ctx, modelCacheState);
 
@@ -50,6 +48,14 @@ export function createDirectoryAgentsInjectorHook(
       });
       return;
     }
+  };
+
+  const toolExecuteBefore = async (
+    input: ToolExecuteInput,
+    output: ToolExecuteBeforeOutput,
+  ): Promise<void> => {
+    void input;
+    void output;
   };
 
   const eventHandler = async ({ event }: EventInput) => {
@@ -74,6 +80,7 @@ export function createDirectoryAgentsInjectorHook(
   };
 
   return {
+    "tool.execute.before": toolExecuteBefore,
     "tool.execute.after": toolExecuteAfter,
     event: eventHandler,
   };

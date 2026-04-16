@@ -52,9 +52,6 @@ class LSPServerManager {
     this.cleanupInterval = setInterval(() => {
       this.cleanupIdleClients();
     }, 60000);
-    if (typeof this.cleanupInterval === "object" && "unref" in this.cleanupInterval) {
-      this.cleanupInterval.unref();
-    }
   }
 
   private cleanupIdleClients(): void {

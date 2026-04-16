@@ -12,7 +12,6 @@ export interface BoulderState {
   started_at: string
   /** Session IDs that have worked on this plan */
   session_ids: string[]
-  session_origins?: Record<string, "direct" | "appended">
   /** Plan name derived from filename */
   plan_name: string
   /** Agent type to use when resuming (e.g., 'atlas') */

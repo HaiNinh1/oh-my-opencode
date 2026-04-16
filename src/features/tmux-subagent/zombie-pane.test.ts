@@ -1,5 +1,4 @@
-/// <reference path="../../../bun-test.d.ts" />
-import { beforeEach, describe, expect, mock, test, afterAll } from "bun:test"
+import { beforeEach, describe, expect, mock, test } from "bun:test"
 import type { TmuxConfig } from "../../config/schema"
 import type { ActionResult, ExecuteContext, ExecuteActionsResult } from "./action-executor"
 import type { TmuxUtilDeps } from "./manager"
@@ -26,9 +25,6 @@ const mockExecuteActions = mock<(
   results: [],
 }))
 
-const mockSpawnTmuxWindow = mock(async () => ({ success: true, paneId: "%window" }))
-const mockSpawnTmuxSession = mock(async () => ({ success: true, paneId: "%session" }))
-
 const mockIsInsideTmux = mock<() => boolean>(() => true)
 const mockGetCurrentPaneId = mock<() => string | undefined>(() => "%0")
 
@@ -48,12 +44,7 @@ mock.module("../../shared/tmux", () => ({
   SESSION_READY_POLL_INTERVAL_MS: 10,
   SESSION_READY_TIMEOUT_MS: 50,
   SESSION_MISSING_GRACE_MS: 1_000,
-  spawnTmuxWindow: mockSpawnTmuxWindow,
-  spawnTmuxSession: mockSpawnTmuxSession,
-  SESSION_TIMEOUT_MS: 600_000,
 }))
-
-afterAll(() => { mock.restore() })
 
 const mockTmuxDeps: TmuxUtilDeps = {
   isInsideTmux: mockIsInsideTmux,
@@ -63,7 +54,6 @@ const mockTmuxDeps: TmuxUtilDeps = {
 function createConfig(): TmuxConfig {
   return {
     enabled: true,
-    isolation: "inline",
     layout: "main-vertical",
     main_pane_size: 60,
     main_pane_min_width: 80,
@@ -164,8 +154,6 @@ describe("TmuxSessionManager zombie pane handling", () => {
     mockQueryWindowState.mockClear()
     mockExecuteAction.mockClear()
     mockExecuteActions.mockClear()
-    mockSpawnTmuxWindow.mockClear()
-    mockSpawnTmuxSession.mockClear()
     mockIsInsideTmux.mockClear()
     mockGetCurrentPaneId.mockClear()
 
@@ -181,8 +169,6 @@ describe("TmuxSessionManager zombie pane handling", () => {
       spawnedPaneId: "%1",
       results: [],
     }))
-    mockSpawnTmuxWindow.mockImplementation(async () => ({ success: true, paneId: "%window" }))
-    mockSpawnTmuxSession.mockImplementation(async () => ({ success: true, paneId: "%session" }))
     mockIsInsideTmux.mockReturnValue(true)
     mockGetCurrentPaneId.mockReturnValue("%0")
   })
@@ -271,15 +257,9 @@ describe("TmuxSessionManager zombie pane handling", () => {
       "ses_pending",
       createTrackedSession({ closePending: true, closeRetryCount: 0 }),
     )
-    let shouldFailClose = true
-    mockExecuteAction.mockImplementation(async () => {
-      if (shouldFailClose) {
-        shouldFailClose = false
-        sessions.delete("ses_pending")
-        return { success: false }
-      }
-
-      return { success: true }
+    mockExecuteAction.mockImplementationOnce(async () => {
+      sessions.delete("ses_pending")
+      return { success: false }
     })
 
     // when

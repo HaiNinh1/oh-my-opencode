@@ -129,61 +129,6 @@ describe("model-resolution check", () => {
       expect(visual!.userOverride).toBe("google/gemini-3-flash-preview")
       expect(visual!.userVariant).toBe("high")
     })
-
-    it("attaches snapshot-backed capability diagnostics for built-in models", async () => {
-      const { getModelResolutionInfoWithOverrides } = await import("./model-resolution")
-
-      const info = getModelResolutionInfoWithOverrides({})
-      const sisyphus = info.agents.find((a) => a.name === "sisyphus")
-
-      expect(sisyphus).toBeDefined()
-      expect(sisyphus!.capabilityDiagnostics).toMatchObject({
-        resolutionMode: "snapshot-backed",
-        snapshot: { source: "bundled-snapshot" },
-      })
-    })
-
-    it("keeps provider-prefixed overrides for transport while capability diagnostics use pattern aliases", async () => {
-      const { getModelResolutionInfoWithOverrides } = await import("./model-resolution")
-
-      const info = getModelResolutionInfoWithOverrides({
-        categories: {
-          "visual-engineering": { model: "google/gemini-3.1-pro-high" },
-        },
-      })
-
-      const visual = info.categories.find((category) => category.name === "visual-engineering")
-      expect(visual).toBeDefined()
-      expect(visual!.effectiveModel).toBe("google/gemini-3.1-pro-high")
-      expect(visual!.capabilityDiagnostics).toMatchObject({
-        resolutionMode: "alias-backed",
-        canonicalization: {
-          source: "pattern-alias",
-          ruleID: "gemini-3.1-pro-tier-alias",
-        },
-      })
-    })
-
-    it("keeps provider-prefixed Claude overrides for transport while capability diagnostics canonicalize to bare IDs", async () => {
-      const { getModelResolutionInfoWithOverrides } = await import("./model-resolution")
-
-      const info = getModelResolutionInfoWithOverrides({
-        agents: {
-          oracle: { model: "anthropic/claude-opus-4-6-thinking" },
-        },
-      })
-
-      const oracle = info.agents.find((agent) => agent.name === "oracle")
-      expect(oracle).toBeDefined()
-      expect(oracle!.effectiveModel).toBe("anthropic/claude-opus-4-6-thinking")
-      expect(oracle!.capabilityDiagnostics).toMatchObject({
-        resolutionMode: "alias-backed",
-        canonicalization: {
-          source: "pattern-alias",
-          ruleID: "claude-thinking-legacy-alias",
-        },
-      })
-    })
   })
 
   describe("checkModelResolution", () => {
@@ -217,23 +162,6 @@ describe("model-resolution check", () => {
       expect(result.details!.some((d) => d.includes("Categories:"))).toBe(true)
       // Should have legend
       expect(result.details!.some((d) => d.includes("user override"))).toBe(true)
-      expect(result.details!.some((d) => d.includes("capabilities: snapshot-backed"))).toBe(true)
-    })
-
-    it("collects warnings when configured models rely on compatibility fallback", async () => {
-      const { collectCapabilityResolutionIssues, getModelResolutionInfoWithOverrides } = await import("./model-resolution")
-
-      const info = getModelResolutionInfoWithOverrides({
-        agents: {
-          oracle: { model: "custom/unknown-llm" },
-        },
-      })
-
-      const issues = collectCapabilityResolutionIssues(info)
-
-      expect(issues).toHaveLength(1)
-      expect(issues[0]?.title).toContain("compatibility fallback")
-      expect(issues[0]?.description).toContain("oracle=custom/unknown-llm")
     })
   })
 

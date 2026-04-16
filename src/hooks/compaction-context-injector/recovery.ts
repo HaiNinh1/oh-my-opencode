@@ -1,7 +1,4 @@
-import {
-  resolveRegisteredAgentName,
-  updateSessionAgent,
-} from "../../features/claude-code-session-state"
+import { updateSessionAgent } from "../../features/claude-code-session-state"
 import {
   getCompactionAgentConfigCheckpoint,
 } from "../../shared/compaction-agent-config-checkpoint"
@@ -69,7 +66,6 @@ export function createRecoveryLogic(
       checkpointWithAgent,
       currentPromptConfig,
     )
-    const launchAgent = resolveRegisteredAgentName(expectedPromptConfig.agent)
     const model = expectedPromptConfig.model
     const tools = expectedPromptConfig.tools
 
@@ -85,7 +81,7 @@ export function createRecoveryLogic(
         path: { id: sessionID },
         body: {
           noReply: true,
-          agent: launchAgent ?? expectedPromptConfig.agent,
+          agent: expectedPromptConfig.agent,
           ...(model ? { model } : {}),
           ...(tools ? { tools } : {}),
           parts: [createInternalAgentTextPart(AGENT_RECOVERY_PROMPT)],

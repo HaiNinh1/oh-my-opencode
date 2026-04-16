@@ -1,20 +1,17 @@
 import type { ClaudeCodeMcpServer } from "../claude-code-mcp-loader/types"
 import { McpOAuthProvider } from "../mcp-oauth/provider"
-import { withRefreshMutex } from "../mcp-oauth/refresh-mutex"
 import type { OAuthTokenData } from "../mcp-oauth/storage"
 import { isStepUpRequired, mergeScopes } from "../mcp-oauth/step-up"
-import type { OAuthProviderFactory, OAuthProviderLike } from "./types"
 
 export function getOrCreateAuthProvider(
-  authProviders: Map<string, OAuthProviderLike>,
+  authProviders: Map<string, McpOAuthProvider>,
   serverUrl: string,
-  oauth: NonNullable<ClaudeCodeMcpServer["oauth"]>,
-  createOAuthProvider: OAuthProviderFactory = (options) => new McpOAuthProvider(options),
-): OAuthProviderLike {
+  oauth: NonNullable<ClaudeCodeMcpServer["oauth"]>
+): McpOAuthProvider {
   const existing = authProviders.get(serverUrl)
   if (existing) return existing
 
-  const provider = createOAuthProvider({
+  const provider = new McpOAuthProvider({
     serverUrl,
     clientId: oauth.clientId,
     scopes: oauth.scopes,
@@ -30,8 +27,7 @@ function isTokenExpired(tokenData: OAuthTokenData): boolean {
 
 export async function buildHttpRequestInit(
   config: ClaudeCodeMcpServer,
-  authProviders: Map<string, OAuthProviderLike>,
-  createOAuthProvider?: OAuthProviderFactory,
+  authProviders: Map<string, McpOAuthProvider>
 ): Promise<RequestInit | undefined> {
   const headers: Record<string, string> = {}
 
@@ -42,29 +38,14 @@ export async function buildHttpRequestInit(
   }
 
   if (config.oauth && config.url) {
-    const provider = getOrCreateAuthProvider(authProviders, config.url, config.oauth, createOAuthProvider)
+    const provider = getOrCreateAuthProvider(authProviders, config.url, config.oauth)
     let tokenData = provider.tokens()
 
-    if (!tokenData) {
+    if (!tokenData || isTokenExpired(tokenData)) {
       try {
         tokenData = await provider.login()
       } catch {
         tokenData = null
-      }
-    }
-
-      if (tokenData && isTokenExpired(tokenData)) {
-        try {
-          const refreshToken = tokenData.refreshToken
-          tokenData = refreshToken
-            ? await withRefreshMutex(config.url, () => provider.refresh(refreshToken))
-            : await provider.login()
-        } catch {
-          try {
-            tokenData = await provider.login()
-        } catch {
-          tokenData = null
-        }
       }
     }
 
@@ -79,10 +60,9 @@ export async function buildHttpRequestInit(
 export async function handleStepUpIfNeeded(params: {
   error: Error
   config: ClaudeCodeMcpServer
-  authProviders: Map<string, OAuthProviderLike>
-  createOAuthProvider?: OAuthProviderFactory
+  authProviders: Map<string, McpOAuthProvider>
 }): Promise<boolean> {
-  const { error, config, authProviders, createOAuthProvider } = params
+  const { error, config, authProviders } = params
 
   if (!config.oauth || !config.url) {
     return false
@@ -109,50 +89,10 @@ export async function handleStepUpIfNeeded(params: {
   config.oauth.scopes = mergedScopes
 
   authProviders.delete(config.url)
-  const provider = getOrCreateAuthProvider(authProviders, config.url, config.oauth, createOAuthProvider)
+  const provider = getOrCreateAuthProvider(authProviders, config.url, config.oauth)
 
   try {
     await provider.login()
-    return true
-  } catch {
-    return false
-  }
-}
-
-export async function handlePostRequestAuthError(params: {
-  error: Error
-  config: ClaudeCodeMcpServer
-  authProviders: Map<string, OAuthProviderLike>
-  createOAuthProvider?: OAuthProviderFactory
-  refreshAttempted?: Set<string>
-}): Promise<boolean> {
-  const { error, config, authProviders, createOAuthProvider, refreshAttempted = new Set() } = params
-
-  if (!config.oauth || !config.url) {
-    return false
-  }
-
-  const statusMatch = /\b(401|403)\b/.exec(error.message)
-  if (!statusMatch) {
-    return false
-  }
-
-  const provider = getOrCreateAuthProvider(authProviders, config.url, config.oauth, createOAuthProvider)
-  const tokenData = provider.tokens()
-
-  if (!tokenData?.refreshToken) {
-    return false
-  }
-
-  if (refreshAttempted.has(config.url)) {
-    return false
-  }
-
-  refreshAttempted.add(config.url)
-
-  try {
-    const refreshToken = tokenData.refreshToken
-    await withRefreshMutex(config.url, () => provider.refresh(refreshToken))
     return true
   } catch {
     return false

@@ -5,35 +5,21 @@ import { log } from "../../shared"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
 import { buildReminderMessage } from "./formatter"
 
-/**
- * Target agents that should receive category+skill reminders.
- * These are orchestrator agents that delegate work to specialized agents.
- */
 const TARGET_AGENTS = new Set([
   "sisyphus",
   "sisyphus-junior",
   "atlas",
 ])
 
-/**
- * Tools that indicate the agent is doing work that could potentially be delegated.
- * When these tools are used, we remind the agent about the category+skill system.
- */
-const DELEGATABLE_WORK_TOOLS = new Set([
-  "edit",
-  "write",
-  "bash",
-  "read",
+const SEARCH_TOOLS = new Set([
   "grep",
   "glob",
+  "webfetch",
 ])
 
-/**
- * Tools that indicate the agent is already using delegation properly.
- */
-const DELEGATION_TOOLS = new Set([
-   "task",
-   "call_omo_agent",
+const EXPLORE_LIBRARIAN_TOOLS = new Set([
+  "task",
+  "call_omo_agent",
 ])
 
 interface ToolExecuteInput {
@@ -50,9 +36,9 @@ interface ToolExecuteOutput {
 }
 
 interface SessionState {
-  delegationUsed: boolean
+  exploreLibrarianUsed: boolean
   reminderShown: boolean
-  toolCallCount: number
+  searchToolCount: number
 }
 
 export function createCategorySkillReminderHook(
@@ -65,9 +51,9 @@ export function createCategorySkillReminderHook(
   function getOrCreateState(sessionID: string): SessionState {
     if (!sessionStates.has(sessionID)) {
       sessionStates.set(sessionID, {
-        delegationUsed: false,
+        exploreLibrarianUsed: false,
         reminderShown: false,
-        toolCallCount: 0,
+        searchToolCount: 0,
       })
     }
     return sessionStates.get(sessionID)!
@@ -94,24 +80,24 @@ export function createCategorySkillReminderHook(
 
     const state = getOrCreateState(sessionID)
 
-    if (DELEGATION_TOOLS.has(toolLower)) {
-      state.delegationUsed = true
-      log("[category-skill-reminder] Delegation tool used", { sessionID, tool })
+    if (EXPLORE_LIBRARIAN_TOOLS.has(toolLower)) {
+      state.exploreLibrarianUsed = true
+      log("[category-skill-reminder] Agent delegation used", { sessionID, tool })
       return
     }
 
-    if (!DELEGATABLE_WORK_TOOLS.has(toolLower)) {
+    if (!SEARCH_TOOLS.has(toolLower)) {
       return
     }
 
-    state.toolCallCount++
+    state.searchToolCount++
 
-    if (state.toolCallCount >= 3 && !state.delegationUsed && !state.reminderShown) {
+    if (state.searchToolCount >= 3 && !state.exploreLibrarianUsed && !state.reminderShown) {
       output.output += reminderMessage
       state.reminderShown = true
-      log("[category-skill-reminder] Reminder injected", {
+      log("[category-skill-reminder] Explore/librarian reminder injected", {
         sessionID,
-        toolCallCount: state.toolCallCount,
+        searchToolCount: state.searchToolCount,
       })
     }
   }

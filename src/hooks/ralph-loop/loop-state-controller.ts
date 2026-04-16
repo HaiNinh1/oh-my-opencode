@@ -3,7 +3,6 @@ import {
 	DEFAULT_COMPLETION_PROMISE,
 	DEFAULT_MAX_ITERATIONS,
 	HOOK_NAME,
-	ULTRAWORK_MAX_ITERATIONS,
 	ULTRAWORK_VERIFICATION_PROMISE,
 } from "./constants"
 import { clearState, incrementIteration, readState, writeState } from "./storage"
@@ -37,7 +36,7 @@ export function createLoopStateController(options: {
 				active: true,
 				iteration: 1,
 				max_iterations: loopOptions?.ultrawork
-					? ULTRAWORK_MAX_ITERATIONS
+					? undefined
 					: loopOptions?.maxIterations ??
 						config?.default_max_iterations ??
 						DEFAULT_MAX_ITERATIONS,

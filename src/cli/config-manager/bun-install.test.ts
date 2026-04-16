@@ -2,14 +2,13 @@
 
 import * as fs from "node:fs"
 
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test"
+import { afterEach, beforeEach, describe, expect, it, jest, spyOn } from "bun:test"
 
 import * as dataPath from "../../shared/data-path"
 import * as logger from "../../shared/logger"
 import * as spawnHelpers from "../../shared/spawn-with-windows-hide"
 import type { BunInstallResult } from "./bun-install"
-
-type BunInstallModule = typeof import("./bun-install")
+import { runBunInstallWithDetails } from "./bun-install"
 
 type CreateProcOptions = {
   exitCode?: number | null
@@ -38,16 +37,12 @@ describe("runBunInstallWithDetails", () => {
   let logSpy: ReturnType<typeof spyOn>
   let spawnWithWindowsHideSpy: ReturnType<typeof spyOn>
   let existsSyncSpy: ReturnType<typeof spyOn>
-  let runBunInstallWithDetails: BunInstallModule["runBunInstallWithDetails"]
 
-  beforeEach(async () => {
+  beforeEach(() => {
     getOpenCodeCacheDirSpy = spyOn(dataPath, "getOpenCodeCacheDir").mockReturnValue("/tmp/opencode-cache")
     logSpy = spyOn(logger, "log").mockImplementation(() => {})
     spawnWithWindowsHideSpy = spyOn(spawnHelpers, "spawnWithWindowsHide").mockReturnValue(createProc())
     existsSyncSpy = spyOn(fs, "existsSync").mockReturnValue(true)
-
-    const bunInstallModule = await import(`./bun-install?test=${Date.now()}-${Math.random()}`)
-    runBunInstallWithDetails = bunInstallModule.runBunInstallWithDetails
   })
 
   afterEach(() => {
@@ -69,7 +64,7 @@ describe("runBunInstallWithDetails", () => {
         expect(result).toEqual({ success: true })
         expect(getOpenCodeCacheDirSpy).toHaveBeenCalledTimes(1)
         expect(spawnWithWindowsHideSpy).toHaveBeenCalledWith(["bun", "install"], {
-          cwd: "/tmp/opencode-cache/packages",
+          cwd: "/tmp/opencode-cache",
           stdout: "pipe",
           stderr: "pipe",
         })
@@ -86,7 +81,7 @@ describe("runBunInstallWithDetails", () => {
         // then
         expect(result).toEqual({ success: true })
         expect(spawnWithWindowsHideSpy).toHaveBeenCalledWith(["bun", "install"], {
-          cwd: "/tmp/opencode-cache/packages",
+          cwd: "/tmp/opencode-cache",
           stdout: "pipe",
           stderr: "pipe",
         })
@@ -103,7 +98,7 @@ describe("runBunInstallWithDetails", () => {
         // then
         expect(result).toEqual({ success: true })
         expect(spawnWithWindowsHideSpy).toHaveBeenCalledWith(["bun", "install"], {
-          cwd: "/tmp/opencode-cache/packages",
+          cwd: "/tmp/opencode-cache",
           stdout: "inherit",
           stderr: "inherit",
         })
@@ -141,30 +136,9 @@ describe("runBunInstallWithDetails", () => {
     describe("#when the install times out and proc.exited never resolves", () => {
       it("#then returns timedOut true without hanging", async () => {
         // given
+        jest.useFakeTimers()
+
         let killCallCount = 0
-        const originalSetTimeout = globalThis.setTimeout
-        const originalClearTimeout = globalThis.clearTimeout
-
-        Object.defineProperty(globalThis, "setTimeout", {
-          configurable: true,
-          value: Object.assign(
-            (callback: TimerHandler) => {
-              if (typeof callback === "function") {
-                callback()
-              }
-
-              return 0
-            },
-            {
-              __promisify__: originalSetTimeout.__promisify__,
-            }
-          ),
-        })
-        Object.defineProperty(globalThis, "clearTimeout", {
-          configurable: true,
-          value: () => undefined,
-        })
-
         spawnWithWindowsHideSpy.mockReturnValue(
           createProc({
             exitCode: null,
@@ -174,28 +148,38 @@ describe("runBunInstallWithDetails", () => {
             },
           })
         )
-        const timeoutAwareModule = await import(`./bun-install?timeout-test=${Date.now()}-${Math.random()}`)
 
         try {
           // when
-          const outcome = await timeoutAwareModule.runBunInstallWithDetails({ outputMode: "pipe" })
+          const resultPromise = runBunInstallWithDetails({ outputMode: "pipe" })
+          jest.advanceTimersByTime(60_000)
+          jest.runOnlyPendingTimers()
+          await Promise.resolve()
+
+          const outcome = await Promise.race([
+            resultPromise.then((result) => ({
+              status: "resolved" as const,
+              result,
+            })),
+            new Promise<{ status: "pending" }>((resolve) => {
+              queueMicrotask(() => resolve({ status: "pending" }))
+            }),
+          ])
 
           // then
-          expect(outcome).toEqual({
+          if (outcome.status === "pending") {
+            throw new Error("runBunInstallWithDetails did not resolve after timing out")
+          }
+
+          expect(outcome.result).toEqual({
             success: false,
             timedOut: true,
-            error: 'bun install timed out after 60 seconds. Try running manually: cd "/tmp/opencode-cache/packages" && bun i',
+            error: 'bun install timed out after 60 seconds. Try running manually: cd "/tmp/opencode-cache" && bun i',
           } satisfies BunInstallResult)
           expect(killCallCount).toBe(1)
         } finally {
-          Object.defineProperty(globalThis, "setTimeout", {
-            configurable: true,
-            value: originalSetTimeout,
-          })
-          Object.defineProperty(globalThis, "clearTimeout", {
-            configurable: true,
-            value: originalClearTimeout,
-          })
+          jest.clearAllTimers()
+          jest.useRealTimers()
         }
       })
     })

@@ -1,6 +1,5 @@
 const KEYWORD_PATTERN = /\b(ultrawork|ulw)\b/gi
 const WORKTREE_FLAG_PATTERN = /--worktree(?:\s+(\S+))?/
-const WRAPPING_QUOTES_PATTERN = /^(["'`])([\s\S]*)\1$/
 
 export interface ParsedUserRequest {
   planName: string | null
@@ -22,11 +21,9 @@ export function parseUserRequest(promptText: string): ParsedUserRequest {
   }
 
   const cleanedArg = rawArg.replace(KEYWORD_PATTERN, "").trim()
-  const quotedPlanMatch = cleanedArg.match(WRAPPING_QUOTES_PATTERN)
-  const normalizedPlanName = quotedPlanMatch ? quotedPlanMatch[2].trim() : cleanedArg
 
   return {
-    planName: normalizedPlanName || null,
+    planName: cleanedArg || null,
     explicitWorktreePath,
   }
 }

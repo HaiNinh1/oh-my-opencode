@@ -1,7 +1,7 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { detectKeywordsWithType, extractPromptText } from "./detector"
-import { isPlannerAgent, isNonOmoAgent } from "./constants"
-import { log } from "../../shared"
+import { isPlannerAgent } from "./constants"
+import { log, isPassthroughAgent } from "../../shared"
 import {
   isSystemDirective,
   removeSystemReminders,
@@ -12,13 +12,8 @@ import {
   subagentSessions,
 } from "../../features/claude-code-session-state"
 import type { ContextCollector } from "../../features/context-injector"
-import type { RalphLoopHook } from "../ralph-loop"
 
-export function createKeywordDetectorHook(
-  ctx: PluginInput,
-  _collector?: ContextCollector,
-  _ralphLoop?: Pick<RalphLoopHook, "startLoop">
-) {
+export function createKeywordDetectorHook(ctx: PluginInput, _collector?: ContextCollector) {
   function getRuntimeVariant(input: { variant?: string }, message: Record<string, unknown>): string | undefined {
     if (typeof message["variant"] === "string") {
       return message["variant"]
@@ -50,9 +45,8 @@ export function createKeywordDetectorHook(
 
       const currentAgent = getSessionAgent(input.sessionID) ?? input.agent
 
-      // Skip all keyword injection for non-OMO agents (e.g., OpenCode-Builder, Plan)
-      if (isNonOmoAgent(currentAgent)) {
-        log(`[keyword-detector] Skipping keyword injection for non-OMO agent`, { sessionID: input.sessionID, agent: currentAgent })
+      if (isPassthroughAgent(currentAgent)) {
+        log(`[keyword-detector] Skipping passthrough agent`, { sessionID: input.sessionID, agent: currentAgent })
         return
       }
 
@@ -62,20 +56,17 @@ export function createKeywordDetectorHook(
       let detectedKeywords = detectKeywordsWithType(cleanText, currentAgent, modelID)
 
       if (isPlannerAgent(currentAgent)) {
-        const preFilterCount = detectedKeywords.length
         detectedKeywords = detectedKeywords.filter((k) => k.type !== "ultrawork")
-        if (preFilterCount > detectedKeywords.length) {
-          log(`[keyword-detector] Filtered ultrawork keywords for planner agent`, { sessionID: input.sessionID, agent: currentAgent })
-        }
       }
 
       if (detectedKeywords.length === 0) {
         return
       }
 
+      // Skip keyword detection for background task sessions to prevent mode injection
+      // (e.g., [analyze-mode]) which incorrectly triggers Prometheus restrictions
       const isBackgroundTaskSession = subagentSessions.has(input.sessionID)
       if (isBackgroundTaskSession) {
-        log(`[keyword-detector] Skipping keyword injection for background task session`, { sessionID: input.sessionID })
         return
       }
 
@@ -120,7 +111,6 @@ export function createKeywordDetectorHook(
               sessionID: input.sessionID,
             })
           )
-
       }
 
       const textPartIndex = output.parts.findIndex((p) => p.type === "text" && p.text !== undefined)

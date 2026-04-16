@@ -10,9 +10,8 @@ import {
   selectFallbackProvider,
 } from "../../shared/model-error-classifier"
 import { transformModelForProvider } from "../../shared/provider-model-id-transform"
-import { abortWithTimeout } from "./abort-with-timeout"
 
-export async function tryFallbackRetry(args: {
+export function tryFallbackRetry(args: {
   task: BackgroundTask
   errorInfo: { name?: string; message?: string }
   source: string
@@ -21,7 +20,7 @@ export async function tryFallbackRetry(args: {
   idleDeferralTimers: Map<string, ReturnType<typeof setTimeout>>
   queuesByKey: Map<string, QueueItem[]>
   processKey: (key: string) => void
-}): Promise<boolean> {
+}): boolean {
   const { task, errorInfo, source, concurrencyManager, client, idleDeferralTimers, queuesByKey, processKey } = args
   const fallbackChain = task.fallbackChain
   const canRetry =
@@ -36,14 +35,10 @@ export async function tryFallbackRetry(args: {
   const providerModelsCache = readProviderModelsCache()
   const connectedProviders = providerModelsCache?.connected ?? readConnectedProvidersCache()
   const connectedSet = connectedProviders ? new Set(connectedProviders.map(p => p.toLowerCase())) : null
-  const preferredProvider = task.model?.providerID?.toLowerCase()
 
   const isReachable = (entry: FallbackEntry): boolean => {
     if (!connectedSet) return true
-    if (entry.providers.some((provider) => connectedSet.has(provider.toLowerCase()))) {
-      return true
-    }
-    return preferredProvider ? connectedSet.has(preferredProvider) : false
+    return entry.providers.some((p) => connectedSet.has(p.toLowerCase()))
   }
 
   let selectedAttemptCount = attemptCount
@@ -85,13 +80,15 @@ export async function tryFallbackRetry(args: {
     task.concurrencyKey = undefined
   }
 
+  if (task.sessionID) {
+    client.session.abort({ path: { id: task.sessionID } }).catch(() => {})
+  }
+
   const idleTimer = idleDeferralTimers.get(task.id)
   if (idleTimer) {
     clearTimeout(idleTimer)
     idleDeferralTimers.delete(task.id)
   }
-
-  const previousSessionID = task.sessionID
 
   task.attemptCount = selectedAttemptCount
   const transformedModelId = transformModelForProvider(providerID, nextFallback.model)
@@ -122,11 +119,6 @@ export async function tryFallbackRetry(args: {
     category: task.category,
     isUnstableAgent: task.isUnstableAgent,
   }
-
-  if (previousSessionID) {
-    await abortWithTimeout(client, previousSessionID).catch(() => {})
-  }
-
   queue.push({ task, input: retryInput })
   queuesByKey.set(key, queue)
   processKey(key)

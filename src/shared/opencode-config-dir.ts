@@ -1,8 +1,6 @@
-import { existsSync, realpathSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { homedir } from "node:os"
-import { join, resolve, win32 } from "node:path"
-
-import { CONFIG_BASENAME } from "./plugin-identity"
+import { join, resolve } from "node:path"
 
 import type {
   OpenCodeBinaryType,
@@ -33,7 +31,7 @@ function getTauriConfigDir(identifier: string): string {
 
     case "win32": {
       const appData = process.env.APPDATA || join(homedir(), "AppData", "Roaming")
-      return win32.join(appData, identifier)
+      return join(appData, identifier)
     }
 
     case "linux":
@@ -44,25 +42,14 @@ function getTauriConfigDir(identifier: string): string {
   }
 }
 
-function resolveConfigPath(pathValue: string): string {
-  const resolvedPath = resolve(pathValue)
-  if (!existsSync(resolvedPath)) return resolvedPath
-
-  try {
-    return realpathSync(resolvedPath)
-  } catch {
-    return resolvedPath
-  }
-}
-
 function getCliConfigDir(): string {
   const envConfigDir = process.env.OPENCODE_CONFIG_DIR?.trim()
   if (envConfigDir) {
-    return resolveConfigPath(envConfigDir)
+    return resolve(envConfigDir)
   }
 
   const xdgConfig = process.env.XDG_CONFIG_HOME || join(homedir(), ".config")
-  return resolveConfigPath(join(xdgConfig, "opencode"))
+  return join(xdgConfig, "opencode")
 }
 
 export function getOpenCodeConfigDir(options: OpenCodeConfigDirOptions): string {
@@ -73,10 +60,7 @@ export function getOpenCodeConfigDir(options: OpenCodeConfigDirOptions): string 
   }
 
   const identifier = isDevBuild(version) ? TAURI_APP_IDENTIFIER_DEV : TAURI_APP_IDENTIFIER
-  const tauriDirBase = getTauriConfigDir(identifier)
-  const tauriDir = process.platform === "win32"
-    ? (win32.isAbsolute(tauriDirBase) ? win32.normalize(tauriDirBase) : win32.resolve(tauriDirBase))
-    : resolveConfigPath(tauriDirBase)
+  const tauriDir = getTauriConfigDir(identifier)
 
   if (checkExisting) {
     const legacyDir = getCliConfigDir()
@@ -99,7 +83,7 @@ export function getOpenCodeConfigPaths(options: OpenCodeConfigDirOptions): OpenC
     configJson: join(configDir, "opencode.json"),
     configJsonc: join(configDir, "opencode.jsonc"),
     packageJson: join(configDir, "package.json"),
-    omoConfig: join(configDir, `${CONFIG_BASENAME}.json`),
+    omoConfig: join(configDir, "oh-my-opencode.json"),
   }
 }
 
@@ -108,7 +92,7 @@ export function detectExistingConfigDir(binary: OpenCodeBinaryType, version?: st
 
   const envConfigDir = process.env.OPENCODE_CONFIG_DIR?.trim()
   if (envConfigDir) {
-    locations.push(resolveConfigPath(envConfigDir))
+    locations.push(resolve(envConfigDir))
   }
 
   if (binary === "opencode-desktop") {

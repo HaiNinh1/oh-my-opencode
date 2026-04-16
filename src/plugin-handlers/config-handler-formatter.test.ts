@@ -1,6 +1,7 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test, mock } from "bun:test"
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
 
 import type { OhMyOpenCodeConfig } from "../config"
+import { createConfigHandler } from "./config-handler"
 import * as agentConfigHandler from "./agent-config-handler"
 import * as commandConfigHandler from "./command-config-handler"
 import * as mcpConfigHandler from "./mcp-config-handler"
@@ -16,26 +17,8 @@ let applyToolConfigSpy: ReturnType<typeof spyOn>
 let applyMcpConfigSpy: ReturnType<typeof spyOn>
 let applyCommandConfigSpy: ReturnType<typeof spyOn>
 let applyProviderConfigSpy: ReturnType<typeof spyOn>
-let createConfigHandler: (typeof import("./config-handler"))["createConfigHandler"]
 
-async function importFreshConfigHandlerModule(): Promise<typeof import("./config-handler")> {
-  return import(`./config-handler?test=${Date.now()}-${Math.random()}`)
-}
-
-function createPluginConfig(overrides: Partial<OhMyOpenCodeConfig> = {}): OhMyOpenCodeConfig {
-  return {
-    git_master: {
-      commit_footer: true,
-      include_co_authored_by: true,
-      git_env_prefix: "GIT_MASTER=1",
-    },
-    ...overrides,
-  }
-}
-
-beforeEach(async () => {
-  mock.restore()
-
+beforeEach(() => {
   logSpy = spyOn(shared, "log").mockImplementation(() => {})
   loadPluginComponentsSpy = spyOn(
     pluginComponentsLoader,
@@ -64,7 +47,6 @@ beforeEach(async () => {
     providerConfigHandler,
     "applyProviderConfig",
   ).mockImplementation(() => {})
-  ;({ createConfigHandler } = await importFreshConfigHandlerModule())
 })
 
 afterEach(() => {
@@ -75,13 +57,12 @@ afterEach(() => {
   applyMcpConfigSpy.mockRestore()
   applyCommandConfigSpy.mockRestore()
   applyProviderConfigSpy.mockRestore()
-  mock.restore()
 })
 
 describe("createConfigHandler formatter pass-through", () => {
   test("preserves formatter object configured in opencode config", async () => {
     // given
-    const pluginConfig = createPluginConfig()
+    const pluginConfig: OhMyOpenCodeConfig = {}
     const formatterConfig = {
       prettier: {
         command: ["prettier", "--write"],
@@ -117,7 +98,7 @@ describe("createConfigHandler formatter pass-through", () => {
 
   test("preserves formatter=false configured in opencode config", async () => {
     // given
-    const pluginConfig = createPluginConfig()
+    const pluginConfig: OhMyOpenCodeConfig = {}
     const config: Record<string, unknown> = {
       formatter: false,
     }

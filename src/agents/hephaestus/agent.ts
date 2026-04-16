@@ -7,14 +7,13 @@ import type {
   AvailableSkill,
   AvailableCategory,
 } from "../dynamic-agent-prompt-builder";
-import { categorizeTools, buildAgentIdentitySection } from "../dynamic-agent-prompt-builder";
-import { getGptApplyPatchPermission } from "../gpt-apply-patch-guard";
+import { categorizeTools } from "../dynamic-agent-prompt-builder";
 
 import { buildHephaestusPrompt as buildGptPrompt } from "./gpt";
 import { buildHephaestusPrompt as buildGpt53CodexPrompt } from "./gpt-5-3-codex";
 import { buildHephaestusPrompt as buildGpt54Prompt } from "./gpt-5-4";
 
-const MODE: AgentMode = "primary";
+const MODE: AgentMode = "all";
 
 export type HephaestusPromptSource = "gpt-5-4" | "gpt-5-3-codex" | "gpt";
 
@@ -88,12 +87,7 @@ function buildDynamicHephaestusPrompt(ctx?: HephaestusContext): string {
       break;
   }
 
-  const agentIdentity = buildAgentIdentitySection(
-    "Hephaestus",
-    "Autonomous deep worker for software engineering from OhMyOpenCode",
-  );
-
-  return `${agentIdentity}\n${basePrompt}`;
+  return basePrompt;
 }
 
 export function createHephaestusAgent(
@@ -126,7 +120,6 @@ export function createHephaestusAgent(
     permission: {
       question: "allow",
       call_omo_agent: "deny",
-      ...getGptApplyPatchPermission(model),
     } as AgentConfig["permission"],
     reasoningEffort: "medium",
   };

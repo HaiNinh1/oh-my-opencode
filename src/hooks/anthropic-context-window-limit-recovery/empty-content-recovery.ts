@@ -1,7 +1,6 @@
 import {
   findEmptyMessages,
   findEmptyMessageByIndex,
-  findMessagesWithEmptyTextParts,
   injectTextPart,
   replaceEmptyTextParts,
 } from "../session-recovery/storage"
@@ -11,27 +10,6 @@ import type { Client } from "./client"
 import { PLACEHOLDER_TEXT } from "./message-builder"
 import { incrementEmptyContentAttempt } from "./state"
 import { fixEmptyMessagesWithSDK } from "./empty-content-recovery-sdk"
-import { log } from "../../shared/logger"
-
-async function showToastSafely(
-  client: Client,
-  body: {
-    title: string
-    message: string
-    variant: "error" | "warning" | "success"
-    duration: number
-  },
-  failureContext: string,
-): Promise<void> {
-  try {
-    await client.tui.showToast({ body })
-  } catch (error) {
-    log(`[auto-compact] failed to show toast: ${failureContext}`, {
-      title: body.title,
-      error: error instanceof Error ? error.message : String(error),
-    })
-  }
-}
 
 export async function fixEmptyMessages(params: {
   sessionID: string
@@ -53,30 +31,30 @@ export async function fixEmptyMessages(params: {
     })
 
     if (!result.fixed && result.scannedEmptyCount === 0) {
-      await showToastSafely(
-        params.client,
-        {
-          title: "Empty Content Error",
-          message: "No empty messages found in storage. Cannot auto-recover.",
-          variant: "error",
-          duration: 5000,
-        },
-        "sqlite empty message not found",
-      )
+      await params.client.tui
+        .showToast({
+          body: {
+            title: "Empty Content Error",
+            message: "No empty messages found in storage. Cannot auto-recover.",
+            variant: "error",
+            duration: 5000,
+          },
+        })
+        .catch(() => {})
       return false
     }
 
     if (result.fixed) {
-      await showToastSafely(
-        params.client,
-        {
-          title: "Session Recovery",
-          message: `Fixed ${result.fixedMessageIds.length} empty message(s). Retrying...`,
-          variant: "warning",
-          duration: 3000,
-        },
-        "sqlite empty message fixed",
-      )
+      await params.client.tui
+        .showToast({
+          body: {
+            title: "Session Recovery",
+            message: `Fixed ${result.fixedMessageIds.length} empty message(s). Retrying...`,
+            variant: "warning",
+            duration: 3000,
+          },
+        })
+        .catch(() => {})
     }
 
     return result.fixed
@@ -101,23 +79,21 @@ export async function fixEmptyMessages(params: {
 
   if (!fixed) {
     const emptyMessageIds = findEmptyMessages(params.sessionID)
-    const emptyTextPartIds = findMessagesWithEmptyTextParts(params.sessionID)
-    const allIds = [...new Set([...emptyMessageIds, ...emptyTextPartIds])]
-    if (allIds.length === 0) {
-      await showToastSafely(
-        params.client,
-        {
-          title: "Empty Content Error",
-          message: "No empty messages found in storage. Cannot auto-recover.",
-          variant: "error",
-          duration: 5000,
-        },
-        "empty message not found",
-      )
+    if (emptyMessageIds.length === 0) {
+      await params.client.tui
+        .showToast({
+          body: {
+            title: "Empty Content Error",
+            message: "No empty messages found in storage. Cannot auto-recover.",
+            variant: "error",
+            duration: 5000,
+          },
+        })
+        .catch(() => {})
       return false
     }
 
-    for (const messageID of allIds) {
+    for (const messageID of emptyMessageIds) {
       const replaced = replaceEmptyTextParts(messageID, PLACEHOLDER_TEXT)
       if (replaced) {
         fixed = true
@@ -133,16 +109,16 @@ export async function fixEmptyMessages(params: {
   }
 
   if (fixed) {
-    await showToastSafely(
-      params.client,
-      {
-        title: "Session Recovery",
-        message: `Fixed ${fixedMessageIds.length} empty message(s). Retrying...`,
-        variant: "warning",
-        duration: 3000,
-      },
-      "empty messages fixed",
-    )
+    await params.client.tui
+      .showToast({
+        body: {
+          title: "Session Recovery",
+          message: `Fixed ${fixedMessageIds.length} empty message(s). Retrying...`,
+          variant: "warning",
+          duration: 3000,
+        },
+      })
+      .catch(() => {})
   }
 
   return fixed

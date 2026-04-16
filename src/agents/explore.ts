@@ -8,7 +8,7 @@ export const EXPLORE_PROMPT_METADATA: AgentPromptMetadata = {
   category: "exploration",
   cost: "FREE",
   promptAlias: "Explore",
-  keyTrigger: "2+ modules involved → fire `explore` background",
+  keyTrigger: "2+ modules involved \u2192 use `parallel_tasks` with explore agents",
   triggers: [
     { domain: "Explore", trigger: "Find existing codebase structure, patterns and styles" },
   ],
@@ -30,6 +30,7 @@ export function createExploreAgent(model: string): AgentConfig {
     "edit",
     "apply_patch",
     "task",
+    "parallel_tasks",
     "call_omo_agent",
   ])
 
@@ -70,8 +71,8 @@ Always end with this exact format:
 
 <results>
 <files>
-- /absolute/path/to/file1.ts - [why this file is relevant]
-- /absolute/path/to/file2.ts - [why this file is relevant]
+- /absolute/path/to/file1.ts — [why this file is relevant]
+- /absolute/path/to/file2.ts — [why this file is relevant]
 </files>
 
 <answer>
@@ -87,10 +88,10 @@ Always end with this exact format:
 
 ## Success Criteria
 
-- **Paths** - ALL paths must be **absolute** (start with /)
-- **Completeness** - Find ALL relevant matches, not just the first one
-- **Actionability** - Caller can proceed **without asking follow-up questions**
-- **Intent** - Address their **actual need**, not just literal request
+- **Paths** — ALL paths must be **absolute** (start with /)
+- **Completeness** — Find ALL relevant matches, not just the first one
+- **Actionability** — Caller can proceed **without asking follow-up questions**
+- **Intent** — Address their **actual need**, not just literal request
 
 ## Failure Conditions
 

@@ -1,10 +1,22 @@
 import { z } from "zod"
 import { DynamicContextPruningConfigSchema } from "./dynamic-context-pruning"
 
+export const PreemptiveCompactionConfigSchema = z.union([
+  z.boolean(),
+  z.object({
+    /** Context window usage ratio (0-1) at which preemptive compaction triggers (default: 0.78) */
+    threshold: z.number().min(0).max(1).optional(),
+  }),
+])
+
+export type PreemptiveCompactionConfig = z.infer<typeof PreemptiveCompactionConfigSchema>
+
 export const ExperimentalConfigSchema = z.object({
   aggressive_truncation: z.boolean().optional(),
   auto_resume: z.boolean().optional(),
-  preemptive_compaction: z.boolean().optional(),
+  /** Enable preemptive compaction, or pass an object to configure threshold (default threshold: 0.78) */
+  preemptive_compaction: PreemptiveCompactionConfigSchema.optional(),
+  /** Truncate all tool outputs, not just whitelisted tools (default: false). Tool output truncator is enabled by default - disable via disabled_hooks. */
   truncate_all_tool_outputs: z.boolean().optional(),
   /** Dynamic context pruning configuration */
   dynamic_context_pruning: DynamicContextPruningConfigSchema.optional(),
@@ -20,8 +32,6 @@ export const ExperimentalConfigSchema = z.object({
   hashline_edit: z.boolean().optional(),
   /** Append fallback model info to session title when a runtime fallback occurs (default: false) */
   model_fallback_title: z.boolean().optional(),
-  /** Maximum number of tools to register. When set, lower-priority tools are excluded to stay within provider limits (e.g., OpenAI's 128-tool cap). Accounts for ~20 OpenCode built-in tools. */
-  max_tools: z.number().int().min(1).optional(),
 })
 
 export type ExperimentalConfig = z.infer<typeof ExperimentalConfigSchema>

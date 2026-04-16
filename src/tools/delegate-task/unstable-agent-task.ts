@@ -1,12 +1,12 @@
-import type { DelegateTaskArgs, ToolContextWithMetadata, DelegatedModelConfig } from "./types"
+import type { DelegateTaskArgs, ToolContextWithMetadata } from "./types"
 import type { ExecutorContext, ParentContext, SessionMessage } from "./executor-types"
 import { DEFAULT_SYNC_POLL_TIMEOUT_MS, getTimingConfig } from "./timing"
 import { buildTaskPrompt } from "./prompt-builder"
 import { cancelUnstableAgentTask } from "./cancel-unstable-agent-task"
 import { storeToolMetadata } from "../../features/tool-metadata-store"
-import { resolveCallID } from "./resolve-call-id"
 import { formatDuration } from "./time-formatter"
 import { formatDetailedError } from "./error-formatting"
+import { getTaskOutputContent } from "./task-output-pruner"
 import { getSessionTools } from "../../shared/session-tools-store"
 import { normalizeSDKResponse } from "../../shared"
 import { QUESTION_DENIED_SESSION_PERMISSION } from "../../shared/question-denied-session-permission"
@@ -17,17 +17,16 @@ export async function executeUnstableAgentTask(
   executorCtx: ExecutorContext,
   parentContext: ParentContext,
   agentToUse: string,
-  categoryModel: DelegatedModelConfig | undefined,
+  categoryModel: { providerID: string; modelID: string; variant?: string } | undefined,
   systemContent: string | undefined,
   actualModel: string | undefined
 ): Promise<string> {
-  const { manager, client, syncPollTimeoutMs, sisyphusAgentConfig } = executorCtx
+  const { manager, client, syncPollTimeoutMs } = executorCtx
   let cleanupReason: string | undefined
   let launchedTaskID: string | undefined
 
   try {
-    const tddEnabled = sisyphusAgentConfig?.tdd
-    const effectivePrompt = buildTaskPrompt(args.prompt, agentToUse, tddEnabled)
+    const effectivePrompt = buildTaskPrompt(args.prompt, agentToUse)
     const task = await manager.launch({
       description: args.description,
       prompt: effectivePrompt,
@@ -82,9 +81,8 @@ export async function executeUnstableAgentTask(
       },
     }
     await ctx.metadata?.(bgTaskMeta)
-    const callID = resolveCallID(ctx)
-    if (callID) {
-      storeToolMetadata(ctx.sessionID, callID, bgTaskMeta)
+    if (ctx.callID) {
+      storeToolMetadata(ctx.sessionID, ctx.callID, bgTaskMeta)
     }
 
     const startTime = new Date()
@@ -220,7 +218,7 @@ MONITORING INSTRUCTIONS:
 
 RESULT:
 
-${textContent || "(No text output)"}
+${getTaskOutputContent(textContent, parentContext.agent)}
 
 <task_metadata>
 session_id: ${sessionID}

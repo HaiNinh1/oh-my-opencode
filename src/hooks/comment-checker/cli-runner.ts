@@ -47,9 +47,6 @@ export async function processWithCli(
   cliPath: string,
   customPrompt: string | undefined,
   debugLog: (...args: unknown[]) => void,
-  deps: {
-    runCommentChecker?: typeof runCommentChecker
-  } = {},
 ): Promise<void> {
   await withCommentCheckerLock(async () => {
     void input
@@ -70,7 +67,7 @@ export async function processWithCli(
       },
     }
 
-    const result = await (deps.runCommentChecker ?? runCommentChecker)(hookInput, cliPath, customPrompt)
+    const result = await runCommentChecker(hookInput, cliPath, customPrompt)
 
     if (result.hasComments && result.message) {
       debugLog("CLI detected comments, appending message")

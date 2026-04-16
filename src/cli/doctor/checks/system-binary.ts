@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
-import { spawnWithTimeout } from "../spawn-with-timeout"
+import { spawnWithWindowsHide } from "../../../shared/spawn-with-windows-hide"
 
 import { OPENCODE_BINARIES } from "../constants"
 
@@ -111,9 +111,12 @@ export async function getOpenCodeVersion(
 ): Promise<string | null> {
   try {
     const command = buildVersionCommand(binaryPath, platform)
-    const result = await spawnWithTimeout(command, { stdout: "pipe", stderr: "pipe" })
-    if (result.timedOut || result.exitCode !== 0) return null
-    return result.stdout.trim() || null
+    const processResult = spawnWithWindowsHide(command, { stdout: "pipe", stderr: "pipe" })
+    const output = await new Response(processResult.stdout).text()
+    await processResult.exited
+
+    if (processResult.exitCode !== 0) return null
+    return output.trim() || null
   } catch {
     return null
   }

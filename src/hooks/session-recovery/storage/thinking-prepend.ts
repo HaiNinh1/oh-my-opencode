@@ -2,115 +2,19 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { PluginInput } from "@opencode-ai/plugin"
 import { PART_STORAGE, THINKING_TYPES } from "../constants"
-import type { MessageData, StoredPart } from "../types"
+import type { MessageData } from "../types"
 import { readMessages } from "./messages-reader"
 import { readParts } from "./parts-reader"
 import { log, isSqliteBackend, patchPart } from "../../../shared"
 import { normalizeSDKResponse } from "../../../shared"
 
 type OpencodeClient = PluginInput["client"]
-type StoredSignedThinkingPart = StoredPart & {
-  type: "thinking" | "redacted_thinking"
-  signature: string
-}
-type SDKMessagePart = NonNullable<MessageData["parts"]>[number]
-type SDKSignedThinkingPart = SDKMessagePart & {
-  id: string
-  type: "thinking" | "redacted_thinking"
-  signature: string
-}
 
-type ThinkingPrependDeps = {
-  isSqliteBackend: typeof isSqliteBackend
-  patchPart: typeof patchPart
-  log: typeof log
-  findLastThinkingPart: typeof findLastThinkingPart
-  findLastThinkingPartFromSDK: typeof findLastThinkingPartFromSDK
-  readTargetPartIDs: typeof readTargetPartIDs
-  readTargetPartIDsFromSDK: typeof readTargetPartIDsFromSDK
-}
-
-const thinkingPrependDeps: ThinkingPrependDeps = {
-  isSqliteBackend,
-  patchPart,
-  log,
-  findLastThinkingPart,
-  findLastThinkingPartFromSDK,
-  readTargetPartIDs,
-  readTargetPartIDsFromSDK,
-}
-
-function readTargetPartIDs(messageID: string): string[] {
-  return readParts(messageID)
-    .map((part) => part.id)
-    .filter((id): id is string => typeof id === "string")
-}
-
-async function readTargetPartIDsFromSDK(
-  client: OpencodeClient,
-  sessionID: string,
-  messageID: string
-): Promise<string[]> {
-  try {
-    const response = await client.session.messages({ path: { id: sessionID } })
-    const messages = normalizeSDKResponse(response, [] as MessageData[], { preferResponseOnMissingData: true })
-    const targetMessage = messages.find((message) => message.info?.id === messageID)
-    if (!targetMessage?.parts) {
-      return []
-    }
-
-    return targetMessage.parts
-      .map((part) => part.id)
-      .filter((id): id is string => typeof id === "string")
-  } catch {
-    return []
-  }
-}
-
-function canPrependBeforeTargetParts(partID: string, targetPartIDs: string[]): boolean {
-  const firstTargetPartID = [...targetPartIDs].sort((left, right) => left.localeCompare(right))[0]
-  return !firstTargetPartID || partID.localeCompare(firstTargetPartID) < 0
-}
-
-function isStoredSignedThinkingPart(part: StoredPart): part is StoredSignedThinkingPart {
-  if (!THINKING_TYPES.has(part.type)) {
-    return false
-  }
-
-  if (part.type === "reasoning") {
-    return false
-  }
-
-  const signature = Reflect.get(part, "signature")
-  return typeof signature === "string" && signature.length > 0
-}
-
-function isSDKSignedThinkingPart(part: SDKMessagePart): part is SDKSignedThinkingPart {
-  if (!part.type || !THINKING_TYPES.has(part.type)) {
-    return false
-  }
-
-  if (part.type === "reasoning") {
-    return false
-  }
-
-  return typeof part.id === "string"
-    && typeof (part as { signature?: unknown }).signature === "string"
-    && ((part as { signature?: string }).signature?.length ?? 0) > 0
-}
-
-function toPatchBody(part: SDKSignedThinkingPart): Record<string, unknown> {
-  return { ...part }
-}
-
-function findLastThinkingPart(
-  sessionID: string,
-  beforeMessageID: string
-): StoredSignedThinkingPart | null {
+function findLastThinkingContent(sessionID: string, beforeMessageID: string): string {
   const messages = readMessages(sessionID)
 
   const currentIndex = messages.findIndex((message) => message.id === beforeMessageID)
-  if (currentIndex === -1) return null
+  if (currentIndex === -1) return ""
 
   for (let i = currentIndex - 1; i >= 0; i--) {
     const message = messages[i]
@@ -118,31 +22,23 @@ function findLastThinkingPart(
 
     const parts = readParts(message.id)
     for (const part of parts) {
-      if (isStoredSignedThinkingPart(part)) {
-        return part
+      if (THINKING_TYPES.has(part.type)) {
+        const thinking = (part as { thinking?: string; text?: string }).thinking
+        const reasoning = (part as { thinking?: string; text?: string }).text
+        const content = thinking || reasoning
+        if (content && content.trim().length > 0) {
+          return content
+        }
       }
     }
   }
 
-  return null
+  return ""
 }
 
-export function prependThinkingPart(
-  sessionID: string,
-  messageID: string,
-  deps: ThinkingPrependDeps = thinkingPrependDeps
-): boolean {
-  if (deps.isSqliteBackend()) {
+export function prependThinkingPart(sessionID: string, messageID: string): boolean {
+  if (isSqliteBackend()) {
     log("[session-recovery] Disabled on SQLite backend: prependThinkingPart (use async variant)")
-    return false
-  }
-
-  const previousThinkingPart = deps.findLastThinkingPart(sessionID, messageID)
-  if (!previousThinkingPart) {
-    return false
-  }
-
-  if (!canPrependBeforeTargetParts(previousThinkingPart.id, deps.readTargetPartIDs(messageID))) {
     return false
   }
 
@@ -152,28 +48,37 @@ export function prependThinkingPart(
     mkdirSync(partDir, { recursive: true })
   }
 
+  const previousThinking = findLastThinkingContent(sessionID, messageID)
+
+  const partId = `prt_0000000000_${messageID}_thinking`
+  const part = {
+    id: partId,
+    sessionID,
+    messageID,
+    type: "thinking",
+    thinking: previousThinking || "[Continuing from previous reasoning]",
+    synthetic: true,
+  }
+
   try {
-    writeFileSync(
-      join(partDir, `${previousThinkingPart.id}.json`),
-      JSON.stringify(previousThinkingPart, null, 2)
-    )
+    writeFileSync(join(partDir, `${partId}.json`), JSON.stringify(part, null, 2))
     return true
   } catch {
     return false
   }
 }
 
-async function findLastThinkingPartFromSDK(
+async function findLastThinkingContentFromSDK(
   client: OpencodeClient,
   sessionID: string,
   beforeMessageID: string
-): Promise<SDKSignedThinkingPart | null> {
+): Promise<string> {
   try {
     const response = await client.session.messages({ path: { id: sessionID } })
     const messages = normalizeSDKResponse(response, [] as MessageData[], { preferResponseOnMissingData: true })
 
     const currentIndex = messages.findIndex((m) => m.info?.id === beforeMessageID)
-    if (currentIndex === -1) return null
+    if (currentIndex === -1) return ""
 
     for (let i = currentIndex - 1; i >= 0; i--) {
       const msg = messages[i]
@@ -181,43 +86,39 @@ async function findLastThinkingPartFromSDK(
       if (!msg.parts) continue
 
       for (const part of msg.parts) {
-        if (isSDKSignedThinkingPart(part)) {
-          return part
+        if (part.type && THINKING_TYPES.has(part.type)) {
+          const content = part.thinking || part.text
+          if (content && content.trim().length > 0) return content
         }
       }
     }
   } catch {
-    return null
+    return ""
   }
-  return null
+  return ""
 }
 
 export async function prependThinkingPartAsync(
   client: OpencodeClient,
   sessionID: string,
-  messageID: string,
-  deps: ThinkingPrependDeps = thinkingPrependDeps
+  messageID: string
 ): Promise<boolean> {
-  const previousThinkingPart = await deps.findLastThinkingPartFromSDK(client, sessionID, messageID)
-  if (!previousThinkingPart) {
-    return false
-  }
+  const previousThinking = await findLastThinkingContentFromSDK(client, sessionID, messageID)
 
-  const targetPartIDs = await deps.readTargetPartIDsFromSDK(client, sessionID, messageID)
-  if (!canPrependBeforeTargetParts(previousThinkingPart.id, targetPartIDs)) {
-    return false
+  const partId = `prt_0000000000_${messageID}_thinking`
+  const part: Record<string, unknown> = {
+    id: partId,
+    sessionID,
+    messageID,
+    type: "thinking",
+    thinking: previousThinking || "[Continuing from previous reasoning]",
+    synthetic: true,
   }
 
   try {
-    return await deps.patchPart(
-      client,
-      sessionID,
-      messageID,
-      previousThinkingPart.id,
-      toPatchBody(previousThinkingPart)
-    )
+    return await patchPart(client, sessionID, messageID, partId, part)
   } catch (error) {
-    deps.log("[session-recovery] prependThinkingPartAsync failed", { error: String(error) })
+    log("[session-recovery] prependThinkingPartAsync failed", { error: String(error) })
     return false
   }
 }

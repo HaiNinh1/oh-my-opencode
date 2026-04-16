@@ -1,9 +1,8 @@
-import { describe, test, expect, mock, afterAll } from "bun:test"
+import { describe, test, expect, mock } from "bun:test"
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 
-import { processWithCli } from "./cli-runner"
 import type { PendingCall } from "./types"
 
 function createMockInput() {
@@ -24,8 +23,6 @@ function createScriptBinary(scriptContent: string): string {
   chmodSync(binaryPath, 0o755)
   return binaryPath
 }
-
-afterAll(() => { mock.restore() })
 
 describe("comment-checker CLI", () => {
   describe("lazy initialization", () => {
@@ -152,15 +149,20 @@ exit 2
         getCommentCheckerPath: mock(async () => "/fake"),
         startBackgroundInit: mock(() => {}),
       })
-      const cliMocks = cliMockFactory()
+      mock.module("./cli", cliMockFactory)
+      mock.module("./cli.ts", cliMockFactory)
+      mock.module(new URL("./cli.ts", import.meta.url).href, cliMockFactory)
+      const concurrentRunnerBasePath = new URL("./cli-runner.ts", import.meta.url).pathname
+      const concurrentModulePath = `${concurrentRunnerBasePath}?semaphore-concurrent`
+      const { processWithCli } = await import(concurrentModulePath)
       const pendingCall: PendingCall = {
         tool: "write",
         sessionID: "ses-1",
         filePath: "/tmp/a.ts",
         timestamp: Date.now(),
       }
-      const firstCall = processWithCli({ tool: "write", sessionID: "ses-1", callID: "call-1" }, pendingCall, { output: "" }, "/fake", undefined, () => {}, { runCommentChecker: cliMocks.runCommentChecker })
-      const secondCall = processWithCli({ tool: "write", sessionID: "ses-2", callID: "call-2" }, pendingCall, { output: "" }, "/fake", undefined, () => {}, { runCommentChecker: cliMocks.runCommentChecker })
+      const firstCall = processWithCli({ tool: "write", sessionID: "ses-1", callID: "call-1" }, pendingCall, { output: "" }, "/fake", undefined, () => {})
+      const secondCall = processWithCli({ tool: "write", sessionID: "ses-2", callID: "call-2" }, pendingCall, { output: "" }, "/fake", undefined, () => {})
 
       // when
       await secondCall
@@ -181,7 +183,12 @@ exit 2
         getCommentCheckerPath: mock(async () => "/fake"),
         startBackgroundInit: mock(() => {}),
       })
-      const cliMocks = cliMockFactory()
+      mock.module("./cli", cliMockFactory)
+      mock.module("./cli.ts", cliMockFactory)
+      mock.module(new URL("./cli.ts", import.meta.url).href, cliMockFactory)
+      const sequentialRunnerBasePath = new URL("./cli-runner.ts", import.meta.url).pathname
+      const sequentialModulePath = `${sequentialRunnerBasePath}?semaphore-sequential`
+      const { processWithCli } = await import(sequentialModulePath)
       const pendingCall: PendingCall = {
         tool: "write",
         sessionID: "ses-1",
@@ -189,8 +196,8 @@ exit 2
         timestamp: Date.now(),
       }
       // when
-      await processWithCli({ tool: "write", sessionID: "ses-1", callID: "call-1" }, pendingCall, { output: "" }, "/fake", undefined, () => {}, { runCommentChecker: cliMocks.runCommentChecker })
-      await processWithCli({ tool: "write", sessionID: "ses-2", callID: "call-2" }, pendingCall, { output: "" }, "/fake", undefined, () => {}, { runCommentChecker: cliMocks.runCommentChecker })
+      await processWithCli({ tool: "write", sessionID: "ses-1", callID: "call-1" }, pendingCall, { output: "" }, "/fake", undefined, () => {})
+      await processWithCli({ tool: "write", sessionID: "ses-2", callID: "call-2" }, pendingCall, { output: "" }, "/fake", undefined, () => {})
       // then
       expect(callCount).toBe(2)
     })

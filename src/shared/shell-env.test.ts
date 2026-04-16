@@ -10,7 +10,6 @@ describe("shell-env", () => {
     originalEnv = {
       SHELL: process.env.SHELL,
       PSModulePath: process.env.PSModulePath,
-      MSYSTEM: process.env.MSYSTEM,
     }
   })
 
@@ -46,9 +45,7 @@ describe("shell-env", () => {
       expect(result).toBe("unix")
     })
 
-    test("#given PSModulePath is set without SHELL #when detectShellType is called #then returns powershell", () => {
-      delete process.env.SHELL
-      delete process.env.MSYSTEM
+    test("#given PSModulePath is set #when detectShellType is called #then returns powershell", () => {
       process.env.PSModulePath = "C:\\Program Files\\PowerShell\\Modules"
       Object.defineProperty(process, "platform", { value: "win32" })
 
@@ -60,7 +57,6 @@ describe("shell-env", () => {
     test("#given Windows platform without PSModulePath #when detectShellType is called #then returns cmd", () => {
       delete process.env.PSModulePath
       delete process.env.SHELL
-      delete process.env.MSYSTEM
       Object.defineProperty(process, "platform", { value: "win32" })
 
       const result = detectShellType()
@@ -71,7 +67,6 @@ describe("shell-env", () => {
     test("#given non-Windows platform without SHELL env var #when detectShellType is called #then returns unix", () => {
       delete process.env.PSModulePath
       delete process.env.SHELL
-      delete process.env.MSYSTEM
       Object.defineProperty(process, "platform", { value: "linux" })
 
       const result = detectShellType()
@@ -79,46 +74,14 @@ describe("shell-env", () => {
       expect(result).toBe("unix")
     })
 
-    test("#given SHELL takes priority over PSModulePath #when both are set #then returns unix", () => {
+    test("#given PSModulePath takes priority over SHELL #when both are set #then returns powershell", () => {
       process.env.PSModulePath = "C:\\Program Files\\PowerShell\\Modules"
       process.env.SHELL = "/bin/bash"
       Object.defineProperty(process, "platform", { value: "win32" })
 
       const result = detectShellType()
 
-      expect(result).toBe("unix")
-    })
-
-    test("#given SHELL set to Git Bash on Windows with PSModulePath #when detectShellType is called #then returns unix", () => {
-      process.env.PSModulePath = "C:\\Program Files\\PowerShell\\Modules"
-      process.env.SHELL = "C:\\Program Files\\Git\\bin\\bash.exe"
-      Object.defineProperty(process, "platform", { value: "win32" })
-
-      const result = detectShellType()
-
-      expect(result).toBe("unix")
-    })
-
-    test("#given MSYSTEM set on Windows without SHELL #when detectShellType is called #then returns unix", () => {
-      delete process.env.SHELL
-      process.env.MSYSTEM = "MINGW64"
-      process.env.PSModulePath = "C:\\Program Files\\PowerShell\\Modules"
-      Object.defineProperty(process, "platform", { value: "win32" })
-
-      const result = detectShellType()
-
-      expect(result).toBe("unix")
-    })
-
-    test("#given MSYSTEM set to MSYS without SHELL #when detectShellType is called #then returns unix", () => {
-      delete process.env.SHELL
-      process.env.MSYSTEM = "MSYS"
-      process.env.PSModulePath = "C:\\Program Files\\PowerShell\\Modules"
-      Object.defineProperty(process, "platform", { value: "win32" })
-
-      const result = detectShellType()
-
-      expect(result).toBe("unix")
+      expect(result).toBe("powershell")
     })
   })
 

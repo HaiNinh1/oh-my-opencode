@@ -35,7 +35,7 @@ export const AgentOverrideConfigSchema = z.object({
     })
     .optional(),
   /** Reasoning effort level (OpenAI). Overrides category and default settings. */
-  reasoningEffort: z.enum(["none", "minimal", "low", "medium", "high", "xhigh"]).optional(),
+  reasoningEffort: z.enum(["low", "medium", "high", "xhigh"]).optional(),
   /** Text verbosity level. */
   textVerbosity: z.enum(["low", "medium", "high"]).optional(),
   /** Provider-specific options. Passed directly to OpenCode SDK. */
@@ -58,6 +58,7 @@ export const AgentOverrideConfigSchema = z.object({
 export const AgentOverridesSchema = z.object({
   build: AgentOverrideConfigSchema.optional(),
   plan: AgentOverrideConfigSchema.optional(),
+  hermes: AgentOverrideConfigSchema.optional(),
   sisyphus: AgentOverrideConfigSchema.optional(),
   hephaestus: AgentOverrideConfigSchema.extend({
     allow_non_gpt_model: z.boolean().optional(),
@@ -72,6 +73,8 @@ export const AgentOverridesSchema = z.object({
   explore: AgentOverrideConfigSchema.optional(),
   "multimodal-looker": AgentOverrideConfigSchema.optional(),
   atlas: AgentOverrideConfigSchema.optional(),
+  mnemosyne: AgentOverrideConfigSchema.optional(),
+  heracles: AgentOverrideConfigSchema.optional(),
 })
 
 export type AgentOverrideConfig = z.infer<typeof AgentOverrideConfigSchema>

@@ -4,6 +4,7 @@ import { tool, type PluginInput, type ToolDefinition } from "@opencode-ai/plugin
 import { LOOK_AT_DESCRIPTION, MULTIMODAL_LOOKER_AGENT } from "./constants"
 import type { LookAtArgs } from "./types"
 import { log, promptSyncWithModelSuggestionRetry } from "../../shared"
+import { readVisionCapableModelsCache } from "../../shared/vision-capable-models-cache"
 import { extractLatestAssistantText } from "./assistant-message-extractor"
 import type { LookAtArgsWithAlias } from "./look-at-arguments"
 import { normalizeArgs, validateArgs } from "./look-at-arguments"
@@ -38,6 +39,15 @@ function getTemporaryConversionPath(error: unknown): string | null {
   return null
 }
 
+function isVisionCapableResolvedModel(model: {
+  providerID: string
+  modelID: string
+}): boolean {
+  return readVisionCapableModelsCache().some((visionCapableModel) =>
+    visionCapableModel.providerID === model.providerID &&
+    visionCapableModel.modelID === model.modelID,
+  )
+}
 
 export { normalizeArgs, validateArgs } from "./look-at-arguments"
 
@@ -129,15 +139,7 @@ export function createLookAt(ctx: PluginInput): ToolDefinition {
         return "Error: Must provide either 'file_path' or 'image_data'."
       }
 
-      const readEnabled = false
-      const subjectNoun = isBase64Input ? "image" : "file"
-      const sourceClause = readEnabled
-        ? `Use the Read tool on the provided file path to load its contents, then analyze it.`
-        : `The ${subjectNoun} is already attached to this message. Analyze it directly from the attachment. Do NOT attempt to use the Read tool. The Read tool is disabled for this invocation and the ${subjectNoun} cannot be loaded by path.`
-
-      const prompt = `Analyze the attached ${subjectNoun} and extract the requested information.
-
-${sourceClause}
+      const prompt = `Analyze this ${isBase64Input ? "image" : "file"} and extract the requested information.
 
 Goal: ${args.goal}
 
@@ -146,6 +148,12 @@ Be thorough on what was requested, concise on everything else.
 If the requested information is not found, clearly state what is missing.`
 
       const { agentModel, agentVariant } = await resolveMultimodalLookerAgentMetadata(ctx)
+      if (agentModel && !isVisionCapableResolvedModel(agentModel)) {
+        log("[look_at] Resolved model is not vision-capable, blocking", {
+          resolvedModel: agentModel,
+        })
+        return "Error: Resolved multimodal-looker model is not vision-capable"
+      }
 
       log(`[look_at] Creating session with parent: ${toolContext.sessionID}`)
       const parentSession = await ctx.client.session.get({
@@ -190,7 +198,7 @@ Original error: ${createResult.error}`
               task: false,
               call_omo_agent: false,
               look_at: false,
-              read: readEnabled,
+              read: false,
             },
             parts: [
               { type: "text", text: prompt },

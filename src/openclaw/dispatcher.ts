@@ -1,11 +1,30 @@
 import { spawn } from "bun"
-import { validateGatewayUrl } from "./gateway-url-validation"
-import type { OpenClawGateway, WakeResult } from "./types"
+import type { OpenClawGateway } from "./types"
 
 const DEFAULT_HTTP_TIMEOUT_MS = 10_000
 const DEFAULT_COMMAND_TIMEOUT_MS = 5_000
 const MIN_COMMAND_TIMEOUT_MS = 100
 const MAX_COMMAND_TIMEOUT_MS = 300_000
+const SHELL_METACHAR_RE = /[|&;><`$()]/
+
+export function validateGatewayUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === "https:") return true
+    if (
+      parsed.protocol === "http:" &&
+      (parsed.hostname === "localhost" ||
+        parsed.hostname === "127.0.0.1" ||
+        parsed.hostname === "::1" ||
+        parsed.hostname === "[::1]")
+    ) {
+      return true
+    }
+    return false
+  } catch {
+    return false
+  }
+}
 
 export function interpolateInstruction(
   template: string,
@@ -47,70 +66,11 @@ export function resolveCommandTimeoutMs(
   )
 }
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : null
-}
-
-function firstStringValue(record: Record<string, unknown>, keys: string[]): string | undefined {
-  for (const key of keys) {
-    const value = record[key]
-    if (typeof value === "string" && value.trim().length > 0) return value
-    if (typeof value === "number" && Number.isFinite(value)) return String(value)
-  }
-  return undefined
-}
-
-function extractWakeMetadata(payload: unknown): Pick<WakeResult, "messageId" | "platform" | "channelId" | "threadId"> {
-  const record = asRecord(payload)
-  if (!record) return {}
-
-  const nestedCandidates = [record, asRecord(record.data), asRecord(record.result), asRecord(record.message)]
-    .filter((candidate): candidate is Record<string, unknown> => candidate !== null)
-
-  let bestMatch: Pick<WakeResult, "messageId" | "platform" | "channelId" | "threadId"> = {}
-  let bestScore = -1
-
-  for (const candidate of nestedCandidates) {
-    const messageId = firstStringValue(candidate, ["messageId", "message_id", "id"])
-    const platform = firstStringValue(candidate, ["platform", "source"])
-    const channelId = firstStringValue(candidate, ["channelId", "channel_id", "channel"])
-    const threadId = firstStringValue(candidate, ["threadId", "thread_id", "thread"])
-
-    const score =
-      (messageId ? 4 : 0)
-      + (platform ? 3 : 0)
-      + (channelId ? 2 : 0)
-      + (threadId ? 1 : 0)
-
-    if (score > bestScore) {
-      bestMatch = { messageId, platform, channelId, threadId }
-      bestScore = score
-    }
-  }
-
-  return bestScore > 0 ? bestMatch : {}
-}
-
-function parseWakeMetadata(raw: string): Pick<WakeResult, "messageId" | "platform" | "channelId" | "threadId"> {
-  const trimmed = raw.trim()
-  if (!trimmed) return {}
-  try {
-    return extractWakeMetadata(JSON.parse(trimmed))
-  } catch {
-    const messageId = trimmed.match(/message\s+id:\s*([^\s]+)/i)?.[1]
-    const platform = trimmed.match(/sent\s+via\s+([a-z0-9_-]+)/i)?.[1]?.toLowerCase()
-    return {
-      ...(messageId ? { messageId } : {}),
-      ...(platform ? { platform } : {}),
-    }
-  }
-}
-
 export async function wakeGateway(
   gatewayName: string,
   gatewayConfig: OpenClawGateway,
   payload: unknown,
-): Promise<WakeResult> {
+): Promise<{ gateway: string; success: boolean; error?: string; statusCode?: number }> {
   if (!gatewayConfig.url || !validateGatewayUrl(gatewayConfig.url)) {
     return {
       gateway: gatewayName,
@@ -147,10 +107,8 @@ export async function wakeGateway(
         statusCode: response.status,
       }
     }
-
-    const metadata = parseWakeMetadata(await response.text())
-
-    return { gateway: gatewayName, success: true, statusCode: response.status, ...metadata }
+    
+    return { gateway: gatewayName, success: true, statusCode: response.status }
   } catch (error) {
     return {
       gateway: gatewayName,
@@ -164,7 +122,7 @@ export async function wakeCommandGateway(
   gatewayName: string,
   gatewayConfig: OpenClawGateway,
   variables: Record<string, string | undefined>,
-): Promise<WakeResult> {
+): Promise<{ gateway: string; success: boolean; error?: string }> {
   if (!gatewayConfig.command) {
     return {
       gateway: gatewayName,
@@ -176,24 +134,25 @@ export async function wakeCommandGateway(
   try {
     const timeout = resolveCommandTimeoutMs(gatewayConfig.timeout)
 
+    // Interpolate variables with shell escaping
     const interpolated = gatewayConfig.command.replace(/\{\{(\w+)\}\}/g, (_match, key) => {
       const value = variables[key]
       if (value === undefined) return _match
       return shellEscapeArg(value)
     })
 
+    // Always use sh -c to handle the shell command string correctly
     const proc = spawn(["sh", "-c", interpolated], {
       env: { ...process.env },
-      stdout: "pipe",
+      stdout: "ignore",
       stderr: "ignore",
-      detached: process.platform !== "win32",
     })
-    const stdoutPromise = new Response(proc.stdout).text()
 
+    // Handle timeout manually
     let timeoutId: ReturnType<typeof setTimeout> | undefined
     const timeoutPromise = new Promise<never>((_, reject) => {
       timeoutId = setTimeout(() => {
-        terminateCommandProcess(proc, "SIGKILL")
+        proc.kill()
         reject(new Error("Command timed out"))
       }, timeout)
     })
@@ -210,9 +169,7 @@ export async function wakeCommandGateway(
       throw new Error(`Command exited with code ${proc.exitCode}`)
     }
 
-    const metadata = parseWakeMetadata(await stdoutPromise)
-
-    return { gateway: gatewayName, success: true, ...metadata }
+    return { gateway: gatewayName, success: true }
   } catch (error) {
     return {
       gateway: gatewayName,
@@ -220,25 +177,4 @@ export async function wakeCommandGateway(
       error: error instanceof Error ? error.message : "Unknown error",
     }
   }
-}
-
-type KillableProcess = {
-  pid?: number
-  kill: (signal?: NodeJS.Signals) => void
-}
-
-export function terminateCommandProcess(proc: KillableProcess, signal: NodeJS.Signals): void {
-  try {
-    if (process.platform !== "win32" && proc.pid) {
-      try {
-        process.kill(-proc.pid, signal)
-        return
-      } catch {
-        proc.kill(signal)
-        return
-      }
-    }
-
-    proc.kill(signal)
-  } catch {}
 }

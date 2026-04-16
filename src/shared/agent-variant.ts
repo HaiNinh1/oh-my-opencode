@@ -1,5 +1,4 @@
 import type { OhMyOpenCodeConfig } from "../config"
-import { stripInvisibleAgentCharacters } from "./agent-display-names"
 import { AGENT_MODEL_REQUIREMENTS, CATEGORY_MODEL_REQUIREMENTS } from "./model-requirements"
 
 export function resolveAgentVariant(
@@ -10,13 +9,12 @@ export function resolveAgentVariant(
     return undefined
   }
 
-  const stripped = stripInvisibleAgentCharacters(agentName)
   const agentOverrides = config.agents as
     | Record<string, { variant?: string; category?: string }>
     | undefined
   const agentOverride = agentOverrides
-    ? agentOverrides[stripped]
-      ?? Object.entries(agentOverrides).find(([key]) => key.toLowerCase() === stripped.toLowerCase())?.[1]
+    ? agentOverrides[agentName]
+      ?? Object.entries(agentOverrides).find(([key]) => key.toLowerCase() === agentName.toLowerCase())?.[1]
     : undefined
   if (!agentOverride) {
     return undefined
@@ -39,19 +37,18 @@ export function resolveVariantForModel(
   agentName: string,
   currentModel: { providerID: string; modelID: string },
 ): string | undefined {
-  const stripped = stripInvisibleAgentCharacters(agentName)
   const agentOverrides = config.agents as
     | Record<string, { variant?: string; category?: string }>
     | undefined
   const agentOverride = agentOverrides
-    ? agentOverrides[stripped]
-      ?? Object.entries(agentOverrides).find(([key]) => key.toLowerCase() === stripped.toLowerCase())?.[1]
+    ? agentOverrides[agentName]
+      ?? Object.entries(agentOverrides).find(([key]) => key.toLowerCase() === agentName.toLowerCase())?.[1]
     : undefined
   if (agentOverride?.variant) {
     return agentOverride.variant
   }
 
-  const agentRequirement = AGENT_MODEL_REQUIREMENTS[stripped]
+  const agentRequirement = AGENT_MODEL_REQUIREMENTS[agentName]
   if (agentRequirement) {
     return findVariantInChain(agentRequirement.fallbackChain, currentModel)
   }

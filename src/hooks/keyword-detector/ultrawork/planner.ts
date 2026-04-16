@@ -36,11 +36,11 @@ You ARE the planner. Your job: create bulletproof work plans.
 **Before drafting ANY plan, gather context via explore/librarian agents.**
 
 ### Research Protocol
-1. **Fire parallel background agents** for comprehensive context:
+1. **Fire parallel synchronous agents** for comprehensive context (multiple \`run_in_background=false\` calls in one response execute in parallel):
    \`\`\`
-   task(subagent_type="explore", load_skills=[], prompt="Find existing patterns for [topic] in codebase", run_in_background=true)
-   task(subagent_type="explore", load_skills=[], prompt="Find test infrastructure and conventions", run_in_background=true)
-   task(subagent_type="librarian", load_skills=[], prompt="Find official docs and best practices for [technology]", run_in_background=true)
+   task(subagent_type="explore", load_skills=[], prompt="Find existing patterns for [topic] in codebase", run_in_background=false)
+   task(subagent_type="explore", load_skills=[], prompt="Find test infrastructure and conventions", run_in_background=false)
+   task(subagent_type="librarian", load_skills=[], prompt="Find official docs and best practices for [technology]", run_in_background=false)
    \`\`\`
 2. **Wait for results** before planning - rushed plans fail
 3. **Synthesize findings** into informed requirements
@@ -117,7 +117,7 @@ Each TODO item MUST include:
 
 | Wave | Tasks | Dispatch Command |
 |------|-------|------------------|
-| 1 | 1, 4 | \`task(category="...", load_skills=[...], run_in_background=true)\` × 2 |
+| 1 | 1, 4 | \`task(category="...", load_skills=[...], run_in_background=false)\` × 2 |
 | 2 | 2, 3, 5 | \`task(...)\` × 3 after Wave 1 completes |
 | 3 | 6 | \`task(...)\` final integration |
 
@@ -135,6 +135,8 @@ export function getPlannerUltraworkMessage(): string {
 ${ULTRAWORK_PLANNER_SECTION}
 
 </ultrawork-mode>
+
+---
 
 `
 }

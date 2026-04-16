@@ -7,32 +7,9 @@ import {
   getOpenCodeConfigDir,
   addConfigLoadError,
   parseJsonc,
-  detectPluginConfigFile,
+  detectConfigFile,
   migrateConfigFile,
-  resolveAgentDefinitionPaths,
 } from "./shared";
-import { migrateLegacyConfigFile } from "./shared/migrate-legacy-config-file";
-import { CONFIG_BASENAME, LEGACY_CONFIG_BASENAME } from "./shared/plugin-identity";
-
-function loadExplicitGitMasterOverrides(configPath: string): Record<string, unknown> | undefined {
-  try {
-    if (!fs.existsSync(configPath)) {
-      return undefined
-    }
-
-    const content = fs.readFileSync(configPath, "utf-8")
-    const rawConfig = parseJsonc<Record<string, unknown>>(content)
-    const gitMaster = rawConfig.git_master
-
-    if (gitMaster && typeof gitMaster === "object" && !Array.isArray(gitMaster)) {
-      return gitMaster as Record<string, unknown>
-    }
-  } catch {
-    return undefined
-  }
-
-  return undefined
-}
 
 const PARTIAL_STRING_ARRAY_KEYS = new Set([
   "disabled_mcps",
@@ -41,8 +18,6 @@ const PARTIAL_STRING_ARRAY_KEYS = new Set([
   "disabled_hooks",
   "disabled_commands",
   "disabled_tools",
-  "mcp_env_allowlist",
-  "agent_definitions",
 ]);
 
 export function parseConfigPartially(
@@ -83,7 +58,7 @@ export function parseConfigPartially(
   }
 
   if (invalidSections.length > 0) {
-    log("Partial config loaded - invalid sections skipped:", invalidSections);
+    log("Partial config loaded — invalid sections skipped:", invalidSections);
   }
 
   return partialConfig as OhMyOpenCodeConfig;
@@ -113,7 +88,7 @@ export function loadConfigFromPath(
       log(`Config validation error in ${configPath}:`, result.error.issues);
       addConfigLoadError({
         path: configPath,
-        error: `Partial config loaded - invalid sections skipped: ${errorMsg}`,
+        error: `Partial config loaded — invalid sections skipped: ${errorMsg}`,
       });
 
       const partialResult = parseConfigPartially(rawConfig);
@@ -141,12 +116,6 @@ export function mergeConfigs(
     ...override,
     agents: deepMerge(base.agents, override.agents),
     categories: deepMerge(base.categories, override.categories),
-    agent_definitions: [
-      ...new Set([
-        ...(base.agent_definitions ?? []),
-        ...(override.agent_definitions ?? []),
-      ]),
-    ],
     disabled_agents: [
       ...new Set([
         ...(base.disabled_agents ?? []),
@@ -183,12 +152,6 @@ export function mergeConfigs(
         ...(override.disabled_tools ?? []),
       ]),
     ],
-    mcp_env_allowlist: [
-      ...new Set([
-        ...(base.mcp_env_allowlist ?? []),
-        ...(override.mcp_env_allowlist ?? []),
-      ]),
-    ],
     claude_code: deepMerge(base.claude_code, override.claude_code),
   };
 }
@@ -199,108 +162,33 @@ export function loadPluginConfig(
 ): OhMyOpenCodeConfig {
   // User-level config path - prefer .jsonc over .json
   const configDir = getOpenCodeConfigDir({ binary: "opencode" });
-  const userDetected = detectPluginConfigFile(configDir);
-  let userConfigPath =
+  const userBasePath = path.join(configDir, "oh-my-opencode");
+  const userDetected = detectConfigFile(userBasePath);
+  const userConfigPath =
     userDetected.format !== "none"
       ? userDetected.path
-      : path.join(configDir, `${CONFIG_BASENAME}.json`);
-
-  if (userDetected.legacyPath) {
-    log("Canonical plugin config detected alongside legacy config. Remove the legacy file to avoid confusion.", {
-      canonicalPath: userDetected.path,
-      legacyPath: userDetected.legacyPath,
-    });
-  }
-
-  // Auto-copy legacy config file to canonical name if needed
-  if (userDetected.format !== "none" && path.basename(userDetected.path).startsWith(LEGACY_CONFIG_BASENAME)) {
-    const migrated = migrateLegacyConfigFile(userDetected.path);
-    const canonicalPath = path.join(
-      path.dirname(userDetected.path),
-      `${CONFIG_BASENAME}${path.extname(userDetected.path)}`
-    );
-    // Only switch to canonical path if migration succeeded OR canonical file already exists
-    if (migrated || fs.existsSync(canonicalPath)) {
-      userConfigPath = canonicalPath;
-    }
-    // Otherwise keep loading from the legacy path that was detected
-  }
+      : userBasePath + ".json";
 
   // Project-level config path - prefer .jsonc over .json
-  const projectBasePath = path.join(directory, ".opencode");
-  const projectDetected = detectPluginConfigFile(projectBasePath);
-  let projectConfigPath =
+  const projectBasePath = path.join(directory, ".opencode", "oh-my-opencode");
+  const projectDetected = detectConfigFile(projectBasePath);
+  const projectConfigPath =
     projectDetected.format !== "none"
       ? projectDetected.path
-      : path.join(projectBasePath, `${CONFIG_BASENAME}.json`);
+      : projectBasePath + ".json";
 
-  if (projectDetected.legacyPath) {
-    log("Canonical plugin config detected alongside legacy config. Remove the legacy file to avoid confusion.", {
-      canonicalPath: projectDetected.path,
-      legacyPath: projectDetected.legacyPath,
-    });
-  }
-
-  // Auto-copy legacy project config file to canonical name if needed
-  if (projectDetected.format !== "none" && path.basename(projectDetected.path).startsWith(LEGACY_CONFIG_BASENAME)) {
-    const projectMigrated = migrateLegacyConfigFile(projectDetected.path);
-    const canonicalProjectPath = path.join(
-      path.dirname(projectDetected.path),
-      `${CONFIG_BASENAME}${path.extname(projectDetected.path)}`
-    );
-    // Only switch to canonical path if migration succeeded OR canonical file already exists
-    if (projectMigrated || fs.existsSync(canonicalProjectPath)) {
-      projectConfigPath = canonicalProjectPath;
-    }
-    // Otherwise keep loading from the legacy path that was detected
-  }
-
-  // Load user config first (base). Parse empty config through Zod to apply field defaults.
-  const userConfig = loadConfigFromPath(userConfigPath, ctx)
-  const userGitMasterOverrides = loadExplicitGitMasterOverrides(userConfigPath)
-
-  if (userConfig?.agent_definitions) {
-    userConfig.agent_definitions = resolveAgentDefinitionPaths(
-      userConfig.agent_definitions,
-      configDir,
-      null
-    )
-  }
-
+  // Load user config first (base)
   let config: OhMyOpenCodeConfig =
-    userConfig ?? OhMyOpenCodeConfigSchema.parse({});
+    loadConfigFromPath(userConfigPath, ctx) ?? {};
 
   // Override with project config
-  const defaultGitMaster = OhMyOpenCodeConfigSchema.parse({}).git_master
   const projectConfig = loadConfigFromPath(projectConfigPath, ctx);
-  const projectGitMasterOverrides = loadExplicitGitMasterOverrides(projectConfigPath)
-
-  if (projectConfig?.agent_definitions) {
-    projectConfig.agent_definitions = resolveAgentDefinitionPaths(
-      projectConfig.agent_definitions,
-      projectBasePath,
-      directory
-    )
-  }
-
   if (projectConfig) {
     config = mergeConfigs(config, projectConfig);
   }
 
-  if (userGitMasterOverrides || projectGitMasterOverrides) {
-    config = {
-      ...config,
-      git_master: {
-        ...defaultGitMaster,
-        ...(userGitMasterOverrides ?? {}),
-        ...(projectGitMasterOverrides ?? {}),
-      },
-    }
-  }
-
   config = {
     ...config,
-    mcp_env_allowlist: userConfig?.mcp_env_allowlist ?? [],
   };
 
   log("Final merged config", {

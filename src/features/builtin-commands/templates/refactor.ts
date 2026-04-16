@@ -97,53 +97,28 @@ TodoWrite([
 
 ## 1.1: Launch Parallel Explore Agents (BACKGROUND)
 
-Fire ALL of these simultaneously using \`call_omo_agent\`:
+Fire ALL of these simultaneously using \`parallel_tasks\`:
 
 \`\`\`
-// Agent 1: Find the refactoring target
-call_omo_agent(
-  subagent_type="explore",
-  run_in_background=true,
-  prompt="Find all occurrences and definitions of [TARGET]. 
-  Report: file paths, line numbers, usage patterns."
-)
-
-// Agent 2: Find related code
-call_omo_agent(
-  subagent_type="explore", 
-  run_in_background=true,
-  prompt="Find all code that imports, uses, or depends on [TARGET].
-  Report: dependency chains, import graphs."
-)
-
-// Agent 3: Find similar patterns
-call_omo_agent(
-  subagent_type="explore",
-  run_in_background=true,
-  prompt="Find similar code patterns to [TARGET] in the codebase.
-  Report: analogous implementations, established conventions."
-)
-
-// Agent 4: Find tests
-call_omo_agent(
-  subagent_type="explore",
-  run_in_background=true,
-  prompt="Find all test files related to [TARGET].
-  Report: test file paths, test case names, coverage indicators."
-)
-
-// Agent 5: Architecture context
-call_omo_agent(
-  subagent_type="explore",
-  run_in_background=true,
-  prompt="Find architectural patterns and module organization around [TARGET].
-  Report: module boundaries, layer structure, design patterns in use."
-)
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find refactoring target",
+      prompt: "Find all occurrences and definitions of [TARGET]. Report: file paths, line numbers, usage patterns." },
+    { subagent_type: "explore", load_skills: [], description: "Find related code",
+      prompt: "Find all code that imports, uses, or depends on [TARGET]. Report: dependency chains, import graphs." },
+    { subagent_type: "explore", load_skills: [], description: "Find similar patterns",
+      prompt: "Find similar code patterns to [TARGET] in the codebase. Report: analogous implementations, established conventions." },
+    { subagent_type: "explore", load_skills: [], description: "Find tests",
+      prompt: "Find all test files related to [TARGET]. Report: test file paths, test case names, coverage indicators." },
+    { subagent_type: "explore", load_skills: [], description: "Architecture context",
+      prompt: "Find architectural patterns and module organization around [TARGET]. Report: module boundaries, layer structure, design patterns in use." }
+  ]
+})
 \`\`\`
 
-## 1.2: Direct Tool Exploration (WHILE AGENTS RUN)
+## 1.2: Direct Tool Exploration (WHILE parallel_tasks RUNS)
 
-While background agents are running, use direct tools:
+While \`parallel_tasks\` is running, use direct tools:
 
 ### LSP Tools for Precise Analysis:
 
@@ -187,13 +162,7 @@ ast_grep_replace(
 grep(pattern="[search_term]", path="src/", include="*.ts")
 \`\`\`
 
-## 1.3: Collect Background Results
-
-\`\`\`
-background_output(task_id="[agent_1_id]")
-background_output(task_id="[agent_2_id]")
-...
-\`\`\`
+\`parallel_tasks\` returns all results together \u2014 no need to collect individually.
 
 **Mark phase-1 as completed after all results collected.**
 
@@ -274,16 +243,14 @@ ls -la *_test.go
 
 \`\`\`
 // Find all tests related to target
-call_omo_agent(
-  subagent_type="explore",
-  run_in_background=false,  // Need this synchronously
+task(subagent_type="explore", load_skills=[], run_in_background=false,
+  description="Analyze test coverage",
   prompt="Analyze test coverage for [TARGET]:
   1. Which test files cover this code?
   2. What test cases exist?
   3. Are there integration tests?
   4. What edge cases are tested?
-  5. Estimated coverage percentage?"
-)
+  5. Estimated coverage percentage?")
 \`\`\`
 
 ## 3.3: Determine Verification Strategy

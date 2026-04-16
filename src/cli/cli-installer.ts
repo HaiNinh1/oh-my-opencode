@@ -1,5 +1,4 @@
 import color from "picocolors"
-import { PLUGIN_NAME, PUBLISHED_PACKAGE_NAME } from "../shared"
 import type { InstallArgs } from "./types"
 import {
   addPluginToOpenCodeConfig,
@@ -22,12 +21,8 @@ import {
   printWarning,
   validateNonTuiArgs,
 } from "./install-validators"
-import { getUnsupportedOpenCodeVersionMessage } from "./minimum-opencode-version"
-import { createCliPostHog, getPostHogDistinctId } from "../shared/posthog"
 
 export async function runCliInstaller(args: InstallArgs, version: string): Promise<number> {
-  const posthog = createCliPostHog()
-  const distinctId = getPostHogDistinctId()
   const validation = validateNonTuiArgs(args)
   if (!validation.valid) {
     printHeader(false)
@@ -37,7 +32,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     }
     console.log()
     printInfo(
-      `Usage: bunx ${PUBLISHED_PACKAGE_NAME} install --no-tui --claude=<no|yes|max20> --gemini=<no|yes> --copilot=<no|yes>`,
+      "Usage: bunx oh-my-opencode install --no-tui --claude=<no|yes|max20> --gemini=<no|yes> --copilot=<no|yes>",
     )
     console.log()
     return 1
@@ -61,22 +56,6 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     printInfo("Visit https://opencode.ai/docs for installation instructions")
   } else {
     printSuccess(`OpenCode ${openCodeVersion ?? ""} detected`)
-
-    const unsupportedVersionMessage = getUnsupportedOpenCodeVersionMessage(openCodeVersion)
-    if (unsupportedVersionMessage) {
-      printWarning(unsupportedVersionMessage)
-      try {
-        posthog.capture({ distinctId, event: "install_failed", properties: { command: "install", reason: "unsupported_opencode_version", is_update: isUpdate } })
-      } catch {
-        // telemetry failure is non-fatal, silently ignore
-      }
-      try {
-        await posthog.shutdown()
-      } catch {
-        // telemetry failure is non-fatal, silently ignore
-      }
-      return 1
-    }
   }
 
   if (isUpdate) {
@@ -86,40 +65,20 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
 
   const config = argsToConfig(args)
 
-  printStep(step++, totalSteps, `Adding ${PLUGIN_NAME} plugin...`)
+  printStep(step++, totalSteps, "Adding oh-my-opencode plugin...")
   const pluginResult = await addPluginToOpenCodeConfig(version)
   if (!pluginResult.success) {
     printError(`Failed: ${pluginResult.error}`)
-    try {
-      posthog.capture({ distinctId, event: "install_failed", properties: { command: "install", reason: "plugin_config_write_failed", is_update: isUpdate } })
-    } catch {
-      // telemetry failure is non-fatal, silently ignore
-    }
-    try {
-      await posthog.shutdown()
-    } catch {
-      // telemetry failure is non-fatal, silently ignore
-    }
     return 1
   }
   printSuccess(
     `Plugin ${isUpdate ? "verified" : "added"} ${SYMBOLS.arrow} ${color.dim(pluginResult.configPath)}`,
   )
 
-  printStep(step++, totalSteps, `Writing ${PLUGIN_NAME} configuration...`)
+  printStep(step++, totalSteps, "Writing oh-my-opencode configuration...")
   const omoResult = writeOmoConfig(config)
   if (!omoResult.success) {
     printError(`Failed: ${omoResult.error}`)
-    try {
-      posthog.capture({ distinctId, event: "install_failed", properties: { command: "install", reason: "omo_config_write_failed", is_update: isUpdate } })
-    } catch {
-      // telemetry failure is non-fatal, silently ignore
-    }
-    try {
-      await posthog.shutdown()
-    } catch {
-      // telemetry failure is non-fatal, silently ignore
-    }
     return 1
   }
   printSuccess(`Config written ${SYMBOLS.arrow} ${color.dim(omoResult.configPath)}`)
@@ -127,10 +86,17 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
   printBox(formatConfigSummary(config), isUpdate ? "Updated Configuration" : "Installation Complete")
 
   if (!config.hasClaude) {
-    printInfo(
-      "Note: Sisyphus agent performs best with Claude Opus 4.5+. " +
-        "Other models work but may have reduced orchestration quality.",
-    )
+    console.log()
+    console.log(color.bgRed(color.white(color.bold(" CRITICAL WARNING "))))
+    console.log()
+    console.log(color.red(color.bold("  Sisyphus agent is STRONGLY optimized for Claude Opus 4.5.")))
+    console.log(color.red("  Without Claude, you may experience significantly degraded performance:"))
+    console.log(color.dim("    • Reduced orchestration quality"))
+    console.log(color.dim("    • Weaker tool selection and delegation"))
+    console.log(color.dim("    • Less reliable task completion"))
+    console.log()
+    console.log(color.yellow("  Consider subscribing to Claude Pro/Max for the best experience."))
+    console.log()
   }
 
   if (
@@ -138,8 +104,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     !config.hasOpenAI &&
     !config.hasGemini &&
     !config.hasCopilot &&
-    !config.hasOpencodeZen &&
-    !config.hasVercelAiGateway
+    !config.hasOpencodeZen
   ) {
     printWarning("No model providers configured. Using opencode/big-pickle as fallback.")
   }
@@ -148,15 +113,9 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
   console.log(`  Run ${color.cyan("opencode")} to start!`)
   console.log()
 
-  printInfo(
-    "Anonymous telemetry is enabled by default. Disable it with OMO_SEND_ANONYMOUS_TELEMETRY=0 or OMO_DISABLE_POSTHOG=1.",
-  )
-  printInfo("Docs: docs/legal/privacy-policy.md and docs/legal/terms-of-service.md")
-  console.log()
-
   printBox(
     `${color.bold("Pro Tip:")} Include ${color.cyan("ultrawork")} (or ${color.cyan("ulw")}) in your prompt.\n` +
-      `All features work like magic-parallel agents, background tasks,\n` +
+      `All features work like magic—parallel agents, background tasks,\n` +
       `deep exploration, and relentless execution until completion.`,
     "The Magic Word",
   )
@@ -168,29 +127,6 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
   console.log()
   console.log(color.dim("oMoMoMoMo... Enjoy!"))
   console.log()
-
-  try {
-    posthog.capture({
-      distinctId,
-      event: "install_completed",
-      properties: {
-        command: "install",
-        is_update: isUpdate,
-        has_claude: config.hasClaude,
-        has_openai: config.hasOpenAI,
-        has_gemini: config.hasGemini,
-        has_copilot: config.hasCopilot,
-        has_opencode_zen: config.hasOpencodeZen,
-      },
-    })
-  } catch {
-    // telemetry failure is non-fatal, silently ignore
-  }
-  try {
-    await posthog.shutdown()
-  } catch {
-    // telemetry failure is non-fatal, silently ignore
-  }
 
   if ((config.hasClaude || config.hasGemini || config.hasCopilot) && !args.skipAuth) {
     printBox(

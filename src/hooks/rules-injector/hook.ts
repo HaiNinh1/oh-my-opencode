@@ -32,7 +32,6 @@ const TRACKED_TOOLS = ["read", "write", "edit", "multiedit"];
 export function createRulesInjectorHook(
   ctx: PluginInput,
   modelCacheState?: { anthropicContext1MEnabled: boolean },
-  options?: { skipClaudeUserRules?: boolean },
 ) {
   const truncator = createDynamicTruncator(ctx, modelCacheState);
   const { getSessionCache, clearSessionCache } = createSessionCacheStore();
@@ -40,9 +39,6 @@ export function createRulesInjectorHook(
     workspaceDirectory: ctx.directory,
     truncator,
     getSessionCache,
-    ruleFinderOptions: options?.skipClaudeUserRules
-      ? { skipClaudeUserRules: true }
-      : undefined,
   });
 
   const toolExecuteAfter = async (

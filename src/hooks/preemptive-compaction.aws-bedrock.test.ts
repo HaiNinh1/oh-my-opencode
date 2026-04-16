@@ -12,11 +12,7 @@ function createMockContext(): HookContext {
   return {
     client: {
       session: {
-        messages: mock(() => Promise.resolve({ data: [] })),
         summarize: mock(() => Promise.resolve({})),
-      },
-      tui: {
-        showToast: mock(() => Promise.resolve()),
       },
     },
     directory: "/tmp/test",
@@ -31,6 +27,15 @@ describe("preemptive-compaction aws-bedrock-anthropic", () => {
     const hook = createPreemptiveCompactionHook(ctx, pluginConfig)
     const sessionID = "ses_aws_bedrock_anthropic_high"
 
+    // set model limits via chat.params
+    await hook["chat.params"]({
+      sessionID,
+      model: {
+        limit: { input: 200000, output: 8192, context: 200000 },
+      },
+    }, undefined)
+
+    // cache token usage via message.updated event
     await hook.event({
       event: {
         type: "message.updated",
@@ -52,11 +57,13 @@ describe("preemptive-compaction aws-bedrock-anthropic", () => {
       },
     })
 
-    // when
-    await hook["tool.execute.after"](
-      { tool: "bash", sessionID, callID: "call_aws_bedrock_1" },
-      { title: "", output: "test", metadata: null },
-    )
+    // when - trigger compaction check via session.idle
+    await hook.event({
+      event: {
+        type: "session.idle",
+        properties: { sessionID },
+      },
+    })
 
     // then
     expect(ctx.client.session.summarize).toHaveBeenCalledTimes(1)

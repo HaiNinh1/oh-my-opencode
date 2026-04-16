@@ -1,9 +1,5 @@
 import { describe, it, expect } from "bun:test"
-import {
-  BOULDER_CONTINUATION_PROMPT,
-  VERIFICATION_REMINDER,
-  VERIFICATION_REMINDER_GEMINI,
-} from "./system-reminder-templates"
+import { BOULDER_CONTINUATION_PROMPT } from "./system-reminder-templates"
 
 describe("BOULDER_CONTINUATION_PROMPT", () => {
   describe("checkbox-first priority rules", () => {
@@ -37,17 +33,5 @@ describe("BOULDER_CONTINUATION_PROMPT", () => {
 
       expect(checkboxPosition).toBeLessThan(proceedPosition)
     })
-  })
-})
-
-describe("VERIFICATION_REMINDER", () => {
-  it("contains node_modules exclusion pathspec in git diff command", () => {
-    expect(VERIFICATION_REMINDER).toContain(":!node_modules")
-  })
-})
-
-describe("VERIFICATION_REMINDER_GEMINI", () => {
-  it("contains node_modules exclusion pathspec in git diff command", () => {
-    expect(VERIFICATION_REMINDER_GEMINI).toContain(":!node_modules")
   })
 })

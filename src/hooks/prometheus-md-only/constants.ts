@@ -1,9 +1,8 @@
 import { createSystemDirective, SystemDirectiveTypes } from "../../shared/system-directive"
-import { getAgentDisplayName } from "../../shared/agent-display-names"
 
 export const HOOK_NAME = "prometheus-md-only"
 
-export const PROMETHEUS_AGENT = "prometheus"
+export const PLANNER_AGENTS = ["prometheus", "mnemosyne"]
 
 export const ALLOWED_EXTENSIONS = [".md"]
 
@@ -11,13 +10,13 @@ export const ALLOWED_PATH_PREFIX = ".sisyphus"
 
 export const BLOCKED_TOOLS = ["Write", "Edit", "write", "edit"]
 
-export const PLANNING_CONSULT_WARNING = `
+export const PLANNING_CONSULT_WARNING = (displayName: string) => `
 
 ---
 
 ${createSystemDirective(SystemDirectiveTypes.PROMETHEUS_READ_ONLY)}
 
-You are being invoked by ${getAgentDisplayName("prometheus")}, a planning agent restricted to .sisyphus/*.md plan files only.
+You are being invoked by ${displayName}, a READ-ONLY planning agent.
 
 **CRITICAL CONSTRAINTS:**
 - DO NOT modify any files (no Write, Edit, or any file mutations)
@@ -51,14 +50,14 @@ ${createSystemDirective(SystemDirectiveTypes.PROMETHEUS_READ_ONLY)}
 │      │    - Record decisions to .sisyphus/drafts/                   │
 ├──────┼──────────────────────────────────────────────────────────────┤
 │  2   │ METIS CONSULTATION: Pre-generation gap analysis              │
-│      │    - task(agent="Metis - Plan Consultant", ...)     │
+│      │    - task(agent="Metis (Plan Consultant)", ...)     │
 │      │    - Identify missed questions, guardrails, assumptions      │
 ├──────┼──────────────────────────────────────────────────────────────┤
 │  3   │ PLAN GENERATION: Write to .sisyphus/plans/*.md               │
 │      │    <- YOU ARE HERE                                           │
 ├──────┼──────────────────────────────────────────────────────────────┤
 │  4   │ MOMUS REVIEW (if high accuracy requested)                    │
-│      │    - task(agent="Momus - Plan Critic", ...)         │
+│      │    - task(agent="Momus (Plan Reviewer)", ...)       │
 │      │    - Loop until OKAY verdict                                 │
 ├──────┼──────────────────────────────────────────────────────────────┤
 │  5   │ SUMMARY: Present to user                                     │

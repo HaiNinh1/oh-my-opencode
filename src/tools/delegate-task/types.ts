@@ -1,9 +1,10 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import type { BackgroundManager } from "../../features/background-agent"
-import type { CategoriesConfig, GitMasterConfig, BrowserAutomationProvider, AgentOverrides, SisyphusAgentConfig } from "../../config/schema"
+import type { CategoriesConfig, GitMasterConfig, BrowserAutomationProvider, AgentOverrides } from "../../config/schema"
 import type {
   AvailableCategory,
   AvailableSkill,
+  AvailableToolInfo,
 } from "../../agents/dynamic-agent-prompt-builder"
 
 export type OpencodeClient = PluginInput["client"]
@@ -66,14 +67,13 @@ export interface DelegateTaskToolOptions {
   disabledSkills?: Set<string>
   availableCategories?: AvailableCategory[]
   availableSkills?: AvailableSkill[]
+  getAvailableToolInfos?: () => AvailableToolInfo[]
   agentOverrides?: AgentOverrides
-  sisyphusAgentConfig?: SisyphusAgentConfig
   onSyncSessionCreated?: (event: SyncSessionCreatedEvent) => Promise<void>
   syncPollTimeoutMs?: number
+  /** When true, forces run_in_background=true to be treated as false. Set by background_task.force_sync config. */
+  forceSyncEnabled?: boolean
 }
-
-import type { DelegatedModelConfig } from "../../shared/model-resolution-types"
-export type { DelegatedModelConfig }
 
 export interface BuildSystemContentInput {
   skillContent?: string
@@ -82,8 +82,9 @@ export interface BuildSystemContentInput {
   agentsContext?: string
   planAgentPrepend?: string
   maxPromptTokens?: number
-  model?: DelegatedModelConfig
+  model?: { providerID: string; modelID: string; variant?: string }
   agentName?: string
   availableCategories?: AvailableCategory[]
   availableSkills?: AvailableSkill[]
+  availableToolInfos?: AvailableToolInfo[]
 }

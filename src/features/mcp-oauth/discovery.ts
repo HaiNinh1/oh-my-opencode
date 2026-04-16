@@ -36,16 +36,28 @@ async function fetchMetadata(url: string): Promise<{ ok: true; json: Record<stri
   return { ok: true, json }
 }
 
-function parseMetadataFields(json: Record<string, unknown>, resource: string): OAuthServerMetadata {
+async function fetchAuthorizationServerMetadata(issuer: string, resource: string): Promise<OAuthServerMetadata> {
+  const issuerUrl = parseHttpsUrl(issuer, "Authorization server URL")
+  const issuerPath = issuerUrl.pathname.replace(/\/+$/, "")
+  const metadataUrl = new URL(`/.well-known/oauth-authorization-server${issuerPath}`, issuerUrl).toString()
+  const metadata = await fetchMetadata(metadataUrl)
+
+  if (!metadata.ok) {
+    if (metadata.status === 404) {
+      throw new Error("OAuth authorization server metadata not found")
+    }
+    throw new Error(`OAuth authorization server metadata fetch failed (${metadata.status})`)
+  }
+
   const authorizationEndpoint = parseHttpsUrl(
-    readStringField(json, "authorization_endpoint"),
+    readStringField(metadata.json, "authorization_endpoint"),
     "authorization_endpoint"
   ).toString()
   const tokenEndpoint = parseHttpsUrl(
-    readStringField(json, "token_endpoint"),
+    readStringField(metadata.json, "token_endpoint"),
     "token_endpoint"
   ).toString()
-  const registrationEndpointValue = json.registration_endpoint
+  const registrationEndpointValue = metadata.json.registration_endpoint
   const registrationEndpoint =
     typeof registrationEndpointValue === "string" && registrationEndpointValue.length > 0
       ? parseHttpsUrl(registrationEndpointValue, "registration_endpoint").toString()
@@ -57,29 +69,6 @@ function parseMetadataFields(json: Record<string, unknown>, resource: string): O
     registrationEndpoint,
     resource,
   }
-}
-
-async function fetchAuthorizationServerMetadata(issuer: string, resource: string): Promise<OAuthServerMetadata> {
-  const issuerUrl = parseHttpsUrl(issuer, "Authorization server URL")
-  const issuerPath = issuerUrl.pathname.replace(/\/+$/, "")
-  const metadataUrl = new URL(`/.well-known/oauth-authorization-server${issuerPath}`, issuerUrl).toString()
-  const metadata = await fetchMetadata(metadataUrl)
-
-  if (!metadata.ok) {
-    if (metadata.status === 404 && issuerPath !== "") {
-      const rootMetadataUrl = new URL("/.well-known/oauth-authorization-server", issuerUrl).toString()
-      const rootMetadata = await fetchMetadata(rootMetadataUrl)
-      if (rootMetadata.ok) {
-        return parseMetadataFields(rootMetadata.json, resource)
-      }
-    }
-    if (metadata.status === 404) {
-      throw new Error("OAuth authorization server metadata not found")
-    }
-    throw new Error(`OAuth authorization server metadata fetch failed (${metadata.status})`)
-  }
-
-  return parseMetadataFields(metadata.json, resource)
 }
 
 function parseAuthorizationServers(metadata: Record<string, unknown>): string[] {

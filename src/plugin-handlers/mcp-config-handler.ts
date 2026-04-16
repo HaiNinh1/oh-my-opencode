@@ -2,13 +2,8 @@ import type { OhMyOpenCodeConfig } from "../config";
 import { loadMcpConfigs } from "../features/claude-code-mcp-loader";
 import { createBuiltinMcps } from "../mcp";
 import type { PluginComponents } from "./plugin-components-loader";
-import { log } from "../shared";
 
 type McpEntry = Record<string, unknown>;
-
-function isDisabledMcpEntry(value: unknown): value is McpEntry & { enabled: false } {
-  return typeof value === "object" && value !== null && (value as McpEntry).enabled === false;
-}
 
 function captureUserDisabledMcps(
   userMcp: Record<string, unknown> | undefined
@@ -17,7 +12,12 @@ function captureUserDisabledMcps(
   if (!userMcp) return disabled;
 
   for (const [name, value] of Object.entries(userMcp)) {
-    if (isDisabledMcpEntry(value)) {
+    if (
+      value &&
+      typeof value === "object" &&
+      "enabled" in value &&
+      (value as McpEntry).enabled === false
+    ) {
       disabled.add(name);
     }
   }
@@ -38,18 +38,10 @@ export async function applyMcpConfig(params: {
     ? await loadMcpConfigs(disabledMcps)
     : { servers: {} };
 
-  if (userMcp) {
-    for (const name of Object.keys(userMcp)) {
-      if (name in mcpResult.servers) {
-        log(`warning: MCP server "${name}" from user config overrides Claude Code .mcp.json`);
-      }
-    }
-  }
-
   const merged = {
     ...createBuiltinMcps(disabledMcps, params.pluginConfig),
-    ...mcpResult.servers,
     ...(userMcp ?? {}),
+    ...mcpResult.servers,
     ...params.pluginComponents.mcpServers,
   } as Record<string, McpEntry>;
 

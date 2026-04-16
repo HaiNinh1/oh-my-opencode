@@ -3,10 +3,8 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import { subagentSessions, syncSubagentSessions } from "../../features/claude-code-session-state"
 import { clearSessionFallbackChain, setSessionFallbackChain } from "../../hooks/model-fallback/hook"
 import { getAgentToolRestrictions, log } from "../../shared"
-import { applySessionPromptParams } from "../../shared/session-prompt-params-helpers"
-import type { DelegatedModelConfig } from "../../shared/model-resolution-types"
 import type { FallbackEntry } from "../../shared/model-requirements"
-import { stripAgentListSortPrefix } from "../../shared/agent-display-names"
+import { shouldAllowQuestion } from "../delegate-task/constants"
 import { waitForCompletion } from "./completion-poller"
 import { processMessages } from "./message-processor"
 import { createOrGetSession } from "./session-creator"
@@ -36,24 +34,6 @@ const defaultDeps: ExecuteSyncDeps = {
   clearSessionFallbackChain,
 }
 
-function buildPromptGenerationParams(model: DelegatedModelConfig | undefined): Record<string, unknown> {
-  if (!model) {
-    return {}
-  }
-
-  const promptOptions: Record<string, unknown> = {
-    ...(model.reasoningEffort ? { reasoningEffort: model.reasoningEffort } : {}),
-    ...(model.thinking ? { thinking: model.thinking } : {}),
-  }
-
-  return {
-    ...(model.temperature !== undefined ? { temperature: model.temperature } : {}),
-    ...(model.top_p !== undefined ? { topP: model.top_p } : {}),
-    ...(model.maxTokens !== undefined ? { maxOutputTokens: model.maxTokens } : {}),
-    ...(Object.keys(promptOptions).length > 0 ? { options: promptOptions } : {}),
-  }
-}
-
 export async function executeSync(
   args: CallOmoAgentArgs,
   toolContext: {
@@ -67,7 +47,6 @@ export async function executeSync(
   deps: ExecuteSyncDeps = defaultDeps,
   fallbackChain?: FallbackEntry[],
   spawnReservation?: SpawnReservation,
-  model?: DelegatedModelConfig,
 ): Promise<string> {
   let sessionID: string | undefined
   let createdSessionForExecution = false
@@ -89,8 +68,6 @@ export async function executeSync(
       appliedFallbackChain = true
     }
 
-    applySessionPromptParams(sessionID, model)
-
     await Promise.resolve(
       toolContext.metadata?.({
         title: args.description,
@@ -100,29 +77,25 @@ export async function executeSync(
 
     log(`[call_omo_agent] Sending prompt to session ${sessionID}`)
     log(`[call_omo_agent] Prompt text:`, args.prompt.substring(0, 100))
-    const normalizedSubagentType = stripAgentListSortPrefix(args.subagent_type)
 
     try {
       await (ctx.client.session as unknown as SessionWithPromptAsync).promptAsync({
         path: { id: sessionID },
         body: {
-          agent: normalizedSubagentType,
+          agent: args.subagent_type,
           tools: {
-            ...getAgentToolRestrictions(normalizedSubagentType),
+            ...getAgentToolRestrictions(args.subagent_type),
             task: false,
-            question: false,
+            question: shouldAllowQuestion(args.subagent_type),
           },
           parts: [{ type: "text", text: args.prompt }],
-          ...(model ? { model: { providerID: model.providerID, modelID: model.modelID } } : {}),
-          ...(model?.variant ? { variant: model.variant } : {}),
-          ...buildPromptGenerationParams(model),
         },
       })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error)
       log(`[call_omo_agent] Prompt error:`, errorMessage)
       if (errorMessage.includes("agent.name") || errorMessage.includes("undefined")) {
-        return `Error: Agent "${normalizedSubagentType}" not found. Make sure the agent is registered in your opencode.json or provided by a plugin.\n\n<task_metadata>\nsession_id: ${sessionID}\n</task_metadata>`
+        return `Error: Agent "${args.subagent_type}" not found. Make sure the agent is registered in your opencode.json or provided by a plugin.\n\n<task_metadata>\nsession_id: ${sessionID}\n</task_metadata>`
       }
       return `Error: Failed to send prompt: ${errorMessage}\n\n<task_metadata>\nsession_id: ${sessionID}\n</task_metadata>`
     }

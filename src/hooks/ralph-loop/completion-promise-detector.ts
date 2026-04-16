@@ -2,27 +2,11 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import { existsSync, readFileSync } from "node:fs"
 import { log } from "../../shared/logger"
 import { HOOK_NAME } from "./constants"
-import { ULTRAWORK_VERIFICATION_PROMISE } from "./constants"
-import { isOracleVerified } from "./oracle-verification-detector"
 import { withTimeout } from "./with-timeout"
 
 interface OpenCodeSessionMessage {
 	info?: { role?: string }
 	parts?: Array<{ type: string; text?: string }>
-}
-
-interface TranscriptEntry {
-	type?: string
-	timestamp?: string
-	content?: string
-	tool_output?: { output?: string } | string
-}
-
-function extractTranscriptEntryText(entry: TranscriptEntry): string {
-	if (typeof entry.content === "string") return entry.content
-	if (typeof entry.tool_output === "string") return entry.tool_output
-	if (entry.tool_output && typeof entry.tool_output === "object" && typeof entry.tool_output.output === "string") return entry.tool_output.output
-	return ""
 }
 
 function escapeRegex(str: string): string {
@@ -31,38 +15,6 @@ function escapeRegex(str: string): string {
 
 function buildPromisePattern(promise: string): RegExp {
 	return new RegExp(`<promise>\\s*${escapeRegex(promise)}\\s*</promise>`, "is")
-}
-
-function shouldInspectSessionMessagePart(
-	partType: string,
-	promise: string,
-	partText: string,
-): boolean {
-	if (partType === "text") {
-		return true
-	}
-
-	if (partType !== "tool_result") {
-		return false
-	}
-
-	return promise === ULTRAWORK_VERIFICATION_PROMISE && isOracleVerified(partText)
-}
-
-function shouldInspectTranscriptEntry(
-	entry: TranscriptEntry,
-	promise: string,
-	entryText: string,
-): boolean {
-	if (entry.type === "assistant" || entry.type === "text") {
-		return true
-	}
-
-	if (entry.type !== "tool_result") {
-		return false
-	}
-
-	return promise === ULTRAWORK_VERIFICATION_PROMISE && isOracleVerified(entryText)
 }
 
 export function detectCompletionInTranscript(
@@ -77,17 +29,14 @@ export function detectCompletionInTranscript(
 
 		const content = readFileSync(transcriptPath, "utf-8")
 		const pattern = buildPromisePattern(promise)
-		const lines = content.split("\n").filter((line: string) => line.trim())
+		const lines = content.split("\n").filter((line) => line.trim())
 
 		for (const line of lines) {
 			try {
-				const entry = JSON.parse(line) as TranscriptEntry
+				const entry = JSON.parse(line) as { type?: string; timestamp?: string }
 				if (entry.type === "user") continue
 				if (startedAt && entry.timestamp && entry.timestamp < startedAt) continue
-				const entryText = extractTranscriptEntryText(entry)
-				if (!entryText) continue
-				if (!shouldInspectTranscriptEntry(entry, promise, entryText)) continue
-				if (pattern.test(entryText)) return true
+				if (pattern.test(line)) return true
 			} catch {
 				continue
 			}
@@ -142,13 +91,14 @@ export async function detectCompletionInSessionMessages(
 			const assistant = assistantMessages[index]
 			if (!assistant.parts) continue
 
+			let responseText = ""
 			for (const part of assistant.parts) {
-				const partText = part.text ?? ""
-				if (!partText) continue
-				if (!shouldInspectSessionMessagePart(part.type, options.promise, partText)) continue
-				if (pattern.test(partText)) {
-					return true
-				}
+				if (part.type !== "text" && part.type !== "tool_result") continue
+				responseText += `${responseText ? "\n" : ""}${part.text ?? ""}`
+			}
+
+			if (pattern.test(responseText)) {
+				return true
 			}
 		}
 

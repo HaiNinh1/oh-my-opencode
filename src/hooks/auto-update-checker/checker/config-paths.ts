@@ -1,19 +1,18 @@
 import * as os from "node:os"
 import * as path from "node:path"
 import {
-  getUserConfigDir,
-  getUserOpencodeConfig,
-  getUserOpencodeConfigJsonc,
+  USER_CONFIG_DIR,
+  USER_OPENCODE_CONFIG,
+  USER_OPENCODE_CONFIG_JSONC,
   getWindowsAppdataDir,
 } from "../constants"
 
 export function getConfigPaths(directory: string): string[] {
-  const userConfigDir = getUserConfigDir()
   const paths = [
     path.join(directory, ".opencode", "opencode.json"),
     path.join(directory, ".opencode", "opencode.jsonc"),
-    getUserOpencodeConfig(),
-    getUserOpencodeConfigJsonc(),
+    USER_OPENCODE_CONFIG,
+    USER_OPENCODE_CONFIG_JSONC,
   ]
 
   if (process.platform === "win32") {
@@ -21,7 +20,7 @@ export function getConfigPaths(directory: string): string[] {
     const appdataDir = getWindowsAppdataDir()
 
     if (appdataDir) {
-      const alternateDir = userConfigDir === crossPlatformDir ? appdataDir : crossPlatformDir
+      const alternateDir = USER_CONFIG_DIR === crossPlatformDir ? appdataDir : crossPlatformDir
       const alternateConfig = path.join(alternateDir, "opencode", "opencode.json")
       const alternateConfigJsonc = path.join(alternateDir, "opencode", "opencode.jsonc")
 

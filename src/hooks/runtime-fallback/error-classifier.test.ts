@@ -31,20 +31,6 @@ describe("runtime-fallback error classifier", () => {
     expect(signal).toBeDefined()
   })
 
-  test("detects too-many-requests auto-retry status signals without countdown text", () => {
-    //#given
-    const info = {
-      status:
-        "Too Many Requests: Sorry, you've exhausted this model's rate limit. Please try a different model.",
-    }
-
-    //#when
-    const signal = extractAutoRetrySignal(info)
-
-    //#then
-    expect(signal).toBeDefined()
-  })
-
   test("treats cooling-down retry messages as retryable", () => {
     //#given
     const error = {
@@ -134,7 +120,7 @@ describe("extractStatusCode", () => {
   })
 
   test("skips non-numeric status and finds deeper numeric statusCode", () => {
-    //#given - status is a string, but error.statusCode is numeric
+    //#given — status is a string, but error.statusCode is numeric
     const error = {
       status: "error",
       error: { statusCode: 429 },
@@ -178,24 +164,5 @@ describe("extractStatusCode", () => {
       cause: { statusCode: 503 },
     }
     expect(extractStatusCode(error)).toBe(400)
-  })
-})
-
-describe("model support fallback", () => {
-  test("detects model_not_supported errors as retryable for fallback chain", () => {
-    //#given
-    const error1 = { message: "model_not_supported" }
-    const error2 = { message: "The model 'gpt-4-foo' is not supported by this API" }
-    const error3 = { message: "model not supported on free tier" }
-
-    //#when
-    const retryable1 = isRetryableError(error1, [400, 404])
-    const retryable2 = isRetryableError(error2, [400, 404])
-    const retryable3 = isRetryableError(error3, [400, 404])
-
-    //#then
-    expect(retryable1).toBe(true)
-    expect(retryable2).toBe(true)
-    expect(retryable3).toBe(true)
   })
 })

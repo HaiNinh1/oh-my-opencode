@@ -1,8 +1,7 @@
 import type { DelegateTaskArgs, ToolContextWithMetadata } from "./types"
-import type { ExecutorContext, SessionMessage } from "./executor-types"
-import { isPlanFamily } from "./constants"
+import type { ExecutorContext, ParentContext, SessionMessage } from "./executor-types"
+import { shouldAllowQuestion } from "./constants"
 import { storeToolMetadata } from "../../features/tool-metadata-store"
-import { resolveCallID } from "./resolve-call-id"
 import { getTaskToastManager } from "../../features/task-toast-manager"
 import { getAgentToolRestrictions } from "../../shared/agent-tool-restrictions"
 import { getMessageDir } from "../../shared"
@@ -13,14 +12,16 @@ import { syncContinuationDeps, type SyncContinuationDeps } from "./sync-continua
 import { setSessionTools } from "../../shared/session-tools-store"
 import { normalizeSDKResponse } from "../../shared"
 import { buildTaskPrompt } from "./prompt-builder"
+import { getTaskOutputContent } from "./task-output-pruner"
 
 export async function executeSyncContinuation(
   args: DelegateTaskArgs,
   ctx: ToolContextWithMetadata,
   executorCtx: ExecutorContext,
+  parentContext?: ParentContext,
   deps: SyncContinuationDeps = syncContinuationDeps
 ): Promise<string> {
-  const { client, syncPollTimeoutMs, sisyphusAgentConfig } = executorCtx
+  const { client, syncPollTimeoutMs } = executorCtx
   const toastManager = getTaskToastManager()
   const taskId = `resume_sync_${args.session_id!.slice(0, 8)}`
   const startTime = new Date()
@@ -79,19 +80,18 @@ export async function executeSyncContinuation(
       },
     }
     await ctx.metadata?.(syncContMeta)
-    const callID = resolveCallID(ctx)
-    if (callID) {
-      storeToolMetadata(ctx.sessionID, callID, syncContMeta)
+    if (ctx.callID) {
+      storeToolMetadata(ctx.sessionID, ctx.callID, syncContMeta)
     }
 
-    const allowTask = isPlanFamily(resumeAgent)
-    const tddEnabled = sisyphusAgentConfig?.tdd
-    const effectivePrompt = buildTaskPrompt(args.prompt, resumeAgent, tddEnabled)
+    const effectivePrompt = buildTaskPrompt(args.prompt, resumeAgent)
+    const agentRestrictions = resumeAgent ? getAgentToolRestrictions(resumeAgent) : {}
+    const allowQuestion = shouldAllowQuestion(resumeAgent)
     const tools = {
-      task: allowTask,
+      task: agentRestrictions.task ?? true,
       call_omo_agent: true,
-      question: false,
-      ...(resumeAgent ? getAgentToolRestrictions(resumeAgent) : {}),
+      question: allowQuestion,
+      ...agentRestrictions,
     }
     setSessionTools(args.session_id!, tools)
 
@@ -136,7 +136,7 @@ export async function executeSyncContinuation(
 
 ---
 
-${result.textContent || "(No text output)"}
+${getTaskOutputContent(result.textContent, parentContext?.agent)}
 
 <task_metadata>
 session_id: ${args.session_id}

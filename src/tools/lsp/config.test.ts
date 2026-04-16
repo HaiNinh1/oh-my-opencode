@@ -20,7 +20,8 @@ describe("isServerInstalled", () => {
   afterEach(() => {
     try {
       rmSync(tempDir, { recursive: true, force: true })
-    } catch {
+    } catch (e) {
+      // cleanup failed — ignored
     }
 
     if (process.platform === "win32") {

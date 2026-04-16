@@ -52,6 +52,17 @@ describe("resolveSkillContent", () => {
 		expect(result).toContain("Playwright Browser Automation")
 	})
 
+	it("should return template for 'review-work' skill", () => {
+		// given: builtin skills with 'review-work' skill
+		// when: resolving content for 'review-work'
+		const result = resolveSkillContent("review-work")
+
+		// then: returns template string
+		expect(result).not.toBeNull()
+		expect(typeof result).toBe("string")
+		expect(result).toContain("Review Work")
+	})
+
 	it("should return null for non-existent skill", () => {
 		// given: builtin skills without 'nonexistent' skill
 		// when: resolving content for 'nonexistent'

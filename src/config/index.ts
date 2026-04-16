@@ -19,6 +19,5 @@ export type {
   SisyphusConfig,
   SisyphusTasksConfig,
   RuntimeFallbackConfig,
-  ModelCapabilitiesConfig,
   FallbackModels,
 } from "./schema"

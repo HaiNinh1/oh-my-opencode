@@ -4,17 +4,14 @@ type ProcessCleanupEvent = NodeJS.Signals | "beforeExit" | "exit"
 
 function registerProcessSignal(
   signal: ProcessCleanupEvent,
-  handler: () => void | Promise<void>,
+  handler: () => void,
   exitAfter: boolean
 ): () => void {
   const listener = () => {
-    const cleanupResult = handler()
+    handler()
     if (exitAfter) {
       process.exitCode = 0
-      const exitTimeout = setTimeout(() => process.exit(), 6000)
-      void Promise.resolve(cleanupResult).finally(() => {
-        clearTimeout(exitTimeout)
-      })
+      setTimeout(() => process.exit(), 6000).unref()
     }
   }
   process.on(signal, listener)
@@ -35,28 +32,16 @@ export function registerManagerForCleanup(manager: CleanupTarget): void {
   if (cleanupRegistered) return
   cleanupRegistered = true
 
-  let cleanupPromise: Promise<void> | undefined
-
-  const cleanupAll = (): Promise<void> => {
-    if (cleanupPromise) return cleanupPromise
-    const promises: Promise<void>[] = []
+  const cleanupAll = () => {
     for (const m of cleanupManagers) {
       try {
-        promises.push(
-          Promise.resolve(m.shutdown()).catch((error) => {
-            log("[background-agent] Error during async shutdown cleanup:", error)
-          })
-        )
+        void Promise.resolve(m.shutdown()).catch((error) => {
+          log("[background-agent] Error during async shutdown cleanup:", error)
+        })
       } catch (error) {
         log("[background-agent] Error during shutdown cleanup:", error)
       }
     }
-    cleanupPromise = Promise.allSettled(promises).then(() => {})
-    cleanupPromise.then(() => {
-      log("[background-agent] All shutdown cleanup completed")
-    })
-
-    return cleanupPromise
   }
 
   const registerSignal = (signal: ProcessCleanupEvent, exitAfter: boolean): void => {
@@ -85,7 +70,7 @@ export function unregisterManagerForCleanup(manager: CleanupTarget): void {
   cleanupRegistered = false
 }
 
-/** @internal - test-only reset for module-level singleton state */
+/** @internal — test-only reset for module-level singleton state */
 export function _resetForTesting(): void {
   for (const manager of [...cleanupManagers]) {
     cleanupManagers.delete(manager)

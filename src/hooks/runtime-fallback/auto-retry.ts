@@ -9,7 +9,6 @@ import { SessionCategoryRegistry } from "../../shared/session-category-registry"
 import { buildRetryModelPayload } from "./retry-model-payload"
 import { getLastUserRetryParts } from "./last-user-retry-parts"
 import { extractSessionMessages } from "./session-messages"
-import { resolveRegisteredAgentName } from "../../features/claude-code-session-state"
 
 const SESSION_TTL_MS = 30 * 60 * 1000
 
@@ -102,13 +101,7 @@ export function createAutoRetryHelpers(deps: HookDeps) {
       return
     }
 
-    const agentSettings = resolvedAgent
-      ? pluginConfig?.agents?.[resolvedAgent as keyof typeof pluginConfig.agents]
-      : undefined
-    const retryModelPayload = buildRetryModelPayload(newModel, agentSettings ? {
-      variant: agentSettings.variant,
-      reasoningEffort: agentSettings.reasoningEffort,
-    } : undefined)
+    const retryModelPayload = buildRetryModelPayload(newModel)
     if (!retryModelPayload) {
       log(`[${HOOK_NAME}] Invalid model format (missing provider prefix): ${newModel}`)
       const state = sessionStates.get(sessionID)
@@ -133,14 +126,13 @@ export function createAutoRetryHelpers(deps: HookDeps) {
         })
 
         const retryAgent = resolvedAgent ?? getSessionAgent(sessionID)
-        const launchAgent = resolveRegisteredAgentName(retryAgent)
         sessionAwaitingFallbackResult.add(sessionID)
         scheduleSessionFallbackTimeout(sessionID, retryAgent)
 
         await ctx.client.session.promptAsync({
           path: { id: sessionID },
           body: {
-            ...(launchAgent ? { agent: launchAgent } : {}),
+            ...(retryAgent ? { agent: retryAgent } : {}),
             ...retryModelPayload,
             parts: retryParts,
           },

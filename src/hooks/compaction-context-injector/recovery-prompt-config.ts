@@ -1,4 +1,3 @@
-import { stripInvisibleAgentCharacters } from "../../shared/agent-display-names"
 import type { CompactionAgentConfigCheckpoint } from "../../shared/compaction-agent-config-checkpoint"
 
 export type RecoveryPromptConfig = CompactionAgentConfigCheckpoint & {
@@ -67,7 +66,7 @@ export function isPromptConfigRecovered(
   const agentMatches =
     typeof actualAgent === "string" &&
     !isCompactionAgent(actualAgent) &&
-    stripInvisibleAgentCharacters(actualAgent).toLowerCase() === stripInvisibleAgentCharacters(expectedPromptConfig.agent).toLowerCase()
+    actualAgent.toLowerCase() === expectedPromptConfig.agent.toLowerCase()
 
   return (
     agentMatches &&

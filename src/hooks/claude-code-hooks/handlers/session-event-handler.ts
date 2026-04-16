@@ -1,26 +1,16 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import type { ContextCollector } from "../../../features/context-injector"
-import { clearClaudeHooksConfigCache, loadClaudeHooksConfig } from "../config"
-import { clearPluginExtendedConfigCache, loadPluginExtendedConfig } from "../config-loader"
+import { loadClaudeHooksConfig } from "../config"
+import { loadPluginExtendedConfig } from "../config-loader"
 import { executeStopHooks, type StopContext } from "../stop"
-import { clearTranscriptCache } from "../transcript"
-import { clearToolInputCache, stopToolInputCacheCleanup } from "../tool-input-cache"
 import type { PluginConfig } from "../types"
 import { createInternalAgentTextPart, isHookDisabled, log } from "../../../shared"
 import {
-	clearAllSessionHookState,
 	clearSessionHookState,
 	sessionErrorState,
 	sessionInterruptState,
 } from "../session-hook-state"
 
-export function createSessionEventHandler(
-	ctx: PluginInput,
-	config: PluginConfig,
-	contextCollector?: ContextCollector,
-) {
-	const parentSessionIdCache = new Map<string, string | undefined>()
-
+export function createSessionEventHandler(ctx: PluginInput, config: PluginConfig) {
 	return async (input: { event: { type: string; properties?: unknown } }) => {
 		const { event } = input
 
@@ -40,10 +30,6 @@ export function createSessionEventHandler(
 			const props = event.properties as Record<string, unknown> | undefined
 			const sessionInfo = props?.info as { id?: string } | undefined
 			if (sessionInfo?.id) {
-				parentSessionIdCache.delete(sessionInfo.id)
-				clearTranscriptCache(sessionInfo.id)
-				clearToolInputCache(sessionInfo.id)
-				contextCollector?.clear(sessionInfo.id)
 				clearSessionHookState(sessionInfo.id)
 			}
 			return
@@ -65,17 +51,14 @@ export function createSessionEventHandler(
 		const interruptStateBefore = sessionInterruptState.get(sessionID)
 		const interruptedBefore = interruptStateBefore?.interrupted === true
 
-		let parentSessionId = parentSessionIdCache.get(sessionID)
-		if (parentSessionId === undefined && !parentSessionIdCache.has(sessionID)) {
-			try {
-				const sessionInfo = await ctx.client.session.get({
-					path: { id: sessionID },
-				})
-				parentSessionId = sessionInfo.data?.parentID
-				parentSessionIdCache.set(sessionID, parentSessionId)
-			} catch {
-				parentSessionId = undefined
-			}
+		let parentSessionId: string | undefined
+		try {
+			const sessionInfo = await ctx.client.session.get({
+				path: { id: sessionID },
+			})
+			parentSessionId = sessionInfo.data?.parentID
+		} catch {
+			parentSessionId = undefined
 		}
 
 		if (!isHookDisabled(config, "Stop")) {
@@ -125,13 +108,4 @@ export function createSessionEventHandler(
 
 		clearSessionHookState(sessionID)
 	}
-}
-
-export function disposeSessionEventHandler(contextCollector?: ContextCollector): void {
-	clearTranscriptCache()
-	clearClaudeHooksConfigCache()
-	clearPluginExtendedConfigCache()
-	stopToolInputCacheCleanup()
-	contextCollector?.clearAll()
-	clearAllSessionHookState()
 }

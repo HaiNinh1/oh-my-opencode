@@ -1,7 +1,5 @@
 import { existsSync, readFileSync, statSync } from "fs"
-import { isAbsolute, resolve } from "path"
-import { isWithinProject } from "./contains-path"
-import { log } from "./logger"
+import { join, isAbsolute } from "path"
 
 interface FileMatch {
   fullMatch: string
@@ -32,10 +30,9 @@ function findFileReferences(text: string): FileMatch[] {
 
 function resolveFilePath(filePath: string, cwd: string): string {
   if (isAbsolute(filePath)) {
-    return resolve(filePath)
+    return filePath
   }
-
-  return resolve(cwd, filePath)
+  return join(cwd, filePath)
 }
 
 function readFileContent(resolvedPath: string): string {
@@ -71,17 +68,6 @@ export async function resolveFileReferencesInText(
 
   for (const match of matches) {
     const resolvedPath = resolveFilePath(match.filePath, cwd)
-
-    if (!isWithinProject(resolvedPath, cwd)) {
-      log("[file-reference-resolver] Rejected file reference outside project root", {
-        filePath: match.filePath,
-        resolvedPath,
-        projectRoot: cwd,
-      })
-      replacements.set(match.fullMatch, `[path rejected: ${match.filePath}]`)
-      continue
-    }
-
     const content = readFileContent(resolvedPath)
     replacements.set(match.fullMatch, content)
   }

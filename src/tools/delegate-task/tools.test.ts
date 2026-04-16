@@ -1,7 +1,8 @@
-declare const require: NodeJS.Require
+declare const require: (name: string) => any
 const { describe, test, expect, beforeEach, afterEach, spyOn, mock } = require("bun:test")
 import { DEFAULT_CATEGORIES, CATEGORY_PROMPT_APPENDS, CATEGORY_DESCRIPTIONS, isPlanAgent, PLAN_AGENT_NAMES, isPlanFamily, PLAN_FAMILY_NAMES } from "./constants"
-import { getAgentDisplayName, getAgentListDisplayName } from "../../shared/agent-display-names"
+import { isMnemosyneAgent, MNEMOSYNE_AGENT_NAMES } from "./mnemosyne-plan-constants"
+import { resolveCategoryConfig } from "./tools"
 import type { CategoryConfig } from "../../config/schema"
 import type { DelegateTaskArgs } from "./types"
 import { __resetModelCache } from "../../shared/model-availability"
@@ -9,20 +10,6 @@ import { clearSkillCache } from "../../features/opencode-skill-loader/skill-cont
 import { __setTimingConfig, __resetTimingConfig } from "./timing"
 import * as connectedProvidersCache from "../../shared/connected-providers-cache"
 import * as executor from "./executor"
-
-const runtimeRequire = require as NodeJS.Require & { cache?: Record<string, unknown> }
-
-function clearRequireCache(modulePath: string): void {
-  const resolvedPath = runtimeRequire.resolve(modulePath)
-  if (runtimeRequire.cache?.[resolvedPath]) {
-    delete runtimeRequire.cache[resolvedPath]
-  }
-}
-
-function resolveCategoryConfig(...args: Parameters<typeof import("./tools").resolveCategoryConfig>): ReturnType<typeof import("./tools").resolveCategoryConfig> {
-  clearRequireCache("./tools")
-  return require("./tools").resolveCategoryConfig(...args)
-}
 
 const SYSTEM_DEFAULT_MODEL = "anthropic/claude-sonnet-4-6"
 
@@ -51,7 +38,6 @@ describe("sisyphus-task", () => {
 
   beforeEach(() => {
     mock.restore()
-    clearRequireCache("./tools")
     __resetModelCache()
     clearSkillCache()
     __setTimingConfig({
@@ -108,7 +94,7 @@ describe("sisyphus-task", () => {
 
       // when / #then
       expect(category).toBeDefined()
-      expect(category.model).toBe("openai/gpt-5.4")
+      expect(category.model).toBe("openai/gpt-5.3-codex")
       expect(category.variant).toBe("medium")
     })
 
@@ -195,8 +181,8 @@ describe("sisyphus-task", () => {
       //#given / #when
       const result = isPlanAgent("planner")
 
-      //#then - "planner" is NOT an exact match for "plan" (T37 exact match fix)
-      expect(result).toBe(false)
+      //#then - "planner" contains "plan" so it matches via includes
+      expect(result).toBe(true)
     })
 
     test("returns true for case-insensitive match 'PLAN'", () => {
@@ -268,44 +254,9 @@ describe("sisyphus-task", () => {
       expect(result).toBe(true)
     })
 
-    test("returns true for prometheus display name", () => {
-      //#given / #when
-      const result = isPlanFamily(getAgentDisplayName("prometheus"))
-      //#then
-      expect(result).toBe(true)
-    })
-
-    test("returns true for prometheus list display name with zwsp prefix", () => {
-      //#given / #when
-      const result = isPlanFamily(getAgentListDisplayName("prometheus"))
-      //#then
-      expect(result).toBe(true)
-    })
-
     test("returns false for 'oracle'", () => {
       //#given / #when
       const result = isPlanFamily("oracle")
-      //#then
-      expect(result).toBe(false)
-    })
-
-    test("returns false for 'Momus (Plan Critic)' - no substring false-positive", () => {
-      //#given / #when
-      const result = isPlanFamily("Momus (Plan Critic)")
-      //#then
-      expect(result).toBe(false)
-    })
-
-    test("returns false for 'Momus - Plan Critic' - no substring false-positive", () => {
-      //#given / #when
-      const result = isPlanFamily("Momus - Plan Critic")
-      //#then
-      expect(result).toBe(false)
-    })
-
-    test("returns false for 'Metis - Plan Consultant' - no substring false-positive", () => {
-      //#given / #when
-      const result = isPlanFamily("Metis - Plan Consultant")
       //#then
       expect(result).toBe(false)
     })
@@ -319,7 +270,70 @@ describe("sisyphus-task", () => {
 
     test("PLAN_FAMILY_NAMES contains plan and prometheus", () => {
       //#given / #when / #then
-      expect(PLAN_FAMILY_NAMES).toEqual(["plan", "prometheus"])
+      expect(PLAN_FAMILY_NAMES).toEqual(["plan", "prometheus", "mnemosyne"])
+    })
+  })
+
+  describe("isMnemosyneAgent", () => {
+    test("returns true for 'mnemosyne'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("mnemosyne")
+      //#then
+      expect(result).toBe(true)
+    })
+
+    test("returns true for case-insensitive match 'MNEMOSYNE'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("MNEMOSYNE")
+      //#then
+      expect(result).toBe(true)
+    })
+
+    test("returns true for 'Mnemosyne' (mixed case)", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("Mnemosyne")
+      //#then
+      expect(result).toBe(true)
+    })
+
+    test("returns false for 'plan'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("plan")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for 'prometheus'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("prometheus")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for 'oracle'", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("oracle")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for undefined", () => {
+      //#given / #when
+      const result = isMnemosyneAgent(undefined)
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("returns false for empty string", () => {
+      //#given / #when
+      const result = isMnemosyneAgent("")
+      //#then
+      expect(result).toBe(false)
+    })
+
+    test("MNEMOSYNE_AGENT_NAMES contains only mnemosyne", () => {
+      //#given / #when / #then
+      expect(MNEMOSYNE_AGENT_NAMES).toEqual(["mnemosyne"])
     })
   })
 
@@ -515,7 +529,7 @@ describe("sisyphus-task", () => {
        expect(args.subagent_type).toBe("Sisyphus-Junior")
     }, { timeout: 10000 })
 
-    test("prefers category over subagent_type when both are provided", async () => {
+    test("category overrides subagent_type and still maps to sisyphus-junior", async () => {
       //#given
       const { createDelegateTask } = require("./tools")
 
@@ -557,7 +571,14 @@ describe("sisyphus-task", () => {
         abort: new AbortController().signal,
       }
 
-      const args = {
+      const args: {
+        description: string
+        prompt: string
+        category: string
+        subagent_type: string
+        run_in_background: boolean
+        load_skills: string[]
+      } = {
         description: "Override test",
         prompt: "Do something",
         category: "quick",
@@ -567,10 +588,11 @@ describe("sisyphus-task", () => {
       }
 
       //#when
-      await tool.execute(args, toolContext)
+      const result = await tool.execute(args, toolContext)
 
-      //#then - category takes precedence, subagent_type is overridden to sisyphus-junior
+      //#then
       expect(args.subagent_type).toBe("Sisyphus-Junior")
+      expect(result).toContain("Background task launched")
     }, { timeout: 10000 })
 
     test("proceeds without error when systemDefaultModel is undefined", async () => {
@@ -755,8 +777,8 @@ describe("sisyphus-task", () => {
     })
 
     test("blocks requiresModel when availability is known and missing the required model", () => {
-      // given - artistry has requiresModel: gemini-3.1-pro
-      const categoryName = "artistry"
+      // given
+      const categoryName = "deep"
       const availableModels = new Set<string>(["anthropic/claude-opus-4-6"])
 
       // when
@@ -770,8 +792,8 @@ describe("sisyphus-task", () => {
     })
 
     test("blocks requiresModel when availability is empty", () => {
-      // given - artistry has requiresModel: gemini-3.1-pro
-      const categoryName = "artistry"
+      // given
+      const categoryName = "deep"
       const availableModels = new Set<string>()
 
       // when
@@ -1416,134 +1438,6 @@ describe("sisyphus-task", () => {
       )).rejects.toThrow("Invalid arguments: 'run_in_background' parameter is REQUIRED")
     })
 
-    test("#given category without description #when executing #then auto-generates description from prompt", async () => {
-      // given
-      const { createDelegateTask } = require("./tools")
-      let capturedTitle: string | undefined
-      const mockManager = { launch: async () => ({}) }
-      const mockClient = {
-        app: { agents: async () => ({ data: [] }) },
-        config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
-        session: {
-          create: async () => ({ data: { id: "test-session" } }),
-          prompt: async () => ({ data: {} }),
-          promptAsync: async () => ({ data: {} }),
-          messages: async () => ({ data: [] }),
-        },
-      }
-      const tool = createDelegateTask({ manager: mockManager, client: mockClient })
-
-      // when
-      try {
-        await tool.execute(
-          {
-            prompt: "Fix the broken unit tests in parser module",
-            category: "quick",
-            run_in_background: false,
-            load_skills: [],
-          },
-          {
-            sessionID: "parent-session",
-            messageID: "parent-message",
-            agent: "sisyphus",
-            abort: new AbortController().signal,
-            metadata: async (meta: { title?: string }) => { capturedTitle = meta.title },
-          }
-        )
-      } catch {
-        // execution may fail due to incomplete mocks — we only care about the title
-      }
-
-      // then — description auto-generated from first 4 words of prompt
-      expect(capturedTitle).toBe("Fix the broken unit")
-    })
-
-    test("#given empty description #when executing #then auto-generates description from prompt", async () => {
-      // given
-      const { createDelegateTask } = require("./tools")
-      let capturedTitle: string | undefined
-      const mockManager = { launch: async () => ({}) }
-      const mockClient = {
-        app: { agents: async () => ({ data: [] }) },
-        config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
-        session: {
-          create: async () => ({ data: { id: "test-session" } }),
-          prompt: async () => ({ data: {} }),
-          promptAsync: async () => ({ data: {} }),
-          messages: async () => ({ data: [] }),
-        },
-      }
-      const tool = createDelegateTask({ manager: mockManager, client: mockClient })
-
-      // when
-      try {
-        await tool.execute(
-          {
-            description: "   ",
-            prompt: "Refactor authentication module completely",
-            category: "quick",
-            run_in_background: false,
-            load_skills: [],
-          },
-          {
-            sessionID: "parent-session",
-            messageID: "parent-message",
-            agent: "sisyphus",
-            abort: new AbortController().signal,
-            metadata: async (meta: { title?: string }) => { capturedTitle = meta.title },
-          }
-        )
-      } catch {
-        // execution may fail due to incomplete mocks
-      }
-
-      // then
-      expect(capturedTitle).toBe("Refactor authentication module completely")
-    })
-
-    test("#given explicit description #when executing #then preserves provided description", async () => {
-      // given
-      const { createDelegateTask } = require("./tools")
-      let capturedTitle: string | undefined
-      const mockManager = { launch: async () => ({}) }
-      const mockClient = {
-        app: { agents: async () => ({ data: [] }) },
-        config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
-        session: {
-          create: async () => ({ data: { id: "test-session" } }),
-          prompt: async () => ({ data: {} }),
-          promptAsync: async () => ({ data: {} }),
-          messages: async () => ({ data: [] }),
-        },
-      }
-      const tool = createDelegateTask({ manager: mockManager, client: mockClient })
-
-      // when
-      try {
-        await tool.execute(
-          {
-            description: "My custom task name",
-            prompt: "Do something else entirely",
-            category: "quick",
-            run_in_background: false,
-            load_skills: [],
-          },
-          {
-            sessionID: "parent-session",
-            messageID: "parent-message",
-            agent: "sisyphus",
-            abort: new AbortController().signal,
-            metadata: async (meta: { title?: string }) => { capturedTitle = meta.title },
-          }
-        )
-      } catch {
-        // execution may fail due to incomplete mocks
-      }
-
-      // then — explicit description preserved
-      expect(capturedTitle).toBe("My custom task name")
-    })
-
     test("#given explicit run_in_background=false #when executing #then sync execution succeeds", async () => {
       // given
       const { createDelegateTask } = require("./tools")
@@ -1630,92 +1524,6 @@ describe("sisyphus-task", () => {
       // then
       expect(launchCalled).toBe(true)
       expect(result).toContain("Background task launched")
-    }, { timeout: 10000 })
-
-    test("#given concurrent background launches from the same parent #when one parent call aborts during session wait #then sibling launch is not interrupted", async () => {
-      // given
-      const { createDelegateTask } = require("./tools")
-      const firstAbortController = new AbortController()
-      const secondAbortController = new AbortController()
-      const taskStates = new Map([
-        ["bg_tool_first", { reads: 0, abortOnFirstRead: true, sessionID: "ses_tool_first" }],
-        ["bg_tool_second", { reads: 0, abortOnFirstRead: false, sessionID: "ses_tool_second" }],
-      ])
-      let launchCount = 0
-      const mockManager = {
-        launch: async () => {
-          launchCount += 1
-          return launchCount === 1
-            ? {
-                id: "bg_tool_first",
-                sessionID: undefined,
-                description: "Tool first",
-                agent: "Sisyphus-Junior",
-                status: "running",
-              }
-            : {
-                id: "bg_tool_second",
-                sessionID: undefined,
-                description: "Tool second",
-                agent: "Sisyphus-Junior",
-                status: "running",
-              }
-        },
-        getTask: (taskID: string) => {
-          const state = taskStates.get(taskID)
-          if (!state) return undefined
-          state.reads += 1
-          if (state.abortOnFirstRead && state.reads === 1) {
-            firstAbortController.abort()
-          }
-          return state.reads >= 2
-            ? { sessionID: state.sessionID, status: "running" }
-            : { sessionID: undefined, status: "pending" }
-        },
-      }
-      const mockClient = {
-        app: { agents: async () => ({ data: [] }) },
-        config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
-        model: { list: async () => [] },
-        session: {
-          create: async () => ({ data: { id: "ses_bg_explicit_true" } }),
-          prompt: async () => ({ data: {} }),
-          promptAsync: async () => ({ data: {} }),
-          messages: async () => ({ data: [] }),
-        },
-      }
-      const tool = createDelegateTask({ manager: mockManager, client: mockClient })
-
-      // when
-      const [firstResult, secondResult] = await Promise.all([
-        tool.execute(
-          {
-            description: "Tool first",
-            prompt: "Run background",
-            category: "quick",
-            run_in_background: true,
-            load_skills: [],
-          },
-          { sessionID: "parent-session", messageID: "parent-message-1", agent: "sisyphus", abort: firstAbortController.signal }
-        ),
-        tool.execute(
-          {
-            description: "Tool second",
-            prompt: "Run background",
-            category: "quick",
-            run_in_background: true,
-            load_skills: [],
-          },
-          { sessionID: "parent-session", messageID: "parent-message-2", agent: "sisyphus", abort: secondAbortController.signal }
-        ),
-      ])
-
-      // then
-      expect(firstResult).toContain("Background task launched")
-      expect(firstResult).not.toContain("Task failed to start")
-      expect(secondResult).toContain("Background task launched")
-      expect(secondResult).toContain("session_id: ses_tool_second")
-      expect(secondResult).not.toContain("interrupt")
     }, { timeout: 10000 })
   })
 
@@ -2546,68 +2354,60 @@ describe("sisyphus-task", () => {
       expect(result).toContain("Artistry result here")
     }, { timeout: 20000 })
 
-    test("writing category (kimi) with run_in_background=false should run sync when kimi provider is available", async () => {
-      // given - writing uses kimi model which is no longer considered unstable
-      // Override provider cache to include kimi-for-coding provider
-      providerModelsSpy.mockReturnValue({
-        models: {
-          anthropic: ["claude-opus-4-6", "claude-sonnet-4-6", "claude-haiku-4-5"],
-          google: ["gemini-3.1-pro", "gemini-3-flash"],
-          openai: ["gpt-5.4", "gpt-5.3-codex"],
-          "kimi-for-coding": ["k2p5"],
-        },
-        connected: ["anthropic", "google", "openai", "kimi-for-coding"],
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      })
-      cacheSpy.mockReturnValue(["anthropic", "google", "openai", "kimi-for-coding"])
-
+    test("writing category (kimi) with run_in_background=false should force background but wait for result", async () => {
+      // given - writing uses kimi-for-coding/k2p5
       const { createDelegateTask } = require("./tools")
       let launchCalled = false
-      let promptCalled = false
-
+      
+      const launchedTask = {
+        id: "task-writing",
+        sessionID: "ses_writing_gemini",
+        description: "Writing gemini task",
+        agent: "sisyphus-junior",
+        status: "running",
+      }
       const mockManager = {
         launch: async () => {
           launchCalled = true
-          return { id: "should-not-be-called", sessionID: "x", description: "x", agent: "x", status: "running" }
+          return launchedTask
         },
+        getTask: () => launchedTask,
       }
-
-       const promptMock = async () => {
-         promptCalled = true
-         return { data: {} }
-       }
-
+      
        const mockClient = {
          app: { agents: async () => ({ data: [] }) },
          config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
+         model: { list: async () => [{ provider: "google", id: "gemini-3-flash" }] },
          session: {
            get: async () => ({ data: { directory: "/project" } }),
-           create: async () => ({ data: { id: "ses_writing_kimi" } }),
-           prompt: promptMock,
-           promptAsync: promptMock,
+           create: async () => ({ data: { id: "ses_writing_gemini" } }),
+           prompt: async () => ({ data: {} }),
+           promptAsync: async () => ({ data: {} }),
            messages: async () => ({
-             data: [{ info: { role: "assistant" }, parts: [{ type: "text", text: "Writing result here" }] }]
+             data: [
+               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "Writing result here" }] }
+             ]
            }),
-           status: async () => ({ data: { "ses_writing_kimi": { type: "idle" } } }),
+           status: async () => ({ data: { "ses_writing_gemini": { type: "idle" } } }),
          },
        }
-
+       
        const tool = createDelegateTask({
          manager: mockManager,
          client: mockClient,
        })
-
+      
       const toolContext = {
         sessionID: "parent-session",
         messageID: "parent-message",
         agent: "sisyphus",
         abort: new AbortController().signal,
       }
-
-      // when - writing category (kimi) with run_in_background=false
+      
+      // when - writing category (gemini-3-flash)
       const result = await tool.execute(
         {
-          description: "Test writing sync",
+          description: "Test writing forced background",
           prompt: "Write something",
           category: "writing",
           run_in_background: false,
@@ -2615,11 +2415,11 @@ describe("sisyphus-task", () => {
         },
         toolContext
       )
-
-      // then - should run sync, NOT forced to background (kimi is not unstable)
-      expect(launchCalled).toBe(false)
-      expect(promptCalled).toBe(true)
-      expect(result).not.toContain("SUPERVISED TASK COMPLETED")
+      
+      // then - should launch as background BUT wait for and return actual result
+      expect(launchCalled).toBe(true)
+      expect(result).toContain("SUPERVISED TASK COMPLETED")
+      expect(result).toContain("Writing result here")
     }, { timeout: 20000 })
 
     test("is_unstable_agent=true should force background but wait for result", async () => {
@@ -3013,7 +2813,6 @@ describe("sisyphus-task", () => {
       // then - sisyphus-junior override model should be used, not category default
       expect(launchInput.model.providerID).toBe("anthropic")
       expect(launchInput.model.modelID).toBe("claude-sonnet-4-6")
-      expect(launchInput.fallbackChain).toBeUndefined()
     })
 
     test("sisyphus-junior model override works with user-defined category (#1295)", async () => {
@@ -3274,7 +3073,7 @@ describe("sisyphus-task", () => {
 
       // then
       expect(result).toContain("<system>")
-      expect(result).toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
+      expect(result).toContain("Context Gathering Protocol")
       expect(result).toContain("### AVAILABLE CATEGORIES")
       expect(result).toContain("`deep`")
       expect(result).not.toContain("prompt-engineer")
@@ -3387,10 +3186,6 @@ describe("sisyphus-task", () => {
 
       // then
       expect(result).toContain(prompt)
-      expect(result).toContain("Answer in English.")
-      expect(result).toContain("Write the plan in English.")
-      expect(result).toContain("Plan well for ultrawork execution.")
-      expect(result).toContain("Use TDD-oriented planning.")
       expect(result).toContain("Include a clear atomic commit strategy.")
     })
 
@@ -3405,34 +3200,123 @@ describe("sisyphus-task", () => {
       // then
       expect(result).toBe(prompt)
     })
+  })
 
-    test("excludes TDD line when tddEnabled is false", () => {
-      // given
-      const { buildTaskPrompt } = require("./tools")
-      const prompt = "Create a work plan for this feature"
+  describe("buildSystemContent (Mnemosyne)", () => {
+    test("prepends mnemosyne system prompt when agentName is 'mnemosyne'", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+      const { buildMnemosyneSystemPrepend } = require("./mnemosyne-plan-constants")
 
-      // when
-      const result = buildTaskPrompt(prompt, "plan", false)
+      const availableSkills = [
+        {
+          name: "git-master",
+          description: "Atomic commits, rebase surgery.",
+          location: "plugin",
+        },
+      ]
 
-      // then
-      expect(result).toContain(prompt)
-      expect(result).toContain("Answer in English.")
-      expect(result).toContain("Write the plan in English.")
-      expect(result).toContain("Plan well for ultrawork execution.")
-      expect(result).toContain("Include a clear atomic commit strategy.")
-      expect(result).not.toContain("Use TDD-oriented planning.")
+      //#when
+      const result = buildSystemContent({
+        agentName: "mnemosyne",
+        availableSkills,
+      })
+
+      //#then
+      expect(result).toContain("<system>")
+      expect(result).toContain("sequential")
+      expect(result).toContain("IN ORDER")
+      expect(result).not.toContain("### AVAILABLE CATEGORIES")
+      expect(result).toContain("### AVAILABLE SKILLS")
+      expect(result).toContain("`git-master`")
+      expect(result).toBe(buildMnemosyneSystemPrepend(availableSkills))
     })
 
-    test("includes TDD line when tddEnabled is true", () => {
-      // given
-      const { buildTaskPrompt } = require("./tools")
-      const prompt = "Create a work plan for this feature"
+    test("mnemosyne prepend does not include categories table", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
 
-      // when
-      const result = buildTaskPrompt(prompt, "plan", true)
+      const availableCategories = [
+        {
+          name: "deep",
+          description: "Goal-oriented autonomous problem-solving",
+          model: "openai/gpt-5.3-codex",
+        },
+      ]
+      const availableSkills = [
+        {
+          name: "playwright",
+          description: "Browser automation.",
+          location: "plugin",
+        },
+      ]
 
-      // then
-      expect(result).toContain("Use TDD-oriented planning.")
+      //#when
+      const result = buildSystemContent({
+        agentName: "mnemosyne",
+        availableCategories,
+        availableSkills,
+      })
+
+      //#then - categories are passed but should NOT appear in mnemosyne prepend
+      expect(result).not.toContain("`deep`")
+      expect(result).not.toContain("### AVAILABLE CATEGORIES")
+      expect(result).toContain("`playwright`")
+    })
+
+    test("combines mnemosyne prepend with skill content", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+      const { buildMnemosyneSystemPrepend } = require("./mnemosyne-plan-constants")
+      const skillContent = "You are a planning expert"
+
+      const availableSkills = [
+        {
+          name: "frontend-design",
+          description: "Create distinctive frontend interfaces.",
+          location: "user",
+        },
+      ]
+      const mnemPrepend = buildMnemosyneSystemPrepend(availableSkills)
+
+      //#when
+      const result = buildSystemContent({
+        skillContent,
+        agentName: "mnemosyne",
+        availableSkills,
+      })
+
+      //#then
+      expect(result).toContain(mnemPrepend)
+      expect(result).toContain(skillContent)
+      expect(result!.indexOf(mnemPrepend)).toBeLessThan(result!.indexOf(skillContent))
+    })
+
+    test("mnemosyne prepend contains sequential execution model", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+
+      //#when
+      const result = buildSystemContent({ agentName: "mnemosyne" })
+
+      //#then
+      expect(result).toContain("Heracles")
+      expect(result).toContain("sequentially")
+      expect(result).toContain("/execute-plan")
+      expect(result).not.toContain("Wave 1")
+      expect(result).not.toContain("Parallel Execution Graph")
+    })
+
+    test("'plan' agent does NOT get mnemosyne prepend", () => {
+      //#given
+      const { buildSystemContent } = require("./tools")
+
+      //#when
+      const result = buildSystemContent({ agentName: "plan" })
+
+      //#then - plan agent gets plan prepend, not mnemosyne
+      expect(result).toContain("Parallel Execution Graph")
+      expect(result).not.toContain("Heracles")
     })
   })
 
@@ -3658,31 +3542,11 @@ describe("sisyphus-task", () => {
       expect(result).toContain("plan-family")
     })
 
-    test("prometheus display name cannot delegate to plan (cross-blocking)", async () => {
+    test("plan cannot delegate to prometheus (cross-blocking)", async () => {
       //#given
       const { createDelegateTask } = require("./tools")
       const mockClient = {
-         app: { agents: async () => ({ data: [{ name: "plan", mode: "subagent" }] }) },
-         config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
-         session: { get: async () => ({ data: { directory: "/project" } }), create: async () => ({ data: { id: "s" } }), prompt: async () => ({ data: {} }), promptAsync: async () => ({ data: {} }), messages: async () => ({ data: [] }), status: async () => ({ data: {} }) },
-       }
-       const tool = createDelegateTask({ manager: { launch: async () => ({}) }, client: mockClient })
-
-      //#when
-      const result = await tool.execute(
-        { description: "test", prompt: "Create a plan", subagent_type: "plan", run_in_background: false, load_skills: [] },
-        { sessionID: "p", messageID: "m", agent: getAgentDisplayName("prometheus"), abort: new AbortController().signal }
-      )
-
-      //#then
-      expect(result).toContain("plan-family")
-    })
-
-    test("plan cannot delegate to prometheus even when it is exposed as a primary agent", async () => {
-      //#given
-      const { createDelegateTask } = require("./tools")
-      const mockClient = {
-         app: { agents: async () => ({ data: [{ name: "prometheus", mode: "primary" }] }) },
+         app: { agents: async () => ({ data: [{ name: "prometheus", mode: "subagent" }] }) },
          config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
          session: { get: async () => ({ data: { directory: "/project" } }), create: async () => ({ data: { id: "s" } }), prompt: async () => ({ data: {} }), promptAsync: async () => ({ data: {} }), messages: async () => ({ data: [] }), status: async () => ({ data: {} }) },
        }
@@ -4175,17 +4039,19 @@ describe("sisyphus-task", () => {
       expect(promptBody.tools.task).toBe(true)
     }, { timeout: 20000 })
 
-    test("prometheus primary agent should not be callable via task", async () => {
+    test("prometheus subagent should have task permission (plan family)", async () => {
       //#given
       const { createDelegateTask } = require("./tools")
+      let promptBody: any
+      const promptMock = async (input: any) => { promptBody = input.body; return { data: {} } }
        const mockClient = {
-         app: { agents: async () => ({ data: [{ name: "prometheus", mode: "primary" }] }) },
+         app: { agents: async () => ({ data: [{ name: "prometheus", mode: "subagent" }] }) },
          config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
          session: {
            get: async () => ({ data: { directory: "/project" } }),
            create: async () => ({ data: { id: "ses_prometheus_task" } }),
-           prompt: async () => ({ data: {} }),
-           promptAsync: async () => ({ data: {} }),
+           prompt: promptMock,
+           promptAsync: promptMock,
            messages: async () => ({ data: [{ info: { role: "assistant" }, parts: [{ type: "text", text: "Plan created" }] }] }),
            status: async () => ({ data: { "ses_prometheus_task": { type: "idle" } } }),
          },
@@ -4193,13 +4059,13 @@ describe("sisyphus-task", () => {
        const tool = createDelegateTask({ manager: { launch: async () => ({}) }, client: mockClient })
       
       //#when
-      const result = await tool.execute(
+      await tool.execute(
         { description: "Test prometheus task permission", prompt: "Create a plan", subagent_type: "prometheus", run_in_background: false, load_skills: [] },
         { sessionID: "p", messageID: "m", agent: "sisyphus", abort: new AbortController().signal }
       )
       
       //#then
-      expect(result).toContain('Cannot delegate to primary agent "prometheus" via task. Select that agent directly instead.')
+      expect(promptBody.tools.task).toBe(true)
     }, { timeout: 20000 })
 
     test("non-plan subagent should NOT have task permission", async () => {

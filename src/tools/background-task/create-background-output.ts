@@ -10,13 +10,11 @@ import { formatTaskResult } from "./task-result-format"
 import { formatTaskStatus } from "./task-status-format"
 
 import { getAgentDisplayName } from "../../shared/agent-display-names"
-import { recordBackgroundOutputConsumption } from "../../shared/background-output-consumption"
 
 const SISYPHUS_JUNIOR_AGENT = getAgentDisplayName("sisyphus-junior")
 
 type ToolContextWithMetadata = {
   sessionID: string
-  messageID?: string
   metadata?: (input: { title?: string; metadata?: Record<string, unknown> }) => void
   callID?: string
   callId?: string
@@ -141,7 +139,6 @@ export function createBackgroundOutput(manager: BackgroundOutputManager, client:
         }
 
         if (resolvedTask.status === "completed") {
-          recordBackgroundOutputConsumption(ctx.sessionID, ctx.messageID, resolvedTask.sessionID)
           return await formatTaskResult(resolvedTask, client)
         }
 

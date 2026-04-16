@@ -42,12 +42,11 @@ export interface ExecutorOptions {
   pluginsEnabled?: boolean
   enabledPluginsOverride?: Record<string, boolean>
   agent?: string
-  directory?: string
 }
 
 
 async function discoverAllCommands(options?: ExecutorOptions): Promise<CommandInfo[]> {
-  const discoveredCommands = discoverCommandsSync(options?.directory ?? process.cwd(), {
+  const discoveredCommands = discoverCommandsSync(process.cwd(), {
     pluginsEnabled: options?.pluginsEnabled,
     enabledPluginsOverride: options?.enabledPluginsOverride,
   })

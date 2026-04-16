@@ -1,13 +1,7 @@
 import { describe, expect, it } from "bun:test"
-async function importFreshReaders() {
-  const token = `${Date.now()}-${Math.random()}`
-  const [{ readMessagesFromSDK, readMessages }, { readPartsFromSDK, readParts }] = await Promise.all([
-    import(`./messages-reader?test=${token}`),
-    import(`./parts-reader?test=${token}`),
-  ])
-
-  return { readMessagesFromSDK, readPartsFromSDK, readMessages, readParts }
-}
+import { readMessagesFromSDK, readPartsFromSDK } from "../storage"
+import { readMessages } from "./messages-reader"
+import { readParts } from "./parts-reader"
 
 function createMockClient(handlers: {
   messages?: (sessionID: string) => unknown[]
@@ -34,7 +28,6 @@ function createMockClient(handlers: {
 describe("session-recovery storage SDK readers", () => {
   it("readPartsFromSDK returns empty array when fetch fails", async () => {
     //#given a client that throws on request
-    const { readPartsFromSDK } = await importFreshReaders()
     const client = createMockClient({}) as Parameters<typeof readPartsFromSDK>[0]
 
     //#when readPartsFromSDK is called
@@ -46,7 +39,6 @@ describe("session-recovery storage SDK readers", () => {
 
   it("readPartsFromSDK returns stored parts from SDK response", async () => {
     //#given a client that returns a message with parts
-    const { readPartsFromSDK } = await importFreshReaders()
     const sessionID = "ses_test"
     const messageID = "msg_test"
     const storedParts = [
@@ -66,7 +58,6 @@ describe("session-recovery storage SDK readers", () => {
 
   it("readMessagesFromSDK normalizes and sorts messages", async () => {
     //#given a client that returns messages list
-    const { readMessagesFromSDK } = await importFreshReaders()
     const sessionID = "ses_test"
     const client = createMockClient({
       messages: () => [
@@ -87,9 +78,8 @@ describe("session-recovery storage SDK readers", () => {
     ])
   })
 
-  it("readParts returns empty array for nonexistent message", async () => {
+  it("readParts returns empty array for nonexistent message", () => {
     //#given a message ID that has no stored parts
-    const { readParts } = await importFreshReaders()
     //#when readParts is called
     const parts = readParts("msg_nonexistent")
 
@@ -97,9 +87,8 @@ describe("session-recovery storage SDK readers", () => {
     expect(parts).toEqual([])
   })
 
-  it("readMessages returns empty array for nonexistent session", async () => {
+  it("readMessages returns empty array for nonexistent session", () => {
     //#given a session ID that has no stored messages
-    const { readMessages } = await importFreshReaders()
     //#when readMessages is called
     const messages = readMessages("ses_nonexistent")
 

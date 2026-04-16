@@ -6,12 +6,6 @@ import { tmpdir } from "node:os"
 import * as dataPathModule from "../shared/data-path"
 import * as sharedModule from "../shared"
 
-let scheduleDeferredModelOverride: (typeof import("./ultrawork-db-model-override"))["scheduleDeferredModelOverride"]
-
-async function importFreshUltraworkDbModelOverrideModule(): Promise<typeof import("./ultrawork-db-model-override")> {
-  return import(`./ultrawork-db-model-override?test=${Date.now()}-${Math.random()}`)
-}
-
 function flushMicrotasks(depth: number): Promise<void> {
   return new Promise<void>((resolve) => {
     let remaining = depth
@@ -28,22 +22,13 @@ function flushWithTimeout(): Promise<void> {
   return new Promise<void>((resolve) => setTimeout(resolve, 10))
 }
 
-async function settleDeferredModelOverrideWork(): Promise<void> {
-  await flushMicrotasks(12)
-  await flushWithTimeout()
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null
-}
-
 describe("scheduleDeferredModelOverride", () => {
   let tempDir: string
   let dbPath: string
   let logSpy: ReturnType<typeof spyOn>
   let getDataDirSpy: ReturnType<typeof spyOn>
 
-  beforeEach(async () => {
+  beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), "ultrawork-db-test-"))
     const opencodePath = join(tempDir, "opencode")
     mkdirSync(opencodePath, { recursive: true })
@@ -61,15 +46,11 @@ describe("scheduleDeferredModelOverride", () => {
     `)
     db.close()
 
-    getDataDirSpy = spyOn(dataPathModule, "getDataDir")
-    getDataDirSpy.mockReturnValue(tempDir)
-    logSpy = spyOn(sharedModule, "log")
-    logSpy.mockImplementation(() => {})
-    ;({ scheduleDeferredModelOverride } = await importFreshUltraworkDbModelOverrideModule())
+    getDataDirSpy = spyOn(dataPathModule, "getDataDir").mockReturnValue(tempDir)
+    logSpy = spyOn(sharedModule, "log").mockImplementation(() => {})
   })
 
-  afterEach(async () => {
-    await settleDeferredModelOverrideWork()
+  afterEach(() => {
     getDataDirSpy?.mockRestore()
     logSpy?.mockRestore()
     rmSync(tempDir, { recursive: true, force: true })
@@ -79,7 +60,9 @@ describe("scheduleDeferredModelOverride", () => {
     const db = new Database(dbPath)
     db.run(
       `INSERT INTO message (id, session_id, data) VALUES (?, ?, ?)`,
-      [id, "ses_test", JSON.stringify({ model })],
+      id,
+      "ses_test",
+      JSON.stringify({ model }),
     )
     db.close()
   }
@@ -110,6 +93,7 @@ describe("scheduleDeferredModelOverride", () => {
     insertMessage("msg_001", { providerID: "anthropic", modelID: "claude-sonnet-4-6" })
 
     //#when
+    const { scheduleDeferredModelOverride } = await import("./ultrawork-db-model-override")
     scheduleDeferredModelOverride(
       "msg_001",
       { providerID: "anthropic", modelID: "claude-opus-4-6" },
@@ -126,6 +110,7 @@ describe("scheduleDeferredModelOverride", () => {
     insertMessage("msg_002", { providerID: "anthropic", modelID: "claude-sonnet-4-6" })
 
     //#when
+    const { scheduleDeferredModelOverride } = await import("./ultrawork-db-model-override")
     scheduleDeferredModelOverride(
       "msg_002",
       { providerID: "anthropic", modelID: "claude-opus-4-6" },
@@ -139,9 +124,10 @@ describe("scheduleDeferredModelOverride", () => {
   })
 
   test("should fall back to setTimeout when message never appears", async () => {
-    //#given no message inserted
+    //#given — no message inserted
 
     //#when
+    const { scheduleDeferredModelOverride } = await import("./ultrawork-db-model-override")
     scheduleDeferredModelOverride(
       "msg_nonexistent",
       { providerID: "anthropic", modelID: "claude-opus-4-6" },
@@ -160,6 +146,7 @@ describe("scheduleDeferredModelOverride", () => {
     insertMessage("msg_003", { providerID: "anthropic", modelID: "claude-sonnet-4-6" })
 
     //#when
+    const { scheduleDeferredModelOverride } = await import("./ultrawork-db-model-override")
     scheduleDeferredModelOverride(
       "msg_003",
       { providerID: "anthropic", modelID: "claude-opus-4-6" },
@@ -178,6 +165,7 @@ describe("scheduleDeferredModelOverride", () => {
     getDataDirSpy.mockReturnValue("/nonexistent/path/that/does/not/exist")
 
     //#when
+    const { scheduleDeferredModelOverride } = await import("./ultrawork-db-model-override")
     scheduleDeferredModelOverride(
       "msg_004",
       { providerID: "anthropic", modelID: "claude-opus-4-6" },
@@ -190,7 +178,7 @@ describe("scheduleDeferredModelOverride", () => {
     )
   })
 
-  test("should log a DB failure when DB file exists but is corrupted", async () => {
+  test("should not crash when DB file exists but is corrupted", async () => {
     //#given
     const { chmodSync, writeFileSync } = await import("node:fs")
     const corruptedDbPath = join(tempDir, "opencode", "opencode.db")
@@ -198,6 +186,7 @@ describe("scheduleDeferredModelOverride", () => {
     chmodSync(corruptedDbPath, 0o000)
 
     //#when
+    const { scheduleDeferredModelOverride } = await import("./ultrawork-db-model-override")
     scheduleDeferredModelOverride(
       "msg_corrupt",
       { providerID: "anthropic", modelID: "claude-opus-4-6" },
@@ -205,16 +194,9 @@ describe("scheduleDeferredModelOverride", () => {
     await flushMicrotasks(5)
 
     //#then
-    const failureCall = logSpy.mock.calls.find(([message, metadata]) =>
-      typeof message === "string"
-      && (
-        message.includes("Failed to open DB")
-        || message.includes("Deferred DB update failed with error")
-      )
-      && isRecord(metadata)
-      && metadata.messageId === "msg_corrupt"
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to open DB"),
+      expect.objectContaining({ messageId: "msg_corrupt" }),
     )
-
-    expect(failureCall).toBeDefined()
   })
 })

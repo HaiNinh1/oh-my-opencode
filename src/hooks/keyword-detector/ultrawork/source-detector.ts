@@ -2,21 +2,23 @@
  * Agent/model detection utilities for ultrawork message routing.
  *
  * Routing logic:
- * 1. Planner agents (prometheus, plan) → planner.ts
- * 2. GPT 5.4 models → gpt5.4.ts
- * 3. Gemini models → gemini.ts
- * 4. Everything else (Claude, etc.) → default.ts
+ * 1. Mnemosyne → skip (has its own planning instructions)
+ * 2. Planner agents (prometheus, plan) → planner.ts
+ * 3. GPT models → gpt.ts
+ * 4. Gemini models → gemini.ts
+ * 5. Everything else (Claude, etc.) → default.ts
  */
 
 import { isGptModel, isGeminiModel } from "../../../agents/types"
 
 /**
- * Checks if agent is a planner-type agent.
- * Planners don't need ultrawork injection (they ARE the planner).
+ * Checks if agent is a planner-type agent that uses wave-based parallel execution.
+ * Mnemosyne is excluded — it plans for sequential execution (Heracles) and has its own instructions.
  */
 export function isPlannerAgent(agentName?: string): boolean {
   if (!agentName) return false
   const lowerName = agentName.toLowerCase()
+  if (isMnemosyneAgent(lowerName)) return false
   if (lowerName.includes("prometheus") || lowerName.includes("planner")) return true
 
   const normalized = lowerName.replace(/[_-]+/g, " ")
@@ -24,42 +26,37 @@ export function isPlannerAgent(agentName?: string): boolean {
 }
 
 /**
- * Checks if agent is a non-OMO agent (e.g., OpenCode's built-in Builder/Plan).
- * Non-OMO agents should not receive keyword injection (search-mode, analyze-mode, etc.).
+ * Mnemosyne plans for sequential Heracles execution — ultrawork's wave/category
+ * planner section contradicts its model. Its base prompt already handles planning.
  */
-export function isNonOmoAgent(agentName?: string): boolean {
-  if (!agentName) return false
-  const lowerName = agentName.toLowerCase()
-  return lowerName.includes("builder") || lowerName === "plan"
+function isMnemosyneAgent(lowerName: string): boolean {
+  return lowerName.includes("mnemosyne")
 }
 
 export { isGptModel, isGeminiModel }
 
-/** Ultrawork message source type */
-export type UltraworkSource = "planner" | "gpt" | "gemini" | "default"
+/** Ultrawork message source type. "skip" = agent has its own planning instructions, no injection needed. */
+export type UltraworkSource = "planner" | "gpt" | "gemini" | "default" | "skip"
 
-/**
- * Determines which ultrawork message source to use.
- */
 export function getUltraworkSource(
   agentName?: string,
   modelID?: string
 ): UltraworkSource {
-  // Priority 1: Planner agents
+  if (agentName && isMnemosyneAgent(agentName.toLowerCase())) {
+    return "skip"
+  }
+
   if (isPlannerAgent(agentName)) {
     return "planner"
   }
 
-  // Priority 2: GPT models
   if (modelID && isGptModel(modelID)) {
     return "gpt"
   }
 
-
-  // Priority 3: Gemini models
   if (modelID && isGeminiModel(modelID)) {
     return "gemini"
   }
-  // Default: Claude and other models
+
   return "default"
 }

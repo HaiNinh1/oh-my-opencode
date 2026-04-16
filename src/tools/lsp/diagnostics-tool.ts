@@ -4,38 +4,37 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 
 import { DEFAULT_MAX_DIAGNOSTICS } from "./constants"
 import { aggregateDiagnosticsForDirectory } from "./directory-diagnostics"
-import { inferExtensionFromDirectory } from "./infer-extension"
 import { filterDiagnosticsBySeverity, formatDiagnostic } from "./lsp-formatters"
 import { isDirectoryPath, withLspClient } from "./lsp-client-wrapper"
 import type { Diagnostic } from "./types"
 
 export const lsp_diagnostics: ToolDefinition = tool({
   description:
-    'Get errors, warnings, hints from language server BEFORE running build. Works for both single files and directories - file extension is auto-detected for directories.',
+    'Get errors, warnings, hints from language server BEFORE running build. For directories, provide \'extension\' parameter (e.g., extension=".ts").',
   args: {
-    filePath: tool.schema
-      .string()
-      .describe("File or directory path to check diagnostics for"),
+    filePath: tool.schema.string(),
     severity: tool.schema
       .enum(["error", "warning", "information", "hint", "all"])
       .optional()
       .describe("Filter by severity level"),
+    extension: tool.schema
+      .string()
+      .optional()
+      .describe("Required if filePath is a directory. E.g., '.ts', '.py', '.go'"),
   },
   execute: async (args, _context) => {
     try {
-      if (!args.filePath) {
-        throw new Error("'filePath' parameter is required.")
-      }
       const absPath = resolve(args.filePath)
 
       if (isDirectoryPath(absPath)) {
-        const extension = inferExtensionFromDirectory(absPath)
-        if (!extension) {
+        if (!args.extension) {
           throw new Error(
-            `No supported source files found in directory: ${absPath}`
+            `Directory path requires 'extension' parameter.\n\n` +
+              `Example: lsp_diagnostics(filePath="src", extension=".ts")\n\n` +
+              `Supported extensions: .ts, .tsx, .js, .py, .go, etc.`
           )
         }
-        return await aggregateDiagnosticsForDirectory(absPath, extension, args.severity)
+        return await aggregateDiagnosticsForDirectory(absPath, args.extension, args.severity)
       }
 
       const result = await withLspClient(args.filePath, async (client) => {

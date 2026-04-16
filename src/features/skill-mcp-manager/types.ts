@@ -1,29 +1,15 @@
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js"
-import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js"
+import type { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
+import type { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js"
 import type { ClaudeCodeMcpServer } from "../claude-code-mcp-loader/types"
 import type { McpOAuthProvider } from "../mcp-oauth/provider"
-import type { SkillScope } from "../opencode-skill-loader/types"
 
 export type SkillMcpConfig = Record<string, ClaudeCodeMcpServer>
-
-export type McpTransport = Transport
-
-export interface McpClient {
-  connect: Client["connect"]
-  close: Client["close"]
-  listTools: Client["listTools"]
-  listResources: Client["listResources"]
-  listPrompts: Client["listPrompts"]
-  callTool: Client["callTool"]
-  readResource: Client["readResource"]
-  getPrompt: Client["getPrompt"]
-}
 
 export interface SkillMcpClientInfo {
   serverName: string
   skillName: string
   sessionID: string
-  scope?: SkillScope | "local"
 }
 
 export interface SkillMcpServerContext {
@@ -39,7 +25,7 @@ export interface SkillMcpServerContext {
 export type ConnectionType = "stdio" | "http"
 
 export interface ManagedClientBase {
-  client: McpClient
+  client: Client
   skillName: string
   lastUsedAt: number
   connectionType: ConnectionType
@@ -47,12 +33,12 @@ export interface ManagedClientBase {
 
 export interface ManagedStdioClient extends ManagedClientBase {
   connectionType: "stdio"
-  transport: McpTransport
+  transport: StdioClientTransport
 }
 
 export interface ManagedHttpClient extends ManagedClientBase {
   connectionType: "http"
-  transport: McpTransport
+  transport: StreamableHTTPClientTransport
 }
 
 export type ManagedClient = ManagedStdioClient | ManagedHttpClient
@@ -62,20 +48,9 @@ export interface ProcessCleanupHandler {
   listener: () => void
 }
 
-export type OAuthProviderLike = Pick<
-  McpOAuthProvider,
-  "tokens" | "login" | "refresh"
->
-
-export type OAuthProviderFactory = (options: {
-  serverUrl: string
-  clientId?: string
-  scopes?: string[]
-}) => OAuthProviderLike
-
 export interface SkillMcpManagerState {
   clients: Map<string, ManagedClient>
-  pendingConnections: Map<string, Promise<McpClient>>
+  pendingConnections: Map<string, Promise<Client>>
   disconnectedSessions: Map<string, number>
   authProviders: Map<string, McpOAuthProvider>
   cleanupRegistered: boolean
@@ -85,7 +60,6 @@ export interface SkillMcpManagerState {
   shutdownGeneration: number
   inFlightConnections: Map<string, number>
   disposed: boolean
-  createOAuthProvider: OAuthProviderFactory
 }
 
 export interface SkillMcpClientConnectionParams {

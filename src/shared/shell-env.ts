@@ -1,35 +1,20 @@
-export type ShellType = "unix" | "powershell" | "cmd" | "csh"
+export type ShellType = "unix" | "powershell" | "cmd"
 
 /**
  * Detect the current shell type based on environment variables.
  * 
  * Detection priority:
- * 1. SHELL env var → Unix shell (explicit user choice takes precedence)
- * 2. PSModulePath → PowerShell
+ * 1. PSModulePath → PowerShell
+ * 2. SHELL env var → Unix shell
  * 3. Platform fallback → win32: cmd, others: unix
- * 
- * Note: SHELL is checked before PSModulePath because on Windows, PSModulePath
- * is always set by the system even when the active shell is Git Bash or WSL.
- * An explicit SHELL variable indicates the user's chosen shell overrides that.
  */
 export function detectShellType(): ShellType {
-  if (process.env.SHELL) {
-    const shell = process.env.SHELL
-    if (shell.includes("csh") || shell.includes("tcsh")) {
-      return "csh"
-    }
-    return "unix"
-  }
-
-  // Git Bash on Windows sets MSYSTEM (e.g. "MINGW64", "MINGW32", "MSYS")
-  // even when SHELL is not set. Detect this before PSModulePath which is
-  // always present on Windows regardless of the active shell.
-  if (process.env.MSYSTEM) {
-    return "unix"
-  }
-
   if (process.env.PSModulePath) {
     return "powershell"
+  }
+
+  if (process.env.SHELL) {
+    return "unix"
   }
 
   return process.platform === "win32" ? "cmd" : "unix"
@@ -49,7 +34,6 @@ export function shellEscape(value: string, shellType: ShellType): string {
 
   switch (shellType) {
     case "unix":
-    case "csh":
       if (/[^a-zA-Z0-9_\-.:\/]/.test(value)) {
         return `'${value.replace(/'/g, "'\\''")}'`
       }
@@ -105,13 +89,6 @@ export function buildEnvPrefix(
         .map(([key, value]) => `${key}=${shellEscape(value, shellType)}`)
         .join(" ")
       return `export ${assignments};`
-    }
-
-    case "csh": {
-      const assignments = entries
-        .map(([key, value]) => `setenv ${key} ${shellEscape(value, shellType)}`)
-        .join("; ")
-      return `${assignments};`
     }
 
     case "powershell": {

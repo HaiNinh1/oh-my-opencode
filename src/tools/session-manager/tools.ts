@@ -27,48 +27,9 @@ function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Pro
   ])
 }
 
-type SessionManagerToolDeps = {
-  getAllSessions: typeof getAllSessions
-  getMainSessions: typeof getMainSessions
-  getSessionInfo: typeof getSessionInfo
-  readSessionMessages: typeof readSessionMessages
-  readSessionTodos: typeof readSessionTodos
-  sessionExists: typeof sessionExists
-  setStorageClient: typeof setStorageClient
-  filterSessionsByDate: typeof filterSessionsByDate
-  formatSessionInfo: typeof formatSessionInfo
-  formatSessionList: typeof formatSessionList
-  formatSessionMessages: typeof formatSessionMessages
-  formatSearchResults: typeof formatSearchResults
-  searchInSession: typeof searchInSession
-}
-
-const defaultSessionManagerToolDeps: SessionManagerToolDeps = {
-  getAllSessions,
-  getMainSessions,
-  getSessionInfo,
-  readSessionMessages,
-  readSessionTodos,
-  sessionExists,
-  setStorageClient,
-  filterSessionsByDate,
-  formatSessionInfo,
-  formatSessionList,
-  formatSessionMessages,
-  formatSearchResults,
-  searchInSession,
-}
-
-export function createSessionManagerTools(
-  ctx: PluginInput,
-  deps: Partial<SessionManagerToolDeps> = {},
-): Record<string, ToolDefinition> {
-  const resolvedDeps: SessionManagerToolDeps = {
-    ...defaultSessionManagerToolDeps,
-    ...deps,
-  }
+export function createSessionManagerTools(ctx: PluginInput): Record<string, ToolDefinition> {
   // Initialize storage client for SDK-based operations (beta mode)
-  resolvedDeps.setStorageClient(ctx.client)
+  setStorageClient(ctx.client)
 
   const session_list: ToolDefinition = tool({
     description: SESSION_LIST_DESCRIPTION,
@@ -81,18 +42,18 @@ export function createSessionManagerTools(
     execute: async (args: SessionListArgs, _context) => {
       try {
         const directory = args.project_path ?? ctx.directory
-        let sessions = await resolvedDeps.getMainSessions({ directory })
+        let sessions = await getMainSessions({ directory })
         let sessionIDs = sessions.map((s) => s.id)
 
         if (args.from_date || args.to_date) {
-          sessionIDs = await resolvedDeps.filterSessionsByDate(sessionIDs, args.from_date, args.to_date)
+          sessionIDs = await filterSessionsByDate(sessionIDs, args.from_date, args.to_date)
         }
 
         if (args.limit && args.limit > 0) {
           sessionIDs = sessionIDs.slice(0, args.limit)
         }
 
-        return await resolvedDeps.formatSessionList(sessionIDs)
+        return await formatSessionList(sessionIDs)
       } catch (e) {
         return `Error: ${e instanceof Error ? e.message : String(e)}`
       }
@@ -109,11 +70,11 @@ export function createSessionManagerTools(
     },
     execute: async (args: SessionReadArgs, _context) => {
       try {
-        if (!(await resolvedDeps.sessionExists(args.session_id))) {
+        if (!(await sessionExists(args.session_id))) {
           return `Session not found: ${args.session_id}`
         }
 
-        let messages = await resolvedDeps.readSessionMessages(args.session_id)
+        let messages = await readSessionMessages(args.session_id)
 
         if (messages.length === 0) {
           return `Session not found: ${args.session_id}`
@@ -123,9 +84,9 @@ export function createSessionManagerTools(
           messages = messages.slice(0, args.limit)
         }
 
-        const todos = args.include_todos ? await resolvedDeps.readSessionTodos(args.session_id) : undefined
+        const todos = args.include_todos ? await readSessionTodos(args.session_id) : undefined
 
-        return resolvedDeps.formatSessionMessages(messages, args.include_todos, todos)
+        return formatSessionMessages(messages, args.include_todos, todos)
       } catch (e) {
         return `Error: ${e instanceof Error ? e.message : String(e)}`
       }
@@ -146,10 +107,10 @@ export function createSessionManagerTools(
 
         const searchOperation = async (): Promise<SearchResult[]> => {
           if (args.session_id) {
-            return resolvedDeps.searchInSession(args.session_id, args.query, args.case_sensitive, resultLimit)
+            return searchInSession(args.session_id, args.query, args.case_sensitive, resultLimit)
           }
 
-          const allSessions = await resolvedDeps.getAllSessions()
+          const allSessions = await getAllSessions()
           const sessionsToScan = allSessions.slice(0, MAX_SESSIONS_TO_SCAN)
 
           const allResults: SearchResult[] = []
@@ -157,7 +118,7 @@ export function createSessionManagerTools(
             if (allResults.length >= resultLimit) break
 
             const remaining = resultLimit - allResults.length
-            const sessionResults = await resolvedDeps.searchInSession(sid, args.query, args.case_sensitive, remaining)
+            const sessionResults = await searchInSession(sid, args.query, args.case_sensitive, remaining)
             allResults.push(...sessionResults)
           }
 
@@ -166,7 +127,7 @@ export function createSessionManagerTools(
 
         const results = await withTimeout(searchOperation(), SEARCH_TIMEOUT_MS, "Search")
 
-        return resolvedDeps.formatSearchResults(results)
+        return formatSearchResults(results)
       } catch (e) {
         return `Error: ${e instanceof Error ? e.message : String(e)}`
       }
@@ -180,13 +141,13 @@ export function createSessionManagerTools(
     },
     execute: async (args: SessionInfoArgs, _context) => {
       try {
-        const info = await resolvedDeps.getSessionInfo(args.session_id)
+        const info = await getSessionInfo(args.session_id)
 
         if (!info) {
           return `Session not found: ${args.session_id}`
         }
 
-        return resolvedDeps.formatSessionInfo(info)
+        return formatSessionInfo(info)
       } catch (e) {
         return `Error: ${e instanceof Error ? e.message : String(e)}`
       }

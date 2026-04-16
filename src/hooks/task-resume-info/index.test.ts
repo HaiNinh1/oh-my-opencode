@@ -1,5 +1,3 @@
-/// <reference types="bun-types" />
-
 import { describe, it, expect } from "bun:test"
 import { createTaskResumeInfoHook } from "./index"
 
@@ -62,19 +60,6 @@ describe("createTaskResumeInfoHook", () => {
         expect(output.output).toContain("to continue:")
         expect(output.output).toContain("ses_abc123")
       })
-
-      it("#then should include run_in_background in resume info", async () => {
-        const input = createInput("call_omo_agent")
-        const output = {
-          title: "delegate_task",
-          output: "Task completed.\nSession ID: ses_abc123",
-          metadata: {},
-        }
-
-        await afterHook(input, output)
-
-        expect(output.output).toContain("run_in_background=false")
-      })
     })
   })
 
@@ -102,7 +87,7 @@ describe("createTaskResumeInfoHook", () => {
         const output = {
           title: "task",
           output:
-            'Done.\nSession ID: ses_abc123\nto continue: task(session_id="ses_abc123", load_skills=[], prompt="...")',
+            'Done.\nSession ID: ses_abc123\nto continue: task(session_id="ses_abc123", prompt="...")',
           metadata: {},
         }
 

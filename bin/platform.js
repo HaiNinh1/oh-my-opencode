@@ -3,11 +3,11 @@
 
 /**
  * Get the platform-specific package name
- * @param {{ platform: string, arch: string, libcFamily?: string | null, packageBaseName?: string }} options
+ * @param {{ platform: string, arch: string, libcFamily?: string | null }} options
  * @returns {string} Package name like "oh-my-opencode-darwin-arm64"
  * @throws {Error} If libc cannot be detected on Linux
  */
-export function getPlatformPackage({ platform, arch, libcFamily, packageBaseName = "oh-my-opencode" }) {
+export function getPlatformPackage({ platform, arch, libcFamily }) {
   let suffix = "";
   if (platform === "linux") {
     if (libcFamily === null || libcFamily === undefined) {
@@ -23,13 +23,13 @@ export function getPlatformPackage({ platform, arch, libcFamily, packageBaseName
   
   // Map platform names: win32 -> windows (for package name)
   const os = platform === "win32" ? "windows" : platform;
-  return `${packageBaseName}-${os}-${arch}${suffix}`;
+  return `oh-my-opencode-${os}-${arch}${suffix}`;
 }
 
-/** @param {{ platform: string, arch: string, libcFamily?: string | null, preferBaseline?: boolean, packageBaseName?: string }} options */
-export function getPlatformPackageCandidates({ platform, arch, libcFamily, preferBaseline = false, packageBaseName = "oh-my-opencode" }) {
-  const primaryPackage = getPlatformPackage({ platform, arch, libcFamily, packageBaseName });
-  const baselinePackage = getBaselinePlatformPackage({ platform, arch, libcFamily, packageBaseName });
+/** @param {{ platform: string, arch: string, libcFamily?: string | null, preferBaseline?: boolean }} options */
+export function getPlatformPackageCandidates({ platform, arch, libcFamily, preferBaseline = false }) {
+  const primaryPackage = getPlatformPackage({ platform, arch, libcFamily });
+  const baselinePackage = getBaselinePlatformPackage({ platform, arch, libcFamily });
 
   if (!baselinePackage) {
     return [primaryPackage];
@@ -38,18 +38,18 @@ export function getPlatformPackageCandidates({ platform, arch, libcFamily, prefe
   return preferBaseline ? [baselinePackage, primaryPackage] : [primaryPackage, baselinePackage];
 }
 
-/** @param {{ platform: string, arch: string, libcFamily?: string | null, packageBaseName?: string }} options */
-function getBaselinePlatformPackage({ platform, arch, libcFamily, packageBaseName = "oh-my-opencode" }) {
+/** @param {{ platform: string, arch: string, libcFamily?: string | null }} options */
+function getBaselinePlatformPackage({ platform, arch, libcFamily }) {
   if (arch !== "x64") {
     return null;
   }
 
   if (platform === "darwin") {
-    return `${packageBaseName}-darwin-x64-baseline`;
+    return "oh-my-opencode-darwin-x64-baseline";
   }
 
   if (platform === "win32") {
-    return `${packageBaseName}-windows-x64-baseline`;
+    return "oh-my-opencode-windows-x64-baseline";
   }
 
   if (platform === "linux") {
@@ -61,10 +61,10 @@ function getBaselinePlatformPackage({ platform, arch, libcFamily, packageBaseNam
     }
 
     if (libcFamily === "musl") {
-      return `${packageBaseName}-linux-x64-musl-baseline`;
+      return "oh-my-opencode-linux-x64-musl-baseline";
     }
 
-    return `${packageBaseName}-linux-x64-baseline`;
+    return "oh-my-opencode-linux-x64-baseline";
   }
 
   return null;

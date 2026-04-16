@@ -1,7 +1,4 @@
-import { describe, expect, it, beforeEach, afterEach, spyOn, mock } from "bun:test"
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { describe, expect, it, beforeEach, mock, spyOn } from "bun:test"
 import type { LoadedSkill } from "../../features/opencode-skill-loader/types"
 import type {
   AutoSlashCommandHookInput,
@@ -13,7 +10,12 @@ import type {
 // Import real shared module to avoid mock leaking to other test files
 import * as shared from "../../shared"
 
-type AutoSlashCommandModule = typeof import("./hook")
+// Spy on log instead of mocking the entire module
+const logMock = spyOn(shared, "log").mockImplementation(() => {})
+
+
+
+const { createAutoSlashCommandHook } = await import("./index")
 
 function createMockInput(sessionID: string, messageID?: string): AutoSlashCommandHookInput {
   return {
@@ -37,55 +39,11 @@ function createMockOutput(text: string): AutoSlashCommandHookOutput {
 }
 
 describe("createAutoSlashCommandHook", () => {
-  let tempDir = ""
-  let originalWorkingDirectory = ""
-  let logCalls: Array<[string, unknown?]>
-  let createAutoSlashCommandHook: AutoSlashCommandModule["createAutoSlashCommandHook"]
-
-  beforeEach(async () => {
-    mock.restore()
-    logCalls = []
-    spyOn(shared, "log").mockImplementation((message: string, data?: unknown) => {
-      logCalls.push([message, data])
-    })
-    tempDir = mkdtempSync(join(tmpdir(), "omo-auto-slash-hook-test-"))
-    originalWorkingDirectory = process.cwd()
-
-    const autoSlashCommandModule = await import(`./hook?test=${Date.now()}-${Math.random()}`)
-    createAutoSlashCommandHook = autoSlashCommandModule.createAutoSlashCommandHook
-  })
-
-  afterEach(() => {
-    process.chdir(originalWorkingDirectory)
-    rmSync(tempDir, { recursive: true, force: true })
-    mock.restore()
+  beforeEach(() => {
+    logMock.mockClear()
   })
 
   describe("slash command replacement", () => {
-    it("should resolve project commands from provided directory even when cwd differs", async () => {
-      // given
-      const projectDir = join(tempDir, "project")
-      const commandDir = join(projectDir, ".claude", "commands")
-      mkdirSync(commandDir, { recursive: true })
-      writeFileSync(
-        join(commandDir, "project-only-command.md"),
-        `---\ndescription: Project command\n---\nExecute from project directory.\n`,
-      )
-      process.chdir("/tmp")
-
-      const hook = createAutoSlashCommandHook({ directory: projectDir })
-      const input = createMockInput(`test-session-project-${Date.now()}`)
-      const output = createMockOutput("/project-only-command")
-
-      // when
-      await hook["chat.message"](input, output)
-
-      // then
-      expect(output.parts[0].text).toContain("<auto-slash-command>")
-      expect(output.parts[0].text).toContain("Execute from project directory.")
-      expect(output.parts[0].text).toContain("**Scope**: project")
-    })
-
     it("should not modify message when command not found", async () => {
       // given a slash command that doesn't exist
       const hook = createAutoSlashCommandHook()
@@ -242,7 +200,7 @@ describe("createAutoSlashCommandHook", () => {
 
       // when hook is called
       // then should not throw
-      await hook["chat.message"](input, output)
+      await expect(hook["chat.message"](input, output)).resolves.toBeUndefined()
     })
 
     it("should handle just slash", async () => {
@@ -353,22 +311,6 @@ describe("createAutoSlashCommandHook", () => {
       expect(output.parts[0].text).toContain("/ralph-loop Command")
     })
 
-    it("should inject template for known builtin commands like ulw-loop", async () => {
-      //#given
-      const hook = createAutoSlashCommandHook()
-      const input = createCommandInput("ulw-loop", '"Ship feature" --strategy=continue')
-      const output = createCommandOutput("original")
-
-      //#when
-      await hook["command.execute.before"](input, output)
-
-      //#then
-      expect(output.parts[0].text).toContain("<auto-slash-command>")
-      expect(output.parts[0].text).toContain("/ulw-loop Command")
-      expect(output.parts[0].text).toContain("<user-task>")
-      expect(output.parts[0].text).toContain('"Ship feature" --strategy=continue')
-    })
-
     it("should pass command arguments correctly", async () => {
       //#given
       const hook = createAutoSlashCommandHook()
@@ -379,13 +321,13 @@ describe("createAutoSlashCommandHook", () => {
       await hook["command.execute.before"](input, output)
 
       //#then
-      expect(logCalls).toContainEqual([
+      expect(logMock).toHaveBeenCalledWith(
         "[auto-slash-command] command.execute.before received",
         expect.objectContaining({
           command: "some-command",
           arguments: "arg1 arg2 arg3",
-        }),
-      ])
+        })
+      )
     })
 
   })

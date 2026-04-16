@@ -1,36 +1,25 @@
 const MAX_PROCESSED_ENTRY_COUNT = 10_000
 const PROCESSED_COMMAND_TTL_MS = 30_000
 
-function pruneExpiredEntries(entries: Map<string, number>, now: number): void {
-  for (const [commandKey, expiresAt] of entries) {
-    if (expiresAt <= now) {
-      entries.delete(commandKey)
-    }
-  }
+function pruneExpiredEntries(entries: Map<string, number>, now: number): Map<string, number> {
+  return new Map(Array.from(entries.entries()).filter(([, expiresAt]) => expiresAt > now))
 }
 
-function trimProcessedEntries(entries: Map<string, number>): void {
+function trimProcessedEntries(entries: Map<string, number>): Map<string, number> {
   if (entries.size <= MAX_PROCESSED_ENTRY_COUNT) {
-    return
+    return entries
   }
 
-  const targetSize = Math.floor(entries.size / 2)
-  for (const commandKey of entries.keys()) {
-    if (entries.size <= targetSize) {
-      return
-    }
-
-    entries.delete(commandKey)
-  }
+  return new Map(
+    Array.from(entries.entries())
+      .sort((left, right) => left[1] - right[1])
+      .slice(Math.floor(entries.size / 2))
+  )
 }
 
-function removeSessionEntries(entries: Map<string, number>, sessionID: string): void {
+function removeSessionEntries(entries: Map<string, number>, sessionID: string): Map<string, number> {
   const sessionPrefix = `${sessionID}:`
-  for (const entry of entries.keys()) {
-    if (entry.startsWith(sessionPrefix)) {
-      entries.delete(entry)
-    }
-  }
+  return new Map(Array.from(entries.entries()).filter(([entry]) => !entry.startsWith(sessionPrefix)))
 }
 
 export interface ProcessedCommandStore {
@@ -45,27 +34,19 @@ export function createProcessedCommandStore(): ProcessedCommandStore {
 
   return {
     has(commandKey: string): boolean {
-      const expiresAt = entries.get(commandKey)
-      if (expiresAt === undefined) {
-        return false
-      }
-
-      if (expiresAt <= Date.now()) {
-        entries.delete(commandKey)
-        return false
-      }
-
-      return true
+      const now = Date.now()
+      entries = pruneExpiredEntries(entries, now)
+      return entries.has(commandKey)
     },
     add(commandKey: string, ttlMs = PROCESSED_COMMAND_TTL_MS): void {
       const now = Date.now()
-      pruneExpiredEntries(entries, now)
+      entries = pruneExpiredEntries(entries, now)
       entries.delete(commandKey)
       entries.set(commandKey, now + ttlMs)
-      trimProcessedEntries(entries)
+      entries = trimProcessedEntries(entries)
     },
     cleanupSession(sessionID: string): void {
-      removeSessionEntries(entries, sessionID)
+      entries = removeSessionEntries(entries, sessionID)
     },
     clear(): void {
       entries.clear()

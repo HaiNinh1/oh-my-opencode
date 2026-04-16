@@ -2,14 +2,15 @@ import { readFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { OhMyOpenCodeConfigSchema } from "../../../config"
-import { detectPluginConfigFile, getOpenCodeConfigDir, parseJsonc } from "../../../shared"
+import { detectConfigFile, getOpenCodeConfigDir, parseJsonc } from "../../../shared"
 import { CHECK_IDS, CHECK_NAMES, PACKAGE_NAME } from "../constants"
 import type { CheckResult, DoctorIssue } from "../types"
 import { loadAvailableModelsFromCache } from "./model-resolution-cache"
 import { getModelResolutionInfoWithOverrides } from "./model-resolution"
 import type { OmoConfig } from "./model-resolution-types"
 
-const PROJECT_CONFIG_DIR = join(process.cwd(), ".opencode")
+const USER_CONFIG_BASE = join(getOpenCodeConfigDir({ binary: "opencode" }), PACKAGE_NAME)
+const PROJECT_CONFIG_BASE = join(process.cwd(), ".opencode", PACKAGE_NAME)
 
 interface ConfigValidationResult {
   exists: boolean
@@ -20,11 +21,10 @@ interface ConfigValidationResult {
 }
 
 function findConfigPath(): string | null {
-  const projectConfig = detectPluginConfigFile(PROJECT_CONFIG_DIR)
+  const projectConfig = detectConfigFile(PROJECT_CONFIG_BASE)
   if (projectConfig.format !== "none") return projectConfig.path
 
-  const userConfigDir = getOpenCodeConfigDir({ binary: "opencode" })
-  const userConfig = detectPluginConfigFile(userConfigDir)
+  const userConfig = detectConfigFile(USER_CONFIG_BASE)
   if (userConfig.format !== "none") return userConfig.path
 
   return null

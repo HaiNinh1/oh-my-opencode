@@ -75,8 +75,7 @@ export async function loadSkillFromPathAsync(
   skillPath: string,
   resolvedPath: string,
   defaultName: string,
-  scope: SkillScope,
-  namePrefix = ""
+  scope: SkillScope
 ): Promise<LoadedSkill | null> {
   try {
     const content = await readFile(skillPath, "utf-8")
@@ -87,8 +86,7 @@ export async function loadSkillFromPathAsync(
     const mcpJsonMcp = await loadMcpJsonFromDirAsync(resolvedPath)
     const mcpConfig = mcpJsonMcp || frontmatterMcp
 
-    const baseName = String(data.name || defaultName)
-    const skillName = namePrefix ? `${namePrefix}/${baseName}` : baseName
+    const skillName = data.name || defaultName
     const originalDescription = data.description || ""
     const isOpencodeSource = scope === "opencode" || scope === "opencode-project"
     const formattedDescription = `(${scope} - Skill) ${originalDescription}`
@@ -144,17 +142,11 @@ function parseAllowedTools(allowedTools: string | string[] | undefined): string[
   return allowedTools.split(/\s+/).filter(Boolean)
 }
 
-export async function discoverSkillsInDirAsync(
-  skillsDir: string,
-  scope: SkillScope = "opencode-project",
-  namePrefix = "",
-  depth = 0,
-  maxDepth = 2
-): Promise<LoadedSkill[]> {
+export async function discoverSkillsInDirAsync(skillsDir: string): Promise<LoadedSkill[]> {
   try {
     const entries = await readdir(skillsDir, { withFileTypes: true })
     
-    const processEntry = async (entry: Dirent): Promise<LoadedSkill | LoadedSkill[] | null> => {
+    const processEntry = async (entry: Dirent): Promise<LoadedSkill | null> => {
       if (entry.name.startsWith(".")) return null
 
       const entryPath = join(skillsDir, entry.name)
@@ -166,44 +158,28 @@ export async function discoverSkillsInDirAsync(
         const skillMdPath = join(resolvedPath, "SKILL.md")
         try {
           await readFile(skillMdPath, "utf-8")
-          return await loadSkillFromPathAsync(skillMdPath, resolvedPath, dirName, scope, namePrefix)
+          return await loadSkillFromPathAsync(skillMdPath, resolvedPath, dirName, "opencode-project")
         } catch {
           const namedSkillMdPath = join(resolvedPath, `${dirName}.md`)
           try {
             await readFile(namedSkillMdPath, "utf-8")
-            return await loadSkillFromPathAsync(namedSkillMdPath, resolvedPath, dirName, scope, namePrefix)
+            return await loadSkillFromPathAsync(namedSkillMdPath, resolvedPath, dirName, "opencode-project")
           } catch {
-            if (depth >= maxDepth) {
-              return null
-            }
-
-            const nestedPrefix = namePrefix ? `${namePrefix}/${dirName}` : dirName
-            const nestedSkills = await discoverSkillsInDirAsync(
-              resolvedPath,
-              scope,
-              nestedPrefix,
-              depth + 1,
-              maxDepth
-            )
-
-            return nestedSkills.length > 0 ? nestedSkills : null
+            return null
           }
         }
       }
 
       if (isMarkdownFile(entry)) {
         const skillName = basename(entry.name, ".md")
-        return await loadSkillFromPathAsync(entryPath, skillsDir, skillName, scope, namePrefix)
+        return await loadSkillFromPathAsync(entryPath, skillsDir, skillName, "opencode-project")
       }
 
       return null
     }
 
     const skillPromises = await mapWithConcurrency(entries, processEntry, 16)
-    return skillPromises.flatMap((skill): LoadedSkill[] => {
-      if (skill === null) return []
-      return Array.isArray(skill) ? skill : [skill]
-    })
+    return skillPromises.filter((skill): skill is LoadedSkill => skill !== null)
   } catch (error: unknown) {
     if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
       return []

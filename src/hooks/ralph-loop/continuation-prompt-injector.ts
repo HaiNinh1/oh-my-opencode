@@ -11,7 +11,7 @@ import {
 
 type MessageInfo = {
 	agent?: string
-	model?: { providerID: string; modelID: string; variant?: string }
+	model?: { providerID: string; modelID: string }
 	modelID?: string
 	providerID?: string
 	tools?: Record<string, boolean | "allow" | "deny" | "ask">
@@ -28,7 +28,7 @@ export async function injectContinuationPrompt(
 	},
 ): Promise<void> {
 	let agent: string | undefined
-	let model: { providerID: string; modelID: string; variant?: string } | undefined
+	let model: { providerID: string; modelID: string } | undefined
 	let tools: Record<string, boolean | "allow" | "deny" | "ask"> | undefined
 	const sourceSessionID = options.inheritFromSessionID ?? options.sessionID
 
@@ -62,7 +62,6 @@ export async function injectContinuationPrompt(
 				? {
 					providerID: currentMessage.model.providerID,
 					modelID: currentMessage.model.modelID,
-					...(currentMessage.model.variant ? { variant: currentMessage.model.variant } : {}),
 				}
 				: undefined
 		tools = currentMessage?.tools
@@ -70,17 +69,11 @@ export async function injectContinuationPrompt(
 
 	const inheritedTools = resolveInheritedPromptTools(sourceSessionID, tools)
 
-	const launchModel = model
-		? { providerID: model.providerID, modelID: model.modelID }
-		: undefined
-	const launchVariant = model?.variant
-
 	await ctx.client.session.promptAsync({
 		path: { id: options.sessionID },
 		body: {
 			...(agent !== undefined ? { agent } : {}),
-			...(launchModel ? { model: launchModel } : {}),
-			...(launchVariant ? { variant: launchVariant } : {}),
+			...(model !== undefined ? { model } : {}),
 			...(inheritedTools ? { tools: inheritedTools } : {}),
 			parts: [createInternalAgentTextPart(options.prompt)],
 		},

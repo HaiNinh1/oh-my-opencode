@@ -1,5 +1,5 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
-import type { DelegateTaskArgs, DelegatedModelConfig, ToolContextWithMetadata, DelegateTaskToolOptions } from "./types"
+import type { DelegateTaskArgs, ToolContextWithMetadata, DelegateTaskToolOptions } from "./types"
 import { CATEGORY_DESCRIPTIONS } from "./constants"
 import { SISYPHUS_JUNIOR_AGENT } from "./sisyphus-junior-agent"
 import { mergeCategories } from "../../shared/merge-categories"
@@ -8,6 +8,7 @@ import { buildSystemContent } from "./prompt-builder"
 import type {
   AvailableCategory,
   AvailableSkill,
+  AvailableToolInfo,
 } from "../../agents/dynamic-agent-prompt-builder"
 import {
   resolveSkillContent,
@@ -24,6 +25,7 @@ import {
 export { resolveCategoryConfig } from "./categories"
 export type { SyncSessionCreatedEvent, DelegateTaskToolOptions, BuildSystemContentInput } from "./types"
 export { buildSystemContent, buildTaskPrompt } from "./prompt-builder"
+export { isMnemosyneAgent, buildMnemosyneSystemPrepend } from "./mnemosyne-plan-constants"
 
 export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefinition {
   const { userCategories } = options
@@ -69,7 +71,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
   
   **CORRECT - Using subagent_type:**
   \`\`\`
-  task(subagent_type="explore", load_skills=[], description="Find patterns", prompt="...", run_in_background=true)
+  task(subagent_type="explore", load_skills=[], description="Find patterns", prompt="...", run_in_background=false)
   \`\`\`
   
   REQUIRED: Provide ONE of:
@@ -83,7 +85,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
     Available categories:
   ${categoryList}
   - subagent_type: Use specific agent directly (explore, librarian, oracle, metis, momus)
-  - run_in_background: REQUIRED. true=async (returns task_id), false=sync (waits). Use background=true ONLY for parallel exploration with 5+ independent queries.
+  - run_in_background: REQUIRED. true=async (returns task_id), false=sync (waits). Use run_in_background=false for explore/librarian/oracle — multiple sync calls in one response execute in parallel automatically.
   - session_id: Existing Task session to continue (from previous task output). Continues agent with FULL CONTEXT PRESERVED - saves tokens, maintains continuity.
   - command: The command that triggered this task (optional, for slash command tracking).
   
@@ -93,12 +95,15 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
   - Multi-turn conversation with same agent → always session_id instead of new task
   
   Prompts MUST be in English.`
+  + (options.forceSyncEnabled
+    ? `\n\n  **NOTE: force_sync is ENABLED.** All tasks run synchronously regardless of run_in_background value. Background tools are disabled. For parallel execution of multiple tasks, use the \`parallel_tasks\` tool instead.`
+    : "")
 
   return tool({
     description,
     args: {
       load_skills: tool.schema.array(tool.schema.string()).describe("Skill names to inject. REQUIRED - pass [] if no skills needed."),
-      description: tool.schema.string().optional().describe("Short task description (3-5 words). Auto-generated from prompt if omitted."),
+      description: tool.schema.string().describe("Short task description (3-5 words)"),
       prompt: tool.schema.string().describe("Full detailed prompt for the agent"),
       run_in_background: tool.schema.boolean().describe("REQUIRED. true=async (returns task_id), false=sync (waits). Use false for task delegation, true ONLY for parallel exploration."),
       category: tool.schema.string().optional().describe(`REQUIRED if subagent_type not provided. Do NOT provide both category and subagent_type.`),
@@ -118,16 +123,12 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         }
         args.subagent_type = SISYPHUS_JUNIOR_AGENT
       }
-      // Auto-generate description from prompt when missing or empty
-      if (!args.description || typeof args.description !== "string" || args.description.trim() === "") {
-        const words = (args.prompt || "").trim().split(/\s+/)
-        args.description = words.slice(0, 4).join(" ") || "Delegated task"
-      }
       await ctx.metadata?.({
         title: args.description,
       })
+
       if (args.run_in_background === undefined) {
-        throw new Error(`Invalid arguments: 'run_in_background' parameter is REQUIRED. Specify run_in_background=false for task delegation, or run_in_background=true for parallel exploration.`)
+        throw new Error(`Invalid arguments: 'run_in_background' parameter is REQUIRED. Use run_in_background=false for explore/librarian/oracle and task delegation.`)
       }
       if (typeof args.load_skills === "string") {
         try {
@@ -144,7 +145,15 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         throw new Error(`Invalid arguments: load_skills=null is not allowed. Pass [] if no skills needed.`)
       }
 
-      const runInBackground = args.run_in_background === true
+      const forceSyncOverride = options.forceSyncEnabled && args.run_in_background === true
+      if (forceSyncOverride) {
+        log("[task] force_sync enabled - overriding run_in_background=true to false", {
+          description: args.description,
+          category: args.category,
+          subagent_type: args.subagent_type,
+        })
+      }
+      const runInBackground = forceSyncOverride ? false : args.run_in_background === true
 
       const { content: skillContent, contents: skillContents, error: skillError } = await resolveSkillContent(args.load_skills, {
         gitMasterConfig: options.gitMasterConfig,
@@ -162,7 +171,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         if (runInBackground) {
           return executeBackgroundContinuation(args, ctx, options, parentContext)
         }
-        return executeSyncContinuation(args, ctx, options)
+        return executeSyncContinuation(args, ctx, options, parentContext)
       }
 
       if (!args.category && !args.subagent_type) {
@@ -182,7 +191,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         : undefined
 
       let agentToUse: string
-      let categoryModel: DelegatedModelConfig | undefined
+      let categoryModel: { providerID: string; modelID: string; variant?: string } | undefined
       let categoryPromptAppend: string | undefined
       let modelInfo: import("../../features/task-toast-manager/types").ModelFallbackInfo | undefined
       let actualModel: string | undefined
@@ -217,6 +226,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         })
 
         if (isUnstableAgent && isRunInBackgroundExplicitlyFalse) {
+          const availableToolInfos: AvailableToolInfo[] = options.getAvailableToolInfos?.() ?? []
           const systemContent = buildSystemContent({
             skillContent,
             skillContents,
@@ -226,6 +236,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
             model: categoryModel,
             availableCategories,
             availableSkills,
+            availableToolInfos,
           })
           return executeUnstableAgentTask(args, ctx, options, parentContext, agentToUse, categoryModel, systemContent, actualModel)
         }
@@ -239,6 +250,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         fallbackChain = resolution.fallbackChain
       }
 
+      const availableToolInfos: AvailableToolInfo[] = options.getAvailableToolInfos?.() ?? []
       const systemContent = buildSystemContent({
         skillContent,
         skillContents,
@@ -248,6 +260,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         model: categoryModel,
         availableCategories,
         availableSkills,
+        availableToolInfos,
       })
 
       if (runInBackground) {

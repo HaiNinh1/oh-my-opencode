@@ -10,7 +10,6 @@ import type {
 } from "./types"
 import { transformMcpServer } from "./transformer"
 import { log } from "../../shared/logger"
-import { shouldLoadMcpServer } from "./scope-filter"
 
 interface McpConfigPath {
   path: string
@@ -48,7 +47,6 @@ async function loadMcpConfigFile(
 export function getSystemMcpServerNames(): Set<string> {
   const names = new Set<string>()
   const paths = getMcpConfigPaths()
-  const cwd = process.cwd()
 
   for (const { path } of paths) {
     if (!existsSync(path)) continue
@@ -59,11 +57,7 @@ export function getSystemMcpServerNames(): Set<string> {
       if (!config?.mcpServers) continue
 
       for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
-        if (serverConfig.disabled) {
-          names.delete(name)
-          continue
-        }
-        if (!shouldLoadMcpServer(serverConfig, cwd)) continue
+        if (serverConfig.disabled) continue
         names.add(name)
       }
     } catch {
@@ -81,7 +75,6 @@ export async function loadMcpConfigs(
   const loadedServers: LoadedMcpServer[] = []
   const paths = getMcpConfigPaths()
   const disabledSet = new Set(disabledMcps)
-  const cwd = process.cwd()
 
   for (const { path, scope } of paths) {
     const config = await loadMcpConfigFile(path)
@@ -90,15 +83,6 @@ export async function loadMcpConfigs(
     for (const [name, serverConfig] of Object.entries(config.mcpServers)) {
       if (disabledSet.has(name)) {
         log(`Skipping MCP "${name}" (in disabled_mcps)`, { path })
-        continue
-      }
-
-      if (!shouldLoadMcpServer(serverConfig, cwd)) {
-        log(`Skipping MCP server "${name}" because local scope does not match cwd`, {
-          path,
-          projectPath: serverConfig.projectPath,
-          cwd,
-        })
         continue
       }
 

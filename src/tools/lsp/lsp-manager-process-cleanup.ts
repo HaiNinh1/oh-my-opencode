@@ -1,5 +1,3 @@
-import { log } from "../../shared/logger"
-
 type ManagedClientForCleanup = {
   client: {
     stop: () => Promise<void>;
@@ -24,32 +22,23 @@ export type LspProcessCleanupHandle = {
 export function registerLspManagerProcessCleanup(options: ProcessCleanupOptions): LspProcessCleanupHandle {
   const handlers: RegisteredHandler[] = [];
 
-  const logCleanupError = (phase: string, error: unknown): void => {
-    log(`[lsp-manager-process-cleanup] ${phase}`, {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  };
-
+  // Synchronous cleanup for 'exit' event (cannot await)
   const syncCleanup = () => {
     for (const [, managed] of options.getClients()) {
       try {
-        void managed.client.stop().catch((error) => {
-          logCleanupError("stop failed during exit cleanup", error);
-        });
-      } catch (error) {
-        logCleanupError("failed to schedule exit cleanup", error);
-      }
+        // Fire-and-forget during sync exit - process is terminating
+        void managed.client.stop().catch(() => {});
+      } catch {}
     }
     options.clearClients();
     options.clearCleanupInterval();
   };
 
+  // Async cleanup for signal handlers - properly await all stops
   const asyncCleanup = async () => {
     const stopPromises: Promise<void>[] = [];
     for (const [, managed] of options.getClients()) {
-      stopPromises.push(managed.client.stop().catch((error) => {
-        logCleanupError("stop failed during signal cleanup", error);
-      }));
+      stopPromises.push(managed.client.stop().catch(() => {}));
     }
     await Promise.allSettled(stopPromises);
     options.clearClients();
@@ -63,9 +52,8 @@ export function registerLspManagerProcessCleanup(options: ProcessCleanupOptions)
 
   registerHandler("exit", syncCleanup);
 
-  const signalCleanup = () => void asyncCleanup().catch((error) => {
-    logCleanupError("signal cleanup failed", error);
-  });
+  // Don't call process.exit() here; other handlers (background-agent manager) handle final exit.
+  const signalCleanup = () => void asyncCleanup().catch(() => {});
   registerHandler("SIGINT", signalCleanup);
   registerHandler("SIGTERM", signalCleanup);
   if (process.platform === "win32") {

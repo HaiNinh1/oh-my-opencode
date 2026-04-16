@@ -20,8 +20,7 @@ export function getMaxRootSessionSpawnBudget(config?: BackgroundTaskConfig): num
 
 export async function resolveSubagentSpawnContext(
   client: OpencodeClient,
-  parentSessionID: string,
-  directory?: string
+  parentSessionID: string
 ): Promise<SubagentSpawnContext> {
   const visitedSessionIDs = new Set<string>()
   let rootSessionID = parentSessionID
@@ -39,7 +38,6 @@ export async function resolveSubagentSpawnContext(
     try {
       const response = await client.session.get({
         path: { id: currentSessionID },
-        ...(directory ? { query: { directory } } : {}),
       })
       if (response.error) {
         throw new Error(String(response.error))

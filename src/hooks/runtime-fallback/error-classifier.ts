@@ -1,7 +1,5 @@
 import { DEFAULT_CONFIG, RETRYABLE_ERROR_PATTERNS } from "./constants"
 
-export { extractAutoRetrySignal } from "./auto-retry-signal"
-
 export function getErrorMessage(error: unknown): string {
   if (!error) return ""
   if (typeof error === "string") return error.toLowerCase()
@@ -21,13 +19,6 @@ export function getErrorMessage(error: unknown): string {
         return msg.toLowerCase()
       }
     }
-  }
-
-  const errorObj2 = error as Record<string, unknown>
-  const name = errorObj2.name
-  if (typeof name === "string" && name.length > 0) {
-    const nameColonMatch = name.match(/:\s*(.+)/)
-    if (nameColonMatch) return nameColonMatch[1].trim().toLowerCase()
   }
 
   try {
@@ -121,20 +112,42 @@ export function classifyErrorType(error: unknown): string | undefined {
     return "model_not_found"
   }
 
-  if (
-    errorName?.includes("quotaexceeded") ||
-    errorName?.includes("insufficientquota") ||
-    errorName?.includes("billingerror") ||
-    /quota.?exceeded/i.test(message) ||
-    /subscription.*quota/i.test(message) ||
-    /insufficient.?quota/i.test(message) ||
-    /billing.?(?:hard.?)?limit/i.test(message) ||
-    /exhausted\s+your\s+capacity/i.test(message) ||
-    /out\s+of\s+credits?/i.test(message) ||
-    /payment.?required/i.test(message) ||
-    /usage\s+limit/i.test(message)
-  ) {
-    return "quota_exceeded"
+  return undefined
+}
+
+export interface AutoRetrySignal {
+  signal: string
+}
+
+export const AUTO_RETRY_PATTERNS: Array<(combined: string) => boolean> = [
+  (combined) => /retrying\s+in/i.test(combined),
+  (combined) =>
+    /(?:too\s+many\s+requests|quota\s*exceeded|quota\s+will\s+reset\s+after|usage\s+limit|rate\s+limit|limit\s+reached|all\s+credentials\s+for\s+model|cool(?:ing)?\s*down|exhausted\s+your\s+capacity)/i.test(combined),
+]
+
+export function extractAutoRetrySignal(info: Record<string, unknown> | undefined): AutoRetrySignal | undefined {
+  if (!info) return undefined
+
+  const candidates: string[] = []
+
+  const directStatus = info.status
+  if (typeof directStatus === "string") candidates.push(directStatus)
+
+  const summary = info.summary
+  if (typeof summary === "string") candidates.push(summary)
+
+  const message = info.message
+  if (typeof message === "string") candidates.push(message)
+
+  const details = info.details
+  if (typeof details === "string") candidates.push(details)
+
+  const combined = candidates.join("\n")
+  if (!combined) return undefined
+
+  const isAutoRetry = AUTO_RETRY_PATTERNS.every((test) => test(combined))
+  if (isAutoRetry) {
+    return { signal: combined }
   }
 
   return undefined
@@ -166,13 +179,6 @@ export function isRetryableError(error: unknown, retryOnErrors: number[]): boole
 
   if (errorType === "model_not_found") {
     return true
-  }
-
-  if (errorType === "quota_exceeded") {
-    // When a provider signals an auto-retry (e.g. "retrying in ~2 weeks"),
-    // we should still trigger fallback to another model rather than STOP.
-    const hasAutoRetrySignal = /retrying\s+in/i.test(message)
-    return hasAutoRetrySignal
   }
 
   if (statusCode && retryOnErrors.includes(statusCode)) {

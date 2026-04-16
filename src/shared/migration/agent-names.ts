@@ -3,37 +3,37 @@ export const AGENT_NAME_MAP: Record<string, string> = {
   omo: "sisyphus",
   OmO: "sisyphus",
   Sisyphus: "sisyphus",
-  "Sisyphus (Ultraworker)": "sisyphus",
   sisyphus: "sisyphus",
-
-  // Hephaestus variants → "hephaestus"
-  "Hephaestus (Deep Agent)": "hephaestus",
 
   // Prometheus variants → "prometheus"
   "OmO-Plan": "prometheus",
   "omo-plan": "prometheus",
   "Planner-Sisyphus": "prometheus",
   "planner-sisyphus": "prometheus",
-  "Prometheus - Plan Builder": "prometheus",
-  "Prometheus (Plan Builder)": "prometheus",
+  "Prometheus (Planner)": "prometheus",
   prometheus: "prometheus",
 
   // Atlas variants → "atlas"
   "orchestrator-sisyphus": "atlas",
   Atlas: "atlas",
-  "Atlas (Plan Executor)": "atlas",
   atlas: "atlas",
 
   // Metis variants → "metis"
   "plan-consultant": "metis",
-  "Metis - Plan Consultant": "metis",
   "Metis (Plan Consultant)": "metis",
   metis: "metis",
 
   // Momus variants → "momus"
-  "Momus - Plan Critic": "momus",
-  "Momus (Plan Critic)": "momus",
+  "Momus (Plan Reviewer)": "momus",
   momus: "momus",
+
+  // Mnemosyne variants → "mnemosyne"
+  "Mnemosyne (Compact Planner)": "mnemosyne",
+  mnemosyne: "mnemosyne",
+
+  // Heracles variants → "heracles"
+  "Heracles (Direct Executor)": "heracles",
+  heracles: "heracles",
 
   // Sisyphus-Junior → "sisyphus-junior"
   "Sisyphus-Junior": "sisyphus-junior",
@@ -45,6 +45,7 @@ export const AGENT_NAME_MAP: Record<string, string> = {
   librarian: "librarian",
   explore: "explore",
   "multimodal-looker": "multimodal-looker",
+  enhancer: "enhancer",
 }
 
 export const BUILTIN_AGENT_NAMES = new Set([
@@ -53,9 +54,12 @@ export const BUILTIN_AGENT_NAMES = new Set([
   "librarian",
   "explore",
   "multimodal-looker",
-  "metis", // was "Metis - Plan Consultant"
-  "momus", // was "Momus - Plan Critic"
-  "prometheus", // was "Prometheus - Plan Builder"
+  "metis", // was "Metis (Plan Consultant)"
+  "momus", // was "Momus (Plan Reviewer)"
+  "mnemosyne", // was "Mnemosyne (Compact Planner)"
+  "heracles", // was "Heracles (Direct Executor)"
+  "enhancer",
+  "prometheus", // was "Prometheus (Planner)"
   "atlas", // was "Atlas"
   "build",
 ])

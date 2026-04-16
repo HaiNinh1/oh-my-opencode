@@ -38,7 +38,6 @@ afterAll(() => {
   mock.module("@opencode-ai/sdk", () => originalSdk)
   mock.module("../../shared/port-utils", () => originalPortUtils)
   mock.module("./opencode-binary-resolver", () => originalBinaryResolver)
-  mock.restore()
 })
 
 const { createServerConnection } = await import("./server-connection")

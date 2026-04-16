@@ -4,7 +4,6 @@ const KNOWN_VARIANTS = new Set([
   "high",
   "xhigh",
   "max",
-  "minimal",
   "none",
   "auto",
   "thinking",

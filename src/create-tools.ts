@@ -1,4 +1,4 @@
-import type { AvailableCategory, AvailableSkill } from "./agents/dynamic-agent-prompt-builder"
+import type { AvailableCategory, AvailableSkill, AvailableToolInfo } from "./agents/dynamic-agent-prompt-builder"
 import type { OhMyOpenCodeConfig } from "./config"
 import type { BrowserAutomationProvider } from "./config/schema/browser-automation"
 import type { LoadedSkill } from "./features/opencode-skill-loader/types"
@@ -9,11 +9,12 @@ import { createAvailableCategories } from "./plugin/available-categories"
 import { createSkillContext } from "./plugin/skill-context"
 import { createToolRegistry } from "./plugin/tool-registry"
 
-type CreateToolsResult = {
+export type CreateToolsResult = {
   filteredTools: ToolsRecord
   mergedSkills: LoadedSkill[]
   availableSkills: AvailableSkill[]
   availableCategories: AvailableCategory[]
+  availableToolInfos: AvailableToolInfo[]
   browserProvider: BrowserAutomationProvider
   disabledSkills: Set<string>
   taskSystemEnabled: boolean
@@ -33,7 +34,7 @@ export async function createTools(args: {
 
   const availableCategories = createAvailableCategories(pluginConfig)
 
-  const { filteredTools, taskSystemEnabled } = createToolRegistry({
+  const { filteredTools, availableToolInfos, taskSystemEnabled } = createToolRegistry({
     ctx,
     pluginConfig,
     managers,
@@ -46,6 +47,7 @@ export async function createTools(args: {
     mergedSkills: skillContext.mergedSkills,
     availableSkills: skillContext.availableSkills,
     availableCategories,
+    availableToolInfos,
     browserProvider: skillContext.browserProvider,
     disabledSkills: skillContext.disabledSkills,
     taskSystemEnabled,

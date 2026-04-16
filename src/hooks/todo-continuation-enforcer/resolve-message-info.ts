@@ -1,33 +1,22 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 
 import { normalizeSDKResponse } from "../../shared"
-import { isCompactionMessage } from "../../shared/compaction-marker"
 
-import type { MessageInfo, MessageWithInfo, ResolveLatestMessageInfoResult } from "./types"
+import type { MessageInfo, ResolveLatestMessageInfoResult } from "./types"
 
 export async function resolveLatestMessageInfo(
   ctx: PluginInput,
-  sessionID: string,
-  prefetchedMessages?: MessageWithInfo[]
+  sessionID: string
 ): Promise<ResolveLatestMessageInfoResult> {
-  const messages = prefetchedMessages ?? normalizeSDKResponse(
-    await ctx.client.session.messages({
-      path: { id: sessionID },
-    }),
-    [] as MessageWithInfo[],
-  )
+  const messagesResp = await ctx.client.session.messages({
+    path: { id: sessionID },
+  })
+  const messages = normalizeSDKResponse(messagesResp, [] as Array<{ info?: MessageInfo }>)
   let encounteredCompaction = false
-  let latestMessageWasCompaction = false
 
   for (let i = messages.length - 1; i >= 0; i--) {
-    const message = messages[i]
-    const info = message.info
-    const isCompaction = isCompactionMessage(message)
-    if (i === messages.length - 1) {
-      latestMessageWasCompaction = isCompaction
-    }
-
-    if (isCompaction) {
+    const info = messages[i].info
+    if (info?.agent === "compaction") {
       encounteredCompaction = true
       continue
     }
@@ -39,10 +28,9 @@ export async function resolveLatestMessageInfo(
           tools: info.tools,
         },
         encounteredCompaction,
-        latestMessageWasCompaction,
       }
     }
   }
 
-  return { resolvedInfo: undefined, encounteredCompaction, latestMessageWasCompaction }
+  return { resolvedInfo: undefined, encounteredCompaction }
 }

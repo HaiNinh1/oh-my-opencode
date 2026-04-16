@@ -70,10 +70,6 @@ export class ContextCollector {
     this.sessions.delete(sessionID)
   }
 
-  clearAll(): void {
-    this.sessions.clear()
-  }
-
   hasPending(sessionID: string): boolean {
     const sessionMap = this.sessions.get(sessionID)
     return sessionMap !== undefined && sessionMap.size > 0

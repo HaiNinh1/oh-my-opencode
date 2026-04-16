@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import type { HookDeps, RuntimeFallbackPluginInput } from "./types"
 
 let capturedDeps: HookDeps | undefined
@@ -35,10 +35,6 @@ mock.module("./message-update-handler", () => ({
 mock.module("./chat-message-handler", () => ({
   createChatMessageHandler: mockCreateChatMessageHandler,
 }))
-
-afterAll(() => {
-  mock.restore()
-})
 
 const { createRuntimeFallbackHook } = await import("./hook")
 

@@ -11,7 +11,6 @@ export interface InstallArgs {
   zaiCodingPlan?: BooleanArg
 kimiForCoding?: BooleanArg
   opencodeGo?: BooleanArg
-  vercelAiGateway?: BooleanArg
   skipAuth?: boolean
 }
 
@@ -25,7 +24,6 @@ export interface InstallConfig {
   hasZaiCodingPlan: boolean
   hasKimiForCoding: boolean
   hasOpencodeGo: boolean
-  hasVercelAiGateway: boolean
 }
 
 export interface ConfigMergeResult {
@@ -36,7 +34,6 @@ export interface ConfigMergeResult {
 
 export interface DetectedConfig {
   isInstalled: boolean
-  installedVersion: string | null
   hasClaude: boolean
   isMax20: boolean
   hasOpenAI: boolean
@@ -46,5 +43,4 @@ export interface DetectedConfig {
   hasZaiCodingPlan: boolean
   hasKimiForCoding: boolean
   hasOpencodeGo: boolean
-  hasVercelAiGateway: boolean
 }

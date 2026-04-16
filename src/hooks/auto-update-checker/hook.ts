@@ -1,51 +1,15 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { log } from "../../shared/logger"
-import type { AutoUpdateCheckerOptions } from "./types"
 import { getCachedVersion, getLocalDevVersion } from "./checker"
+import type { AutoUpdateCheckerOptions } from "./types"
 import { runBackgroundUpdateCheck } from "./hook/background-update-check"
 import { showConfigErrorsIfAny } from "./hook/config-errors-toast"
 import { updateAndShowConnectedProvidersCacheStatus } from "./hook/connected-providers-status"
-import { refreshModelCapabilitiesOnStartup } from "./hook/model-capabilities-status"
 import { showModelCacheWarningIfNeeded } from "./hook/model-cache-warning"
 import { showLocalDevToast, showVersionToast } from "./hook/startup-toasts"
 
-interface AutoUpdateCheckerDeps {
-  getCachedVersion: typeof getCachedVersion
-  getLocalDevVersion: typeof getLocalDevVersion
-  showConfigErrorsIfAny: typeof showConfigErrorsIfAny
-  updateAndShowConnectedProvidersCacheStatus: typeof updateAndShowConnectedProvidersCacheStatus
-  refreshModelCapabilitiesOnStartup: typeof refreshModelCapabilitiesOnStartup
-  showModelCacheWarningIfNeeded: typeof showModelCacheWarningIfNeeded
-  showLocalDevToast: typeof showLocalDevToast
-  showVersionToast: typeof showVersionToast
-  runBackgroundUpdateCheck: typeof runBackgroundUpdateCheck
-  log: typeof log
-}
-
-const defaultDeps: AutoUpdateCheckerDeps = {
-  getCachedVersion,
-  getLocalDevVersion,
-  showConfigErrorsIfAny,
-  updateAndShowConnectedProvidersCacheStatus,
-  refreshModelCapabilitiesOnStartup,
-  showModelCacheWarningIfNeeded,
-  showLocalDevToast,
-  showVersionToast,
-  runBackgroundUpdateCheck,
-  log,
-}
-
-export function createAutoUpdateCheckerHook(
-  ctx: PluginInput,
-  options: AutoUpdateCheckerOptions = {},
-  deps: AutoUpdateCheckerDeps = defaultDeps,
-) {
-  const {
-    showStartupToast = true,
-    isSisyphusEnabled = false,
-    autoUpdate = true,
-    modelCapabilities,
-  } = options
+export function createAutoUpdateCheckerHook(ctx: PluginInput, options: AutoUpdateCheckerOptions = {}) {
+  const { showStartupToast = true, isSisyphusEnabled = false, autoUpdate = true } = options
   const isCliRunMode = process.env.OPENCODE_CLI_RUN_MODE === "true"
 
   const getToastMessage = (isUpdate: boolean, latestVersion?: string): string => {
@@ -70,32 +34,31 @@ export function createAutoUpdateCheckerHook(
       const props = event.properties as { info?: { parentID?: string } } | undefined
       if (props?.info?.parentID) return
 
-        hasChecked = true
+      hasChecked = true
 
       setTimeout(async () => {
-        const cachedVersion = deps.getCachedVersion()
-        const localDevVersion = deps.getLocalDevVersion(ctx.directory)
+        const cachedVersion = getCachedVersion()
+        const localDevVersion = getLocalDevVersion(ctx.directory)
         const displayVersion = localDevVersion ?? cachedVersion
 
-        await deps.showConfigErrorsIfAny(ctx)
-        await deps.updateAndShowConnectedProvidersCacheStatus(ctx)
-        await deps.refreshModelCapabilitiesOnStartup(modelCapabilities)
-        await deps.showModelCacheWarningIfNeeded(ctx)
+        await showConfigErrorsIfAny(ctx)
+        await updateAndShowConnectedProvidersCacheStatus(ctx)
+        await showModelCacheWarningIfNeeded(ctx)
 
         if (localDevVersion) {
           if (showStartupToast) {
-            deps.showLocalDevToast(ctx, displayVersion, isSisyphusEnabled).catch(() => {})
+            showLocalDevToast(ctx, displayVersion, isSisyphusEnabled).catch(() => {})
           }
-          deps.log("[auto-update-checker] Local development mode")
+          log("[auto-update-checker] Local development mode")
           return
         }
 
         if (showStartupToast) {
-          deps.showVersionToast(ctx, displayVersion, getToastMessage(false)).catch(() => {})
+          showVersionToast(ctx, displayVersion, getToastMessage(false)).catch(() => {})
         }
 
-        deps.runBackgroundUpdateCheck(ctx, autoUpdate, getToastMessage).catch((err) => {
-          deps.log("[auto-update-checker] Background update check failed:", err)
+        runBackgroundUpdateCheck(ctx, autoUpdate, getToastMessage).catch((err) => {
+          log("[auto-update-checker] Background update check failed:", err)
         })
       }, 0)
     },

@@ -1,9 +1,7 @@
 import { existsSync, readFileSync } from "fs"
 import { homedir } from "os"
-import { basename, join } from "path"
-import { fileURLToPath } from "url"
+import { join } from "path"
 import { log } from "../../shared/logger"
-import { shouldLoadPluginForCwd } from "./scope-filter"
 import type {
   InstalledPluginsDatabase,
   InstalledPluginEntryV3,
@@ -24,12 +22,12 @@ function getPluginsBaseDir(): string {
   return join(homedir(), ".claude", "plugins")
 }
 
-function getInstalledPluginsPath(pluginsBaseDir?: string): string {
-  return join(pluginsBaseDir ?? getPluginsBaseDir(), "installed_plugins.json")
+function getInstalledPluginsPath(): string {
+  return join(getPluginsBaseDir(), "installed_plugins.json")
 }
 
-function loadInstalledPlugins(pluginsBaseDir?: string): InstalledPluginsDatabase | null {
-  const dbPath = getInstalledPluginsPath(pluginsBaseDir)
+function loadInstalledPlugins(): InstalledPluginsDatabase | null {
+  const dbPath = getInstalledPluginsPath()
   if (!existsSync(dbPath)) {
     return null
   }
@@ -65,7 +63,7 @@ function loadClaudeSettings(): ClaudeSettings | null {
   }
 }
 
-export function loadPluginManifest(installPath: string): PluginManifest | null {
+function loadPluginManifest(installPath: string): PluginManifest | null {
   const manifestPath = join(installPath, ".claude-plugin", "plugin.json")
   if (!existsSync(manifestPath)) {
     return null
@@ -81,34 +79,8 @@ export function loadPluginManifest(installPath: string): PluginManifest | null {
 }
 
 function derivePluginNameFromKey(pluginKey: string): string {
-  const keyWithoutSource = pluginKey.startsWith("npm:") ? pluginKey.slice(4) : pluginKey
-
-  let versionSeparator: number
-  if (keyWithoutSource.startsWith("@")) {
-    const scopeEnd = keyWithoutSource.indexOf("/")
-    versionSeparator = scopeEnd > 0 ? keyWithoutSource.indexOf("@", scopeEnd) : -1
-  } else {
-    versionSeparator = keyWithoutSource.lastIndexOf("@")
-  }
-  const keyWithoutVersion = versionSeparator > 0 ? keyWithoutSource.slice(0, versionSeparator) : keyWithoutSource
-
-  if (keyWithoutVersion.startsWith("file://")) {
-    try {
-      return basename(fileURLToPath(keyWithoutVersion))
-    } catch {
-      return basename(keyWithoutVersion)
-    }
-  }
-
-  if (keyWithoutVersion.startsWith("@") && keyWithoutVersion.includes("/")) {
-    return keyWithoutVersion
-  }
-
-  if (keyWithoutVersion.includes("/") || keyWithoutVersion.includes("\\")) {
-    return basename(keyWithoutVersion)
-  }
-
-  return keyWithoutVersion
+  const atIndex = pluginKey.indexOf("@")
+  return atIndex > 0 ? pluginKey.substring(0, atIndex) : pluginKey
 }
 
 function isPluginEnabled(
@@ -133,7 +105,6 @@ function v3EntryToInstallation(entry: InstalledPluginEntryV3): PluginInstallatio
     installedAt: entry.lastUpdated,
     lastUpdated: entry.lastUpdated,
     gitCommitSha: entry.gitCommitSha,
-    projectPath: entry.projectPath,
   }
 }
 
@@ -165,9 +136,7 @@ function extractPluginEntries(
 }
 
 export function discoverInstalledPlugins(options?: PluginLoaderOptions): PluginLoadResult {
-  // Allow overriding the plugins base directory for testing
-  const pluginsBaseDir = options?.pluginsHomeOverride ?? getPluginsBaseDir()
-  const db = loadInstalledPlugins(pluginsBaseDir)
+  const db = loadInstalledPlugins()
   const settings = loadClaudeSettings()
   const plugins: LoadedPlugin[] = []
   const errors: PluginLoadError[] = []
@@ -178,22 +147,12 @@ export function discoverInstalledPlugins(options?: PluginLoaderOptions): PluginL
 
   const settingsEnabledPlugins = settings?.enabledPlugins
   const overrideEnabledPlugins = options?.enabledPluginsOverride
-  const pluginManifestLoader = options?.loadPluginManifestOverride ?? loadPluginManifest
-  const cwd = process.cwd()
 
   for (const [pluginKey, installation] of extractPluginEntries(db)) {
     if (!installation) continue
 
     if (!isPluginEnabled(pluginKey, settingsEnabledPlugins, overrideEnabledPlugins)) {
       log(`Plugin disabled: ${pluginKey}`)
-      continue
-    }
-
-    if (!shouldLoadPluginForCwd(installation, cwd)) {
-      log(`Skipping ${installation.scope}-scoped plugin outside current cwd: ${pluginKey}`, {
-        projectPath: installation.projectPath,
-        cwd,
-      })
       continue
     }
 
@@ -208,7 +167,7 @@ export function discoverInstalledPlugins(options?: PluginLoaderOptions): PluginL
       continue
     }
 
-    const manifest = pluginManifestLoader(installPath)
+    const manifest = loadPluginManifest(installPath)
     const pluginName = manifest?.name || derivePluginNameFromKey(pluginKey)
 
     const loadedPlugin: LoadedPlugin = {

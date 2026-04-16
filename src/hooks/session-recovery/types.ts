@@ -73,7 +73,6 @@ export interface MessageData {
     model?: {
       providerID: string
       modelID: string
-      variant?: string
     }
     system?: string
     tools?: Record<string, boolean>
@@ -95,7 +94,6 @@ export interface ResumeConfig {
   model?: {
     providerID: string
     modelID: string
-    variant?: string
   }
   tools?: Record<string, boolean>
 }

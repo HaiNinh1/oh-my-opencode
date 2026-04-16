@@ -23,7 +23,6 @@ export interface AutoCompactState {
   pendingCompact: Set<string>
   errorDataBySession: Map<string, ParsedTokenLimitError>
   retryStateBySession: Map<string, RetryState>
-  retryTimerBySession: Map<string, ReturnType<typeof setTimeout>>
   truncateStateBySession: Map<string, TruncateState>
   emptyContentAttemptBySession: Map<string, number>
   compactionInProgress: Set<string>

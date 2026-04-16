@@ -1,4 +1,4 @@
-import * as childProcess from "node:child_process"
+import { execFileSync } from "node:child_process"
 import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
@@ -59,7 +59,7 @@ export function convertImageToJpeg(inputPath: string, mimeType: string): string 
   try {
     if (process.platform === "darwin") {
       try {
-        childProcess.execFileSync("sips", ["-s", "format", "jpeg", "--", inputPath, "--out", outputPath], {
+        execFileSync("sips", ["-s", "format", "jpeg", "--", inputPath, "--out", outputPath], {
           stdio: "pipe",
           encoding: "utf-8",
           timeout: CONVERSION_TIMEOUT_MS,
@@ -76,7 +76,7 @@ export function convertImageToJpeg(inputPath: string, mimeType: string): string 
 
     try {
       const imagemagickCommand = process.platform === "darwin" ? "convert" : "magick"
-      childProcess.execFileSync(imagemagickCommand, ["--", inputPath, outputPath], {
+      execFileSync(imagemagickCommand, ["--", inputPath, outputPath], {
         stdio: "pipe",
         encoding: "utf-8",
         timeout: CONVERSION_TIMEOUT_MS,

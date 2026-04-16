@@ -1,23 +1,16 @@
 /// <reference types="bun-types" />
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
-
-let getServerBasicAuthHeader: (typeof import("./opencode-server-auth"))["getServerBasicAuthHeader"]
-let injectServerAuthIntoClient: (typeof import("./opencode-server-auth"))["injectServerAuthIntoClient"]
-
-async function importFreshOpencodeServerAuthModule(): Promise<typeof import("./opencode-server-auth")> {
-  return import(`./opencode-server-auth?test=${Date.now()}-${Math.random()}`)
-}
+import { getServerBasicAuthHeader, injectServerAuthIntoClient } from "./opencode-server-auth"
 
 describe("opencode-server-auth", () => {
   let originalEnv: Record<string, string | undefined>
 
-  beforeEach(async () => {
+  beforeEach(() => {
     originalEnv = {
       OPENCODE_SERVER_PASSWORD: process.env.OPENCODE_SERVER_PASSWORD,
       OPENCODE_SERVER_USERNAME: process.env.OPENCODE_SERVER_USERNAME,
     }
-    ;({ getServerBasicAuthHeader, injectServerAuthIntoClient } = await importFreshOpencodeServerAuthModule())
   })
 
   afterEach(() => {

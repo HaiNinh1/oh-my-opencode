@@ -1,5 +1,3 @@
-/// <reference types="bun-types" />
-
 import { describe, expect, test } from "bun:test"
 import {
   createToolCallSignature,
@@ -21,7 +19,7 @@ function buildWindow(
 }
 
 function buildWindowWithInputs(
-  calls: Array<{ tool: string; input?: Record<string, unknown> | null }>,
+  calls: Array<{ tool: string; input?: Record<string, unknown> }>,
   override?: Parameters<typeof resolveCircuitBreakerSettings>[0]
 ) {
   const settings = resolveCircuitBreakerSettings(override)
@@ -112,20 +110,6 @@ describe("loop-detector", () => {
       expect(result).toBe("read")
     })
 
-    test("#given nullish inputs #when signatures are created #then null and undefined behave the same", () => {
-      // given
-      const undefinedInput = undefined
-      const nullInput = null
-
-      // when
-      const undefinedResult = createToolCallSignature("read", undefinedInput)
-      const nullResult = createToolCallSignature("read", nullInput)
-
-      // then
-      expect(undefinedResult).toBe("read")
-      expect(nullResult).toBe(undefinedResult)
-    })
-
     test("#given tool with empty object input #when signature created #then returns bare tool name", () => {
       const result = createToolCallSignature("read", {})
 
@@ -164,12 +148,7 @@ describe("loop-detector", () => {
 
     describe("#given the same tool is called consecutively", () => {
       test("#when evaluated #then it triggers", () => {
-        const window = buildWindowWithInputs(
-          Array.from({ length: 20 }, () => ({
-            tool: "read",
-            input: { filePath: "/src/same.ts" },
-          }))
-        )
+        const window = buildWindow(Array.from({ length: 20 }, () => "read"))
 
         const result = detectRepetitiveToolUse(window)
 
@@ -197,12 +176,7 @@ describe("loop-detector", () => {
 
     describe("#given threshold boundary", () => {
       test("#when below threshold #then it does not trigger", () => {
-        const belowThresholdWindow = buildWindowWithInputs(
-          Array.from({ length: 19 }, () => ({
-            tool: "read",
-            input: { filePath: "/src/same.ts" },
-          }))
-        )
+        const belowThresholdWindow = buildWindow(Array.from({ length: 19 }, () => "read"))
 
         const result = detectRepetitiveToolUse(belowThresholdWindow)
 
@@ -210,12 +184,7 @@ describe("loop-detector", () => {
       })
 
       test("#when equal to threshold #then it triggers", () => {
-        const atThresholdWindow = buildWindowWithInputs(
-          Array.from({ length: 20 }, () => ({
-            tool: "read",
-            input: { filePath: "/src/same.ts" },
-          }))
-        )
+        const atThresholdWindow = buildWindow(Array.from({ length: 20 }, () => "read"))
 
         const result = detectRepetitiveToolUse(atThresholdWindow)
 
@@ -255,40 +224,15 @@ describe("loop-detector", () => {
       })
     })
 
-    describe("#given tool calls with undefined input", () => {
-      test("#when evaluated #then it does not trigger", () => {
+    describe("#given tool calls with no input", () => {
+      test("#when evaluated #then it triggers", () => {
         const calls = Array.from({ length: 20 }, () => ({ tool: "read" }))
         const window = buildWindowWithInputs(calls)
         const result = detectRepetitiveToolUse(window)
-        expect(result).toEqual({ triggered: false })
-      })
-    })
-
-    describe("#given tool calls with null input", () => {
-      test("#when evaluated #then it does not trigger", () => {
-        const calls = Array.from({ length: 20 }, () => ({ tool: "read", input: null }))
-        const window = buildWindowWithInputs(calls)
-        const result = detectRepetitiveToolUse(window)
-
-        expect(result).toEqual({ triggered: false })
-      })
-    })
-
-    describe("#given nullish tool inputs", () => {
-      test("#when recorded #then null and undefined produce the same unknown-input window", () => {
-        // given
-        const settings = resolveCircuitBreakerSettings()
-
-        // when
-        const undefinedWindow = recordToolCall(undefined, "read", settings, undefined)
-        const nullWindow = recordToolCall(undefined, "read", settings, null)
-
-        // then
-        expect(undefinedWindow).toEqual(nullWindow)
-        expect(undefinedWindow).toEqual({
-          lastSignature: "read::__unknown-input__",
-          consecutiveCount: 1,
-          threshold: settings.consecutiveThreshold,
+        expect(result).toEqual({
+          triggered: true,
+          toolName: "read",
+          repeatedCount: 20,
         })
       })
     })

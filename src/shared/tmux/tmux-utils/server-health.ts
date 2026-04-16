@@ -1,25 +1,11 @@
 let serverAvailable: boolean | null = null
 let serverCheckUrl: string | null = null
 
-const SERVER_RUNNING_KEY = Symbol.for("oh-my-opencode:server-running-in-process")
-
 function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-export function markServerRunningInProcess(): void {
-	;(globalThis as Record<symbol, boolean>)[SERVER_RUNNING_KEY] = true
-}
-
-function isMarkedRunningInProcess(): boolean {
-	return (globalThis as Record<symbol, boolean>)[SERVER_RUNNING_KEY] === true
-}
-
 export async function isServerRunning(serverUrl: string): Promise<boolean> {
-	if (isMarkedRunningInProcess()) {
-		return true
-	}
-
 	if (serverCheckUrl === serverUrl && serverAvailable === true) {
 		return true
 	}
@@ -58,5 +44,4 @@ export async function isServerRunning(serverUrl: string): Promise<boolean> {
 export function resetServerCheck(): void {
 	serverAvailable = null
 	serverCheckUrl = null
-	delete (globalThis as Record<symbol, boolean>)[SERVER_RUNNING_KEY]
 }

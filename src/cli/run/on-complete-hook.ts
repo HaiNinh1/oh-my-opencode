@@ -1,6 +1,5 @@
 import { spawnWithWindowsHide } from "../../shared/spawn-with-windows-hide"
-import { detectShellType } from "../../shared"
-import { log } from "../../shared/logger"
+import { log } from "../../shared"
 
 async function readOutput(
   stream: ReadableStream<Uint8Array> | undefined,
@@ -21,24 +20,6 @@ async function readOutput(
   }
 }
 
-function resolveHookShellCommand(command: string): string[] {
-  const shellType = detectShellType()
-
-  switch (shellType) {
-    case "powershell": {
-      const powershellExecutable = process.platform === "win32" ? "powershell.exe" : "pwsh"
-      return [powershellExecutable, "-NoProfile", "-Command", command]
-    }
-    case "cmd":
-      return [process.env.ComSpec || "cmd.exe", "/d", "/s", "/c", command]
-    case "csh":
-      return ["csh", "-c", command]
-    case "unix":
-    default:
-      return ["sh", "-c", command]
-  }
-}
-
 export async function executeOnCompleteHook(options: {
   command: string
   sessionId: string
@@ -56,8 +37,7 @@ export async function executeOnCompleteHook(options: {
   log("Running on-complete hook", { command: trimmedCommand })
 
   try {
-    const shellCommand = resolveHookShellCommand(trimmedCommand)
-    const proc = spawnWithWindowsHide(shellCommand, {
+    const proc = spawnWithWindowsHide(["sh", "-c", trimmedCommand], {
       env: {
         ...process.env,
         SESSION_ID: sessionId,

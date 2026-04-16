@@ -1,10 +1,5 @@
 export type McpScope = "user" | "project" | "local"
 
-export interface McpOAuthConfig {
-  clientId?: string
-  scopes?: string[]
-}
-
 export interface ClaudeCodeMcpServer {
   type?: "http" | "sse" | "stdio"
   url?: string
@@ -12,9 +7,10 @@ export interface ClaudeCodeMcpServer {
   args?: string[]
   env?: Record<string, string>
   headers?: Record<string, string>
-  oauth?: McpOAuthConfig
-  scope?: McpScope
-  projectPath?: string
+  oauth?: {
+    clientId?: string
+    scopes?: string[]
+  }
   disabled?: boolean
 }
 
@@ -33,7 +29,6 @@ export interface McpRemoteConfig {
   type: "remote"
   url: string
   headers?: Record<string, string>
-  oauth?: McpOAuthConfig
   enabled?: boolean
 }
 

@@ -7,31 +7,8 @@ import { BackgroundManager } from "./features/background-agent"
 import { SkillMcpManager } from "./features/skill-mcp-manager"
 import { initTaskToastManager } from "./features/task-toast-manager"
 import { TmuxSessionManager } from "./features/tmux-subagent"
-import * as openclawRuntimeDispatch from "./openclaw/runtime-dispatch"
-import { registerManagerForCleanup } from "./features/background-agent/process-cleanup"
 import { createConfigHandler } from "./plugin-handlers"
 import { log } from "./shared"
-import { markServerRunningInProcess } from "./shared/tmux/tmux-utils/server-health"
-
-type CreateManagersDeps = {
-  BackgroundManagerClass: typeof BackgroundManager
-  SkillMcpManagerClass: typeof SkillMcpManager
-  TmuxSessionManagerClass: typeof TmuxSessionManager
-  initTaskToastManagerFn: typeof initTaskToastManager
-  registerManagerForCleanupFn: typeof registerManagerForCleanup
-  createConfigHandlerFn: typeof createConfigHandler
-  markServerRunningInProcessFn: typeof markServerRunningInProcess
-}
-
-const defaultCreateManagersDeps: CreateManagersDeps = {
-  BackgroundManagerClass: BackgroundManager,
-  SkillMcpManagerClass: SkillMcpManager,
-  TmuxSessionManagerClass: TmuxSessionManager,
-  initTaskToastManagerFn: initTaskToastManager,
-  registerManagerForCleanupFn: registerManagerForCleanup,
-  createConfigHandlerFn: createConfigHandler,
-  markServerRunningInProcessFn: markServerRunningInProcess,
-}
 
 export type Managers = {
   tmuxSessionManager: TmuxSessionManager
@@ -46,33 +23,20 @@ export function createManagers(args: {
   tmuxConfig: TmuxConfig
   modelCacheState: ModelCacheState
   backgroundNotificationHookEnabled: boolean
-  deps?: Partial<CreateManagersDeps>
 }): Managers {
   const { ctx, pluginConfig, tmuxConfig, modelCacheState, backgroundNotificationHookEnabled } = args
-  const deps = { ...defaultCreateManagersDeps, ...args.deps }
 
-  if (tmuxConfig.enabled) {
-    deps.markServerRunningInProcessFn()
-  }
-  const tmuxSessionManager = new deps.TmuxSessionManagerClass(ctx, tmuxConfig)
+  const tmuxSessionManager = new TmuxSessionManager(ctx, tmuxConfig)
 
-  deps.registerManagerForCleanupFn({
-    shutdown: async () => {
-      await tmuxSessionManager.cleanup().catch((error) => {
-        log("[create-managers] tmux cleanup error during process shutdown:", error)
-      })
-    },
-  })
-
-  const backgroundManager = new deps.BackgroundManagerClass(
+  const backgroundManager = new BackgroundManager(
     ctx,
     pluginConfig.background_task,
     {
       tmuxConfig,
-      onSubagentSessionCreated: async (event: SubagentSessionCreatedEvent) => {
-        log("[create-managers] onSubagentSessionCreated callback received", {
-          sessionID: event.sessionID,
-          parentID: event.parentID,
+		onSubagentSessionCreated: async (event: SubagentSessionCreatedEvent) => {
+			log("[index] onSubagentSessionCreated callback received", {
+				sessionID: event.sessionID,
+				parentID: event.parentID,
           title: event.title,
         })
 
@@ -87,34 +51,22 @@ export function createManagers(args: {
           },
         })
 
-        if (pluginConfig.openclaw) {
-          await openclawRuntimeDispatch.dispatchOpenClawEvent({
-            config: pluginConfig.openclaw,
-            rawEvent: "session.created",
-            context: {
-              sessionId: event.sessionID,
-              projectPath: ctx.directory,
-              tmuxPaneId: tmuxSessionManager.getTrackedPaneId?.(event.sessionID) ?? process.env.TMUX_PANE,
-            },
-          })
-        }
-
-        log("[create-managers] onSubagentSessionCreated callback completed")
+        log("[index] onSubagentSessionCreated callback completed")
       },
       onShutdown: async () => {
         await tmuxSessionManager.cleanup().catch((error) => {
-          log("[create-managers] tmux cleanup error during shutdown:", error)
+          log("[index] tmux cleanup error during shutdown:", error)
         })
       },
       enableParentSessionNotifications: backgroundNotificationHookEnabled,
     },
   )
 
-  deps.initTaskToastManagerFn(ctx.client)
+  initTaskToastManager(ctx.client)
 
-  const skillMcpManager = new deps.SkillMcpManagerClass()
+  const skillMcpManager = new SkillMcpManager()
 
-  const configHandler = deps.createConfigHandlerFn({
+  const configHandler = createConfigHandler({
     ctx: { directory: ctx.directory, client: ctx.client },
     pluginConfig,
     modelCacheState,

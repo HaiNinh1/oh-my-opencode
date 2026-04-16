@@ -30,10 +30,6 @@ export function transformMcpServer(
       config.headers = expanded.headers
     }
 
-    if (expanded.oauth && Object.keys(expanded.oauth).length > 0) {
-      config.oauth = expanded.oauth
-    }
-
     return config
   }
 

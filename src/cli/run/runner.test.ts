@@ -1,24 +1,14 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test"
-import { OhMyOpenCodeConfigSchema, type OhMyOpenCodeConfig } from "../../config"
-import { resolveRunAgent } from "./agent-resolver"
-import { getAgentRuntimeName } from "../../shared/agent-display-names"
+import { describe, it, expect, beforeEach, afterEach, vi } from "bun:test"
+import type { OhMyOpenCodeConfig } from "../../config"
+import { resolveRunAgent, waitForEventProcessorShutdown } from "./runner"
 
-const createConfig = (overrides: Partial<OhMyOpenCodeConfig> = {}): OhMyOpenCodeConfig =>
-  OhMyOpenCodeConfigSchema.parse(overrides)
+const createConfig = (overrides: Partial<OhMyOpenCodeConfig> = {}): OhMyOpenCodeConfig => ({
+  ...overrides,
+})
 
 describe("resolveRunAgent", () => {
-  let consoleLogSpy: ReturnType<typeof spyOn>
-
-  beforeEach(() => {
-    consoleLogSpy = spyOn(console, "log").mockImplementation(() => {})
-  })
-
-  afterEach(() => {
-    consoleLogSpy.mockRestore()
-  })
-
   it("uses CLI agent over env and config", () => {
     // given
     const config = createConfig({ default_run_agent: "prometheus" })
@@ -32,7 +22,7 @@ describe("resolveRunAgent", () => {
     )
 
     // then
-    expect(agent).toBe(getAgentRuntimeName("hephaestus"))
+    expect(agent).toBe("Hephaestus (Deep Agent)")
   })
 
   it("uses env agent over config", () => {
@@ -44,7 +34,7 @@ describe("resolveRunAgent", () => {
     const agent = resolveRunAgent({ message: "test" }, config, env)
 
     // then
-    expect(agent).toBe(getAgentRuntimeName("atlas"))
+    expect(agent).toBe("Atlas (Plan Executor)")
   })
 
   it("uses config agent over default", () => {
@@ -55,7 +45,7 @@ describe("resolveRunAgent", () => {
     const agent = resolveRunAgent({ message: "test" }, config, {})
 
     // then
-    expect(agent).toBe(getAgentRuntimeName("prometheus"))
+    expect(agent).toBe("Prometheus (Plan Builder)")
   })
 
   it("falls back to sisyphus when none set", () => {
@@ -66,7 +56,7 @@ describe("resolveRunAgent", () => {
     const agent = resolveRunAgent({ message: "test" }, config, {})
 
     // then
-    expect(agent).toBe(getAgentRuntimeName("sisyphus"))
+    expect(agent).toBe("Sisyphus (Ultraworker)")
   })
 
   it("skips disabled sisyphus for next available core agent", () => {
@@ -77,25 +67,24 @@ describe("resolveRunAgent", () => {
     const agent = resolveRunAgent({ message: "test" }, config, {})
 
     // then
-    expect(agent).toBe(getAgentRuntimeName("hephaestus"))
+    expect(agent).toBe("Hephaestus (Deep Agent)")
   })
 
-  it("maps display-name style default_run_agent values to canonical runtime names", () => {
+  it("maps display-name style default_run_agent values to canonical display names", () => {
     // given
-    const config = createConfig({ default_run_agent: "Sisyphus - Ultraworker" })
+    const config = createConfig({ default_run_agent: "Sisyphus (Ultraworker)" })
 
     // when
     const agent = resolveRunAgent({ message: "test" }, config, {})
 
     // then
-    expect(agent).toBe(getAgentRuntimeName("sisyphus"))
+    expect(agent).toBe("Sisyphus (Ultraworker)")
   })
 })
 
 describe("waitForEventProcessorShutdown", () => {
   it("returns quickly when event processor completes", async () => {
     //#given
-    const { waitForEventProcessorShutdown } = await import("./runner")
     const eventProcessor = new Promise<void>((resolve) => {
       setTimeout(() => {
         resolve()
@@ -113,7 +102,6 @@ describe("waitForEventProcessorShutdown", () => {
 
   it("times out and continues when event processor does not complete", async () => {
     //#given
-    const { waitForEventProcessorShutdown } = await import("./runner")
     const eventProcessor = new Promise<void>(() => {})
     const timeoutMs = 200
     const start = performance.now()
@@ -130,12 +118,10 @@ describe("waitForEventProcessorShutdown", () => {
 describe("run environment setup", () => {
   let originalClient: string | undefined
   let originalRunMode: string | undefined
-  let consoleErrorSpy: ReturnType<typeof spyOn>
 
   beforeEach(() => {
     originalClient = process.env.OPENCODE_CLIENT
     originalRunMode = process.env.OPENCODE_CLI_RUN_MODE
-    consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -149,16 +135,15 @@ describe("run environment setup", () => {
     } else {
       process.env.OPENCODE_CLI_RUN_MODE = originalRunMode
     }
-    consoleErrorSpy.mockRestore()
   })
 
   it("sets OPENCODE_CLIENT to 'run' to exclude question tool from registry", async () => {
     //#given
     delete process.env.OPENCODE_CLIENT
 
-    //#when
-    const { run } = await import("./runner")
-    await run({ message: "test", model: "invalid" })
+    //#when - run() sets env vars synchronously before any async work
+    const { run } = await import(`./runner?env-setup-${Date.now()}`)
+    run({ message: "test" }).catch(() => {})
 
     //#then
     expect(String(process.env.OPENCODE_CLIENT)).toBe("run")

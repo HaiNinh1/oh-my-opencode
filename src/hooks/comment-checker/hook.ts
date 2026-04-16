@@ -22,12 +22,7 @@ import {
   processWithCli,
   processApplyPatchEditsWithCli,
 } from "./cli-runner"
-import {
-  registerPendingCall,
-  startPendingCallCleanup,
-  stopPendingCallCleanup,
-  takePendingCall,
-} from "./pending-calls"
+import { registerPendingCall, startPendingCallCleanup, takePendingCall } from "./pending-calls"
 
 import * as fs from "fs"
 import { tmpdir } from "os"
@@ -184,9 +179,6 @@ export function createCommentCheckerHooks(config?: CommentCheckerConfig) {
       } catch (err) {
         debugLog("tool.execute.after failed:", err)
       }
-    },
-    dispose: (): void => {
-      stopPendingCallCleanup()
     },
   }
 }

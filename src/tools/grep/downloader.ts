@@ -1,7 +1,6 @@
 import { existsSync, readdirSync } from "node:fs"
 import { join } from "node:path"
 import { extractZip as extractZipBase } from "../../shared"
-import { CACHE_DIR_NAME } from "../../shared/plugin-identity"
 import {
   cleanupArchive,
   downloadArchive,
@@ -40,7 +39,7 @@ function getPlatformKey(): string {
 
 function getInstallDir(): string {
   const homeDir = process.env.HOME || process.env.USERPROFILE || "."
-  return join(homeDir, ".cache", CACHE_DIR_NAME, "bin")
+  return join(homeDir, ".cache", "oh-my-opencode", "bin")
 }
 
 function getRgPath(): string {

@@ -4,23 +4,12 @@ import { randomUUID } from "node:crypto"
 import { getMainSessionID } from "../features/claude-code-session-state"
 import { clearBoulderState } from "../features/boulder-state"
 import { log } from "../shared"
-import { stripInvisibleAgentCharacters } from "../shared/agent-display-names"
 import { resolveSessionAgent } from "./session-agent-resolver"
 import { parseRalphLoopArguments } from "../hooks/ralph-loop/command-arguments"
 import { ULTRAWORK_VERIFICATION_PROMISE } from "../hooks/ralph-loop/constants"
 import { readState, writeState } from "../hooks/ralph-loop/storage"
 
 import type { CreatedHooks } from "../create-hooks"
-
-function getLoopCommandArguments(args: Record<string, unknown>, command: "ralph-loop" | "ulw-loop"): string {
-  const rawUserMessage = typeof args.user_message === "string" ? args.user_message.trim() : ""
-  if (rawUserMessage) {
-    return rawUserMessage
-  }
-
-  const rawName = typeof args.name === "string" ? args.name : ""
-  return rawName.replace(new RegExp(`^/?(${command})\\s*`, "i"), "")
-}
 
 export function createToolExecuteBeforeHandler(args: {
   ctx: PluginContext
@@ -52,30 +41,19 @@ export function createToolExecuteBeforeHandler(args: {
   }
 
   return async (input, output): Promise<void> => {
-    if (input.tool.toLowerCase() === "bash" && typeof output.args.command === "string") {
-      if (output.args.command.includes("\x00")) {
-        output.args.command = output.args.command.replace(/\x00/g, "")
-        log("[tool-execute-before] Stripped null bytes from bash command", {
-          sessionID: input.sessionID,
-          callID: input.callID,
-        })
-      }
-    }
-
     await hooks.writeExistingFileGuard?.["tool.execute.before"]?.(input, output)
     await hooks.questionLabelTruncator?.["tool.execute.before"]?.(input, output)
     await hooks.claudeCodeHooks?.["tool.execute.before"]?.(input, output)
     await hooks.nonInteractiveEnv?.["tool.execute.before"]?.(input, output)
-    await hooks.bashFileReadGuard?.["tool.execute.before"]?.(input, output)
     await hooks.commentChecker?.["tool.execute.before"]?.(input, output)
     await hooks.directoryAgentsInjector?.["tool.execute.before"]?.(input, output)
     await hooks.directoryReadmeInjector?.["tool.execute.before"]?.(input, output)
     await hooks.rulesInjector?.["tool.execute.before"]?.(input, output)
     await hooks.tasksTodowriteDisabler?.["tool.execute.before"]?.(input, output)
-    await hooks.webfetchRedirectGuard?.["tool.execute.before"]?.(input, output)
     await hooks.prometheusMdOnly?.["tool.execute.before"]?.(input, output)
     await hooks.sisyphusJuniorNotepad?.["tool.execute.before"]?.(input, output)
     await hooks.atlasHook?.["tool.execute.before"]?.(input, output)
+    await hooks.hermesRoutingGuard?.["tool.execute.before"]?.(input, output)
 
     const normalizedToolName = input.tool.toLowerCase()
     if (
@@ -110,7 +88,7 @@ export function createToolExecuteBeforeHandler(args: {
       }
 
       const normalizedSubagentType =
-        typeof argsObject.subagent_type === "string" ? stripInvisibleAgentCharacters(argsObject.subagent_type) : undefined
+        typeof argsObject.subagent_type === "string" ? argsObject.subagent_type : undefined
       const prompt = typeof argsObject.prompt === "string" ? argsObject.prompt : ""
       const loopState = typeof ctx.directory === "string" ? readState(ctx.directory) : null
       const shouldInjectOracleVerification =
@@ -148,7 +126,7 @@ export function createToolExecuteBeforeHandler(args: {
       const sessionID = input.sessionID || getMainSessionID()
 
       if (command === "ralph-loop" && sessionID) {
-        const rawArgs = getLoopCommandArguments(output.args, "ralph-loop")
+        const rawArgs = rawName?.replace(/^\/?(ralph-loop)\s*/i, "") || ""
         const parsedArguments = parseRalphLoopArguments(rawArgs)
 
         hooks.ralphLoop.startLoop(sessionID, parsedArguments.prompt, {
@@ -159,7 +137,7 @@ export function createToolExecuteBeforeHandler(args: {
       } else if (command === "cancel-ralph" && sessionID) {
         hooks.ralphLoop.cancelLoop(sessionID)
       } else if (command === "ulw-loop" && sessionID) {
-        const rawArgs = getLoopCommandArguments(output.args, "ulw-loop")
+        const rawArgs = rawName?.replace(/^\/?(ulw-loop)\s*/i, "") || ""
         const parsedArguments = parseRalphLoopArguments(rawArgs)
 
         hooks.ralphLoop.startLoop(sessionID, parsedArguments.prompt, {
@@ -184,19 +162,6 @@ export function createToolExecuteBeforeHandler(args: {
         log("[stop-continuation] All continuation mechanisms stopped", {
           sessionID,
         })
-      }
-
-      // Clear stop state when user explicitly resumes work via work-starting commands.
-      // This ensures /stop-continuation persists until the user intentionally restarts.
-      const workStartingCommands = ["start-work", "ralph-loop", "ulw-loop"]
-      if (workStartingCommands.includes(command ?? "") && sessionID) {
-        if (hooks.stopContinuationGuard?.isStopped(sessionID)) {
-          hooks.stopContinuationGuard.clear(sessionID)
-          log("[stop-continuation] Stop state cleared by work-starting command", {
-            sessionID,
-            command,
-          })
-        }
       }
     }
   }

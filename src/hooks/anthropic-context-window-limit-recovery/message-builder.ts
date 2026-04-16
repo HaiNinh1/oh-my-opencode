@@ -4,11 +4,10 @@ import { normalizeSDKResponse } from "../../shared"
 import { isSqliteBackend } from "../../shared/opencode-storage-detection"
 import {
   findEmptyMessages,
-  findMessagesWithEmptyTextParts,
   injectTextPart,
   replaceEmptyTextParts,
 } from "../session-recovery/storage"
-import { findMessagesWithEmptyTextPartsFromSDK, replaceEmptyTextPartsAsync } from "../session-recovery/storage/empty-text"
+import { replaceEmptyTextPartsAsync } from "../session-recovery/storage/empty-text"
 import { injectTextPartAsync } from "../session-recovery/storage/text-part-injector"
 import type { Client } from "./client"
 
@@ -86,14 +85,12 @@ export async function sanitizeEmptyMessagesBeforeSummarize(
 ): Promise<number> {
   if (client && isSqliteBackend()) {
     const emptyMessageIds = await findEmptyMessageIdsFromSDK(client, sessionID)
-    const emptyTextPartIds = await findMessagesWithEmptyTextPartsFromSDK(client, sessionID)
-    const allIds = [...new Set([...emptyMessageIds, ...emptyTextPartIds])]
-    if (allIds.length === 0) {
+    if (emptyMessageIds.length === 0) {
       return 0
     }
 
     let fixedCount = 0
-    for (const messageID of allIds) {
+    for (const messageID of emptyMessageIds) {
       const replaced = await replaceEmptyTextPartsAsync(client, sessionID, messageID, PLACEHOLDER_TEXT)
       if (replaced) {
         fixedCount++
@@ -109,7 +106,7 @@ export async function sanitizeEmptyMessagesBeforeSummarize(
       log("[auto-compact] pre-summarize sanitization fixed empty messages", {
         sessionID,
         fixedCount,
-        totalEmpty: allIds.length,
+        totalEmpty: emptyMessageIds.length,
       })
     }
 
@@ -117,14 +114,12 @@ export async function sanitizeEmptyMessagesBeforeSummarize(
   }
 
   const emptyMessageIds = findEmptyMessages(sessionID)
-  const emptyTextPartIds = findMessagesWithEmptyTextParts(sessionID)
-  const allIds = [...new Set([...emptyMessageIds, ...emptyTextPartIds])]
-  if (allIds.length === 0) {
+  if (emptyMessageIds.length === 0) {
     return 0
   }
 
   let fixedCount = 0
-  for (const messageID of allIds) {
+  for (const messageID of emptyMessageIds) {
     const replaced = replaceEmptyTextParts(messageID, PLACEHOLDER_TEXT)
     if (replaced) {
       fixedCount++
@@ -140,7 +135,7 @@ export async function sanitizeEmptyMessagesBeforeSummarize(
     log("[auto-compact] pre-summarize sanitization fixed empty messages", {
       sessionID,
       fixedCount,
-      totalEmpty: allIds.length,
+      totalEmpty: emptyMessageIds.length,
     })
   }
 
@@ -158,7 +153,7 @@ export async function getLastAssistant(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   client: any,
   directory: string,
-): Promise<{ info: Record<string, unknown>; hasContent: boolean } | null> {
+): Promise<Record<string, unknown> | null> {
   try {
     const resp = await (client as Client).session.messages({
       path: { id: sessionID },
@@ -175,15 +170,7 @@ export async function getLastAssistant(
       return info?.role === "assistant"
     })
     if (!last) return null
-
-    const message = last as SDKMessage & { info?: Record<string, unknown> }
-    const info = message.info
-    if (!info) return null
-
-    return {
-      info,
-      hasContent: messageHasContentFromSDK(message),
-    }
+    return (last as { info?: Record<string, unknown> }).info ?? null
   } catch {
     return null
   }

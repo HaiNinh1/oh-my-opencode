@@ -1,5 +1,4 @@
 import type { OhMyOpenCodeConfig } from "../config";
-import { setAdditionalAllowedMcpEnvVars } from "../features/claude-code-mcp-loader";
 import type { ModelCacheState } from "../plugin-state";
 import { log } from "../shared";
 import { applyAgentConfig } from "./agent-config-handler";
@@ -8,7 +7,6 @@ import { applyMcpConfig } from "./mcp-config-handler";
 import { applyProviderConfig } from "./provider-config-handler";
 import { loadPluginComponents } from "./plugin-components-loader";
 import { applyToolConfig } from "./tool-config-handler";
-import { clearFormatterCache } from "../tools/hashline-edit/formatter-trigger"
 
 export { resolveCategoryConfig } from "./category-config-resolver";
 
@@ -24,9 +22,7 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
   return async (config: Record<string, unknown>) => {
     const formatterConfig = config.formatter;
 
-    setAdditionalAllowedMcpEnvVars(pluginConfig.mcp_env_allowlist ?? [])
     applyProviderConfig({ config, modelCacheState });
-    clearFormatterCache()
 
     const pluginComponents = await loadPluginComponents({ pluginConfig });
 

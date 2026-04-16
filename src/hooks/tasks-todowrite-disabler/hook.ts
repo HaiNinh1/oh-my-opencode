@@ -1,4 +1,3 @@
-import { isTaskSystemEnabled } from "../../shared";
 import { BLOCKED_TOOLS, REPLACEMENT_MESSAGE } from "./constants";
 
 export interface TasksTodowriteDisablerConfig {
@@ -10,14 +9,14 @@ export interface TasksTodowriteDisablerConfig {
 export function createTasksTodowriteDisablerHook(
   config: TasksTodowriteDisablerConfig,
 ) {
-  const taskSystemEnabled = isTaskSystemEnabled(config);
+  const isTaskSystemEnabled = config.experimental?.task_system ?? false;
 
   return {
     "tool.execute.before": async (
       input: { tool: string; sessionID: string; callID: string },
       _output: { args: Record<string, unknown> },
     ) => {
-      if (!taskSystemEnabled) {
+      if (!isTaskSystemEnabled) {
         return;
       }
 

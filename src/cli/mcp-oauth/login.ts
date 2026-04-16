@@ -6,21 +6,7 @@ export interface LoginOptions {
   scopes?: string[]
 }
 
-export type McpOAuthProviderLike = Pick<McpOAuthProvider, "login">
-
-export interface LoginDependencies {
-  createProvider: (options: Required<Pick<LoginOptions, "serverUrl">> & Omit<LoginOptions, "serverUrl">) => McpOAuthProviderLike
-}
-
-const defaultLoginDependencies: LoginDependencies = {
-  createProvider: (options) => new McpOAuthProvider(options),
-}
-
-export async function login(
-  serverName: string,
-  options: LoginOptions,
-  deps: LoginDependencies = defaultLoginDependencies,
-): Promise<number> {
+export async function login(serverName: string, options: LoginOptions): Promise<number> {
   try {
     const serverUrl = options.serverUrl
     if (!serverUrl) {
@@ -28,7 +14,7 @@ export async function login(
       return 1
     }
 
-    const provider = deps.createProvider({
+    const provider = new McpOAuthProvider({
       serverUrl,
       clientId: options.clientId,
       scopes: options.scopes,

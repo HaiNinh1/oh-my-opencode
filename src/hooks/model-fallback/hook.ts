@@ -5,9 +5,8 @@ import { readConnectedProvidersCache, readProviderModelsCache } from "../../shar
 import { selectFallbackProvider } from "../../shared/model-error-classifier"
 import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 import { log } from "../../shared/logger"
+import { getTaskToastManager } from "../../features/task-toast-manager"
 import type { ChatMessageInput, ChatMessageHandlerOutput } from "../../plugin/chat-message"
-import { applyFallbackToChatMessage } from "./chat-message-fallback-handler"
-import { getNextReachableFallback } from "./next-fallback"
 
 type FallbackToast = (input: {
   title: string
@@ -40,14 +39,16 @@ const pendingModelFallbacks = new Map<string, ModelFallbackState>()
 const lastToastKey = new Map<string, string>()
 const sessionFallbackChains = new Map<string, FallbackEntry[]>()
 
+function canonicalizeModelID(modelID: string): string {
+  return modelID
+    .toLowerCase()
+    .replace(/\./g, "-")
+}
+
 export function setSessionFallbackChain(sessionID: string, fallbackChain: FallbackEntry[] | undefined): void {
   if (!sessionID) return
-  if (!fallbackChain) {
-    sessionFallbackChains.set(sessionID, [])
-    return
-  }
-  if (fallbackChain.length === 0) {
-    sessionFallbackChains.set(sessionID, [])
+  if (!fallbackChain || fallbackChain.length === 0) {
+    sessionFallbackChains.delete(sessionID)
     return
   }
   sessionFallbackChains.set(sessionID, fallbackChain)
@@ -69,9 +70,8 @@ export function setPendingModelFallback(
 ): boolean {
   const agentKey = getAgentConfigKey(agentName)
   const requirements = AGENT_MODEL_REQUIREMENTS[agentKey]
-  const hasSessionFallback = sessionFallbackChains.has(sessionID)
   const sessionFallback = sessionFallbackChains.get(sessionID)
-  const fallbackChain = hasSessionFallback
+  const fallbackChain = sessionFallback && sessionFallback.length > 0
     ? sessionFallback
     : requirements?.fallbackChain
 
@@ -126,9 +126,51 @@ export function getNextFallback(
 
   if (!state.pending) return null
 
-  const fallback = getNextReachableFallback(sessionID, state)
-  if (fallback) {
-    return fallback
+  const { fallbackChain } = state
+
+  const providerModelsCache = readProviderModelsCache()
+  const connectedProviders = providerModelsCache?.connected ?? readConnectedProvidersCache()
+  const connectedSet = connectedProviders ? new Set(connectedProviders) : null
+
+  const isReachable = (entry: FallbackEntry): boolean => {
+    if (!connectedSet) return true
+
+    // Gate only on provider connectivity. Provider model lists can be stale/incomplete,
+    // especially after users manually add models to opencode.json.
+    return entry.providers.some((p) => connectedSet.has(p))
+  }
+
+  while (state.attemptCount < fallbackChain.length) {
+    const attemptCount = state.attemptCount
+    const fallback = fallbackChain[attemptCount]
+    state.attemptCount++
+
+    if (!isReachable(fallback)) {
+      log("[model-fallback] Skipping unreachable fallback for session: " + sessionID + ", attempt: " + attemptCount + ", model: " + fallback.model)
+      continue
+    }
+
+    const providerID = selectFallbackProvider(fallback.providers, state.providerID)
+    const modelID = transformModelForProvider(providerID, fallback.model)
+
+    const isNoOpFallback =
+      providerID.toLowerCase() === state.providerID.toLowerCase() &&
+      canonicalizeModelID(modelID) === canonicalizeModelID(state.modelID)
+
+    if (isNoOpFallback) {
+      log("[model-fallback] Skipping no-op fallback for session: " + sessionID + ", attempt: " + attemptCount + ", model: " + fallback.model)
+      continue
+    }
+
+    state.pending = false
+
+    log("[model-fallback] Using fallback for session: " + sessionID + ", attempt: " + attemptCount + ", model: " + fallback.model)
+
+    return {
+      providerID,
+      modelID,
+      variant: fallback.variant,
+    }
   }
 
   log("[model-fallback] No more fallbacks for session: " + sessionID)
@@ -178,24 +220,50 @@ export function createModelFallbackHook(args?: { toast?: FallbackToast; onApplie
       const fallback = getNextFallback(sessionID)
       if (!fallback) return
 
-      await applyFallbackToChatMessage({
-        input,
-        output,
-        fallback,
-        toast,
-        onApplied,
-        lastToastKey,
-      })
+      output.message["model"] = {
+        providerID: fallback.providerID,
+        modelID: fallback.modelID,
+      }
+      if (fallback.variant !== undefined) {
+        output.message["variant"] = fallback.variant
+      } else {
+        delete output.message["variant"]
+      }
+      if (toast) {
+        const key = `${sessionID}:${fallback.providerID}/${fallback.modelID}:${fallback.variant ?? ""}`
+        if (lastToastKey.get(sessionID) !== key) {
+          lastToastKey.set(sessionID, key)
+          const variantLabel = fallback.variant ? ` (${fallback.variant})` : ""
+          await Promise.resolve(
+            toast({
+              title: "Model fallback",
+              message: `Using ${fallback.providerID}/${fallback.modelID}${variantLabel}`,
+              variant: "warning",
+              duration: 5000,
+            }),
+          )
+        }
+      }
+      if (onApplied) {
+        await Promise.resolve(
+          onApplied({
+            sessionID,
+            providerID: fallback.providerID,
+            modelID: fallback.modelID,
+            variant: fallback.variant,
+          }),
+        )
+      }
+
+      const toastManager = getTaskToastManager()
+      if (toastManager) {
+        const variantLabel = fallback.variant ? ` (${fallback.variant})` : ""
+        toastManager.updateTaskModelBySession(sessionID, {
+          model: `${fallback.providerID}/${fallback.modelID}${variantLabel}`,
+          type: "runtime-fallback",
+        })
+      }
+      log("[model-fallback] Applied fallback model: " + JSON.stringify(fallback))
     },
   }
-}
-
-/**
- * Resets all module-global state for testing.
- * Clears pending fallbacks, toast keys, and session chains.
- */
-export function _resetForTesting(): void {
-  pendingModelFallbacks.clear()
-  lastToastKey.clear()
-  sessionFallbackChains.clear()
 }

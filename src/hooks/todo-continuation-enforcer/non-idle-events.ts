@@ -25,23 +25,14 @@ export function handleNonIdleEvent(args: {
           return
         }
       }
-      if (state) {
-        state.abortDetectedAt = undefined
-        state.wasCancelled = false
-        state.tokenLimitDetected = false
-        sessionStateStore.recordActivity(sessionID)
-      }
+      if (state) state.abortDetectedAt = undefined
       sessionStateStore.cancelCountdown(sessionID)
       return
     }
 
     if (role === "assistant") {
       const state = sessionStateStore.getExistingState(sessionID)
-      if (state) {
-        state.abortDetectedAt = undefined
-        state.wasCancelled = false
-        sessionStateStore.recordActivity(sessionID)
-      }
+      if (state) state.abortDetectedAt = undefined
       sessionStateStore.cancelCountdown(sessionID)
       return
     }
@@ -50,33 +41,13 @@ export function handleNonIdleEvent(args: {
   }
 
   if (eventType === "message.part.updated") {
-    const sessionID = typeof properties?.sessionID === "string"
-      ? properties.sessionID
-      : undefined
-    const legacyInfo = properties?.info as Record<string, unknown> | undefined
-    const legacySessionID = legacyInfo?.sessionID as string | undefined
-    const targetSessionID = sessionID ?? legacySessionID
+    const info = properties?.info as Record<string, unknown> | undefined
+    const sessionID = info?.sessionID as string | undefined
+    const role = info?.role as string | undefined
 
-    if (targetSessionID) {
-      const state = sessionStateStore.getExistingState(targetSessionID)
-      if (state) {
-        state.abortDetectedAt = undefined
-        sessionStateStore.recordActivity(targetSessionID)
-      }
-      sessionStateStore.cancelCountdown(targetSessionID)
-    }
-    return
-  }
-
-  if (eventType === "message.part.delta") {
-    const sessionID = properties?.sessionID as string | undefined
-    if (sessionID) {
+    if (sessionID && role === "assistant") {
       const state = sessionStateStore.getExistingState(sessionID)
-      if (state) {
-        state.abortDetectedAt = undefined
-        state.wasCancelled = false
-        sessionStateStore.recordActivity(sessionID)
-      }
+      if (state) state.abortDetectedAt = undefined
       sessionStateStore.cancelCountdown(sessionID)
     }
     return
@@ -86,11 +57,7 @@ export function handleNonIdleEvent(args: {
     const sessionID = properties?.sessionID as string | undefined
     if (sessionID) {
       const state = sessionStateStore.getExistingState(sessionID)
-      if (state) {
-        state.abortDetectedAt = undefined
-        state.wasCancelled = false
-        sessionStateStore.recordActivity(sessionID)
-      }
+      if (state) state.abortDetectedAt = undefined
       sessionStateStore.cancelCountdown(sessionID)
     }
     return

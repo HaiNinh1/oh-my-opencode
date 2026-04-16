@@ -30,7 +30,7 @@ export function parseOpenCodeConfigFileWithError(path: string): ParseConfigResul
 
     const config = parseJsonc<OpenCodeConfig>(content)
 
-    if (config == null) {
+    if (config === null || config === undefined) {
       return { config: null, error: `Config file parsed to null/undefined: ${path}. Ensure it contains valid JSON.` }
     }
 

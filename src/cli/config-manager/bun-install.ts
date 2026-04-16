@@ -1,5 +1,4 @@
 import { existsSync } from "node:fs"
-import { join } from "node:path"
 
 import { getOpenCodeCacheDir } from "../../shared/data-path"
 import { log } from "../../shared/logger"
@@ -41,10 +40,6 @@ export async function runBunInstall(): Promise<boolean> {
   return result.success
 }
 
-function getDefaultWorkspaceDir(): string {
-  return join(getOpenCodeCacheDir(), "packages")
-}
-
 function readProcessOutput(stream: ProcessOutputStream): Promise<string> {
   if (!stream) {
     return Promise.resolve("")
@@ -72,7 +67,7 @@ function logCapturedOutputOnFailure(outputMode: BunInstallOutputMode, output: Bu
 
 export async function runBunInstallWithDetails(options?: RunBunInstallOptions): Promise<BunInstallResult> {
   const outputMode = options?.outputMode ?? "pipe"
-  const cacheDir = options?.workspaceDir ?? getDefaultWorkspaceDir()
+  const cacheDir = options?.workspaceDir ?? getOpenCodeCacheDir()
   const packageJsonPath = `${cacheDir}/package.json`
 
   if (!existsSync(packageJsonPath)) {

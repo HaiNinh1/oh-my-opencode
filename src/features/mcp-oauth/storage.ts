@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs"
+import { chmodSync, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { getOpenCodeConfigDir } from "../../shared"
 
@@ -82,10 +82,8 @@ function writeStore(store: TokenStore): boolean {
       mkdirSync(dir, { recursive: true })
     }
 
-    const tempPath = `${filePath}.tmp.${Date.now()}`
-    writeFileSync(tempPath, JSON.stringify(store, null, 2), { encoding: "utf-8", mode: 0o600 })
-    chmodSync(tempPath, 0o600)
-    renameSync(tempPath, filePath)
+    writeFileSync(filePath, JSON.stringify(store, null, 2), { encoding: "utf-8", mode: 0o600 })
+    chmodSync(filePath, 0o600)
     return true
   } catch {
     return false

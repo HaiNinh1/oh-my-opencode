@@ -54,7 +54,7 @@ export async function promptInstallConfig(detected: DetectedConfig): Promise<Ins
     message: "Will you integrate Google Gemini?",
     options: [
       { value: "no", label: "No", hint: "Frontend/docs agents will use fallback" },
-      { value: "yes", label: "Yes", hint: "Beautiful UI generation with Gemini 3.1 Pro" },
+      { value: "yes", label: "Yes", hint: "Beautiful UI generation with Gemini 3 Pro" },
     ],
     initialValue: initial.gemini,
   })
@@ -110,16 +110,6 @@ export async function promptInstallConfig(detected: DetectedConfig): Promise<Ins
   })
   if (!opencodeGo) return null
 
-  const vercelAiGateway = await selectOrCancel({
-    message: "Do you have a Vercel AI Gateway API key?",
-    options: [
-      { value: "no", label: "No", hint: "Will use other configured providers" },
-      { value: "yes", label: "Yes", hint: "Universal proxy for OpenAI, Anthropic, Google, etc." },
-    ],
-    initialValue: initial.vercelAiGateway,
-  })
-  if (!vercelAiGateway) return null
-
   return {
     hasClaude: claude !== "no",
     isMax20: claude === "max20",
@@ -130,6 +120,5 @@ export async function promptInstallConfig(detected: DetectedConfig): Promise<Ins
     hasZaiCodingPlan: zaiCodingPlan === "yes",
     hasKimiForCoding: kimiForCoding === "yes",
     hasOpencodeGo: opencodeGo === "yes",
-    hasVercelAiGateway: vercelAiGateway === "yes",
   }
 }

@@ -1,3 +1,5 @@
+// ===== New 3-tier doctor types =====
+
 export type DoctorMode = "default" | "status" | "verbose"
 
 export interface DoctorOptions {
@@ -70,6 +72,8 @@ export interface DoctorResult {
   summary: DoctorSummary
   exitCode: number
 }
+
+// ===== Legacy types (used by existing checks until migration) =====
 
 export type CheckCategory =
   | "installation"

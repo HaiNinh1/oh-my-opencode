@@ -1,5 +1,5 @@
 # Dependencies
-.sisyphus/*
+.sisyphus/boulder.json
 !.sisyphus/rules/
 node_modules/
 
@@ -37,3 +37,6 @@ notepad.md
 oauth-success.html
 *.bun-build
 .omx/
+
+# Session dumps
+session-ses_*.md

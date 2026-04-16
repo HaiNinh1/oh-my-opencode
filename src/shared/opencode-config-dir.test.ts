@@ -1,6 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test"
 import { homedir } from "node:os"
-import { join, resolve, win32 } from "node:path"
+import { join, resolve } from "node:path"
 import {
   getOpenCodeConfigDir,
   getOpenCodeConfigPaths,
@@ -241,10 +241,9 @@ describe("opencode-config-dir", () => {
         // when getOpenCodeConfigDir is called with binary="opencode-desktop"
         const result = getOpenCodeConfigDir({ binary: "opencode-desktop", version: "1.0.200", checkExisting: false })
 
-        // then returns %APPDATA%/ai.opencode.desktop using Windows path semantics
-        expect(result).toBe(win32.join("C:\\Users\\TestUser\\AppData\\Roaming", TAURI_APP_IDENTIFIER))
+        // then returns %APPDATA%/ai.opencode.desktop
+        expect(result).toBe(join("C:\\Users\\TestUser\\AppData\\Roaming", TAURI_APP_IDENTIFIER))
       })
-
     })
 
     describe("dev build detection", () => {
@@ -289,7 +288,7 @@ describe("opencode-config-dir", () => {
       expect(paths.configJson).toBe(join(expectedDir, "opencode.json"))
       expect(paths.configJsonc).toBe(join(expectedDir, "opencode.jsonc"))
       expect(paths.packageJson).toBe(join(expectedDir, "package.json"))
-      expect(paths.omoConfig).toBe(join(expectedDir, "oh-my-openagent.json"))
+      expect(paths.omoConfig).toBe(join(expectedDir, "oh-my-opencode.json"))
     })
 
     test("returns all config paths for desktop binary", () => {
@@ -305,7 +304,7 @@ describe("opencode-config-dir", () => {
       expect(paths.configJson).toBe(join(expectedDir, "opencode.json"))
       expect(paths.configJsonc).toBe(join(expectedDir, "opencode.jsonc"))
       expect(paths.packageJson).toBe(join(expectedDir, "package.json"))
-      expect(paths.omoConfig).toBe(join(expectedDir, "oh-my-openagent.json"))
+      expect(paths.omoConfig).toBe(join(expectedDir, "oh-my-opencode.json"))
     })
   })
 

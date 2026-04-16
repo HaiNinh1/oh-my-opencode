@@ -10,9 +10,9 @@ describe("Agent Config Integration", () => {
       const oldConfig = {
         Sisyphus: { model: "anthropic/claude-opus-4-6" },
         Atlas: { model: "anthropic/claude-opus-4-6" },
-        "Prometheus - Plan Builder": { model: "anthropic/claude-opus-4-6" },
-        "Metis - Plan Consultant": { model: "anthropic/claude-sonnet-4-6" },
-        "Momus - Plan Critic": { model: "anthropic/claude-sonnet-4-6" },
+        "Prometheus (Planner)": { model: "anthropic/claude-opus-4-6" },
+        "Metis (Plan Consultant)": { model: "anthropic/claude-sonnet-4-6" },
+        "Momus (Plan Reviewer)": { model: "anthropic/claude-sonnet-4-6" },
       }
 
       // when - migration is applied
@@ -28,9 +28,9 @@ describe("Agent Config Integration", () => {
       // then - old keys are removed
       expect(result.migrated).not.toHaveProperty("Sisyphus")
       expect(result.migrated).not.toHaveProperty("Atlas")
-      expect(result.migrated).not.toHaveProperty("Prometheus - Plan Builder")
-      expect(result.migrated).not.toHaveProperty("Metis - Plan Consultant")
-      expect(result.migrated).not.toHaveProperty("Momus - Plan Critic")
+      expect(result.migrated).not.toHaveProperty("Prometheus (Planner)")
+      expect(result.migrated).not.toHaveProperty("Metis (Plan Consultant)")
+      expect(result.migrated).not.toHaveProperty("Momus (Plan Reviewer)")
 
       // then - values are preserved
       expect(result.migrated.sisyphus).toEqual({ model: "anthropic/claude-opus-4-6" })
@@ -64,7 +64,7 @@ describe("Agent Config Integration", () => {
       const mixedConfig = {
         Sisyphus: { model: "anthropic/claude-opus-4-6" },
         oracle: { model: "openai/gpt-5.4" },
-        "Prometheus - Plan Builder": { model: "anthropic/claude-opus-4-6" },
+        "Prometheus (Planner)": { model: "anthropic/claude-opus-4-6" },
         librarian: { model: "opencode/big-pickle" },
       }
 
@@ -86,18 +86,17 @@ describe("Agent Config Integration", () => {
   describe("Display name resolution", () => {
     test("returns correct display names for all builtin agents", () => {
       // given - lowercase config keys
-      const agents = ["sisyphus", "hephaestus", "prometheus", "atlas", "metis", "momus", "oracle", "librarian", "explore", "multimodal-looker"]
+      const agents = ["sisyphus", "atlas", "prometheus", "metis", "momus", "oracle", "librarian", "explore", "multimodal-looker"]
 
       // when - display names are requested
       const displayNames = agents.map((agent) => getAgentDisplayName(agent))
 
       // then - display names are correct
-      expect(displayNames).toContain("Sisyphus - Ultraworker")
-      expect(displayNames).toContain("Hephaestus - Deep Agent")
-      expect(displayNames).toContain("Prometheus - Plan Builder")
-      expect(displayNames).toContain("Atlas - Plan Executor")
-      expect(displayNames).toContain("Metis - Plan Consultant")
-      expect(displayNames).toContain("Momus - Plan Critic")
+      expect(displayNames).toContain("Sisyphus (Ultraworker)")
+      expect(displayNames).toContain("Atlas (Plan Executor)")
+      expect(displayNames).toContain("Prometheus (Plan Builder)")
+      expect(displayNames).toContain("Metis (Plan Consultant)")
+      expect(displayNames).toContain("Momus (Plan Critic)")
       expect(displayNames).toContain("oracle")
       expect(displayNames).toContain("librarian")
       expect(displayNames).toContain("explore")
@@ -112,12 +111,12 @@ describe("Agent Config Integration", () => {
       const displayNames = keys.map((key) => getAgentDisplayName(key))
 
       // then - correct display names are returned
-      expect(displayNames[0]).toBe("Sisyphus - Ultraworker")
-      expect(displayNames[1]).toBe("Atlas - Plan Executor")
-      expect(displayNames[2]).toBe("Sisyphus - Ultraworker")
-      expect(displayNames[3]).toBe("Atlas - Plan Executor")
-      expect(displayNames[4]).toBe("Prometheus - Plan Builder")
-      expect(displayNames[5]).toBe("Prometheus - Plan Builder")
+      expect(displayNames[0]).toBe("Sisyphus (Ultraworker)")
+      expect(displayNames[1]).toBe("Atlas (Plan Executor)")
+      expect(displayNames[2]).toBe("Sisyphus (Ultraworker)")
+      expect(displayNames[3]).toBe("Atlas (Plan Executor)")
+      expect(displayNames[4]).toBe("Prometheus (Plan Builder)")
+      expect(displayNames[5]).toBe("Prometheus (Plan Builder)")
     })
 
     test("returns original key for unknown agents", () => {
@@ -146,7 +145,7 @@ describe("Agent Config Integration", () => {
 
     test("model requirements include all builtin agents", () => {
       // given - expected builtin agents
-      const expectedAgents = ["sisyphus", "hephaestus", "prometheus", "atlas", "metis", "momus", "oracle", "librarian", "explore", "multimodal-looker"]
+      const expectedAgents = ["sisyphus", "atlas", "prometheus", "metis", "momus", "oracle", "librarian", "explore", "multimodal-looker"]
 
       // when - checking AGENT_MODEL_REQUIREMENTS
       const agentKeys = Object.keys(AGENT_MODEL_REQUIREMENTS)
@@ -174,7 +173,7 @@ describe("Agent Config Integration", () => {
       // given - old format config
       const oldConfig = {
         Sisyphus: { model: "anthropic/claude-opus-4-6", temperature: 0.1 },
-        "Prometheus - Plan Builder": { model: "anthropic/claude-opus-4-6" },
+        "Prometheus (Planner)": { model: "anthropic/claude-opus-4-6" },
       }
 
       // when - config is migrated
@@ -189,8 +188,8 @@ describe("Agent Config Integration", () => {
       const prometheusDisplay = getAgentDisplayName("prometheus")
 
       // then - display names are correct
-      expect(sisyphusDisplay).toBe("Sisyphus - Ultraworker")
-      expect(prometheusDisplay).toBe("Prometheus - Plan Builder")
+      expect(sisyphusDisplay).toBe("Sisyphus (Ultraworker)")
+      expect(prometheusDisplay).toBe("Prometheus (Plan Builder)")
 
       // then - config values are preserved
       expect(result.migrated.sisyphus).toEqual({ model: "anthropic/claude-opus-4-6", temperature: 0.1 })
@@ -218,8 +217,8 @@ describe("Agent Config Integration", () => {
       const atlasDisplay = getAgentDisplayName("atlas")
 
       // then - display names are correct
-      expect(sisyphusDisplay).toBe("Sisyphus - Ultraworker")
-      expect(atlasDisplay).toBe("Atlas - Plan Executor")
+      expect(sisyphusDisplay).toBe("Sisyphus (Ultraworker)")
+      expect(atlasDisplay).toBe("Atlas (Plan Executor)")
     })
   })
 })

@@ -2,16 +2,8 @@ import { readdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import type { StoredMessage } from "../hook-message-injector"
 import { getCompactionAgentConfigCheckpoint } from "../../shared/compaction-agent-config-checkpoint"
-import {
-  hasCompactionPartInStorage,
-  isCompactionAgent,
-  isCompactionMessage,
-} from "../../shared/compaction-marker"
-
-export { isCompactionAgent } from "../../shared/compaction-marker"
 
 type SessionMessage = {
-  id?: string
   info?: {
     agent?: string
     model?: {
@@ -23,7 +15,10 @@ type SessionMessage = {
     modelID?: string
     tools?: StoredMessage["tools"]
   }
-  parts?: Array<{ type?: string }>
+}
+
+export function isCompactionAgent(agent: string | undefined): boolean {
+  return agent?.trim().toLowerCase() === "compaction"
 }
 
 function hasFullAgentAndModel(message: StoredMessage): boolean {
@@ -40,10 +35,6 @@ function hasPartialAgentOrModel(message: StoredMessage): boolean {
 }
 
 function convertSessionMessageToStoredMessage(message: SessionMessage): StoredMessage | null {
-  if (isCompactionMessage(message)) {
-    return null
-  }
-
   const info = message.info
   if (!info) {
     return null
@@ -147,11 +138,7 @@ export function findNearestMessageExcludingCompaction(
     for (const file of files) {
       try {
         const content = readFileSync(join(messageDir, file), "utf-8")
-        const parsed = JSON.parse(content) as StoredMessage & { id?: string }
-        if (hasCompactionPartInStorage(parsed.id) || isCompactionAgent(parsed.agent)) {
-          continue
-        }
-        messages.push(parsed)
+        messages.push(JSON.parse(content) as StoredMessage)
       } catch {
         continue
       }

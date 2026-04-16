@@ -1,14 +1,22 @@
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test"
-import * as childProcess from "node:child_process"
+import { describe, expect, test, mock, beforeEach } from "bun:test"
 import { existsSync, mkdtempSync, writeFileSync, unlinkSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
-type ImageConverterModule = typeof import("./image-converter")
+const originalChildProcess = await import("node:child_process")
 
-async function loadImageConverter(): Promise<ImageConverterModule> {
-  return import(`./image-converter?test=${Date.now()}-${Math.random()}`)
-}
+const execFileSyncMock = mock((_command: string, _args: string[], _options?: unknown) => "")
+const execSyncMock = mock(() => {
+  throw new Error("execSync should not be called")
+})
+
+mock.module("node:child_process", () => ({
+  ...originalChildProcess,
+  execFileSync: execFileSyncMock,
+  execSync: execSyncMock,
+}))
+
+const { convertImageToJpeg, cleanupConvertedImage } = await import("./image-converter")
 
 function writeConvertedOutput(command: string, args: string[]): void {
   if (command === "sips") {
@@ -30,10 +38,7 @@ function writeConvertedOutput(command: string, args: string[]): void {
   }
 }
 
-async function withMockPlatform<TValue>(
-  platform: NodeJS.Platform,
-  run: () => TValue | Promise<TValue>,
-): Promise<TValue> {
+function withMockPlatform<TValue>(platform: NodeJS.Platform, run: () => TValue): TValue {
   const originalPlatform = process.platform
   Object.defineProperty(process, "platform", {
     value: platform,
@@ -41,7 +46,7 @@ async function withMockPlatform<TValue>(
   })
 
   try {
-    return await run()
+    return run()
   } finally {
     Object.defineProperty(process, "platform", {
       value: originalPlatform,
@@ -51,50 +56,34 @@ async function withMockPlatform<TValue>(
 }
 
 describe("image-converter command execution safety", () => {
-  let execFileSyncSpy: ReturnType<typeof spyOn>
-  let execSyncSpy: ReturnType<typeof spyOn>
-
   beforeEach(() => {
-    execSyncSpy = spyOn(childProcess, "execSync").mockImplementation(() => {
-      throw new Error("execSync should not be called")
-    })
-
-    execFileSyncSpy = spyOn(childProcess, "execFileSync").mockImplementation(
-      ((_command: string, _args: string[], _options?: unknown) => "") as typeof childProcess.execFileSync,
-    )
+    execFileSyncMock.mockReset()
+    execSyncMock.mockReset()
   })
 
-  afterEach(() => {
-    execFileSyncSpy.mockRestore()
-    execSyncSpy.mockRestore()
-  })
-
-  test("uses execFileSync with argument arrays for conversion commands", async () => {
+  test("uses execFileSync with argument arrays for conversion commands", () => {
     const testDir = mkdtempSync(join(tmpdir(), "img-converter-test-"))
     const inputPath = join(testDir, "evil$(touch_pwn).heic")
     writeFileSync(inputPath, "fake-heic-data")
-    const { convertImageToJpeg } = await loadImageConverter()
 
-    execFileSyncSpy.mockImplementation(
-      ((command: string, args: string[]) => {
-        writeConvertedOutput(command, args)
-        return ""
-      }) as typeof childProcess.execFileSync,
-    )
+    execFileSyncMock.mockImplementation((command: string, args: string[]) => {
+      writeConvertedOutput(command, args)
+      return ""
+    })
 
     const outputPath = convertImageToJpeg(inputPath, "image/heic")
 
-    expect(execSyncSpy).not.toHaveBeenCalled()
-    expect(execFileSyncSpy).toHaveBeenCalled()
+    expect(execSyncMock).not.toHaveBeenCalled()
+    expect(execFileSyncMock).toHaveBeenCalled()
 
-    const [firstCommand, firstArgs] = execFileSyncSpy.mock.calls[0] as [string, string[]]
+    const [firstCommand, firstArgs] = execFileSyncMock.mock.calls[0] as [string, string[]]
     expect(typeof firstCommand).toBe("string")
     expect(Array.isArray(firstArgs)).toBe(true)
     expect(["sips", "convert", "magick"]).toContain(firstCommand)
     expect(firstArgs).toContain("--")
     expect(firstArgs).toContain(inputPath)
     expect(firstArgs.indexOf("--") < firstArgs.indexOf(inputPath)).toBe(true)
-    expect(firstArgs.join(" ")).not.toContain(`"${inputPath}"`)
+    expect(firstArgs.join(" ")).not.toContain(`\"${inputPath}\"`)
 
     expect(existsSync(outputPath)).toBe(true)
 
@@ -103,18 +92,15 @@ describe("image-converter command execution safety", () => {
     rmSync(testDir, { recursive: true, force: true })
   })
 
-  test("removes temporary conversion directory during cleanup", async () => {
+  test("removes temporary conversion directory during cleanup", () => {
     const testDir = mkdtempSync(join(tmpdir(), "img-converter-cleanup-test-"))
     const inputPath = join(testDir, "photo.heic")
     writeFileSync(inputPath, "fake-heic-data")
-    const { convertImageToJpeg, cleanupConvertedImage } = await loadImageConverter()
 
-    execFileSyncSpy.mockImplementation(
-      ((command: string, args: string[]) => {
-        writeConvertedOutput(command, args)
-        return ""
-      }) as typeof childProcess.execFileSync,
-    )
+    execFileSyncMock.mockImplementation((command: string, args: string[]) => {
+      writeConvertedOutput(command, args)
+      return ""
+    })
 
     const outputPath = convertImageToJpeg(inputPath, "image/heic")
     const conversionDirectory = dirname(outputPath)
@@ -129,25 +115,22 @@ describe("image-converter command execution safety", () => {
     rmSync(testDir, { recursive: true, force: true })
   })
 
-  test("uses magick command on non-darwin platforms to avoid convert.exe collision", async () => {
-    await withMockPlatform("linux", async () => {
+  test("uses magick command on non-darwin platforms to avoid convert.exe collision", () => {
+    withMockPlatform("linux", () => {
       const testDir = mkdtempSync(join(tmpdir(), "img-converter-platform-test-"))
       const inputPath = join(testDir, "photo.heic")
       writeFileSync(inputPath, "fake-heic-data")
-      const { convertImageToJpeg, cleanupConvertedImage } = await loadImageConverter()
 
-      execFileSyncSpy.mockImplementation(
-        ((command: string, args: string[]) => {
-          if (command === "magick") {
-            writeFileSync(args[2], "jpeg")
-          }
-          return ""
-        }) as typeof childProcess.execFileSync,
-      )
+      execFileSyncMock.mockImplementation((command: string, args: string[]) => {
+        if (command === "magick") {
+          writeFileSync(args[2], "jpeg")
+        }
+        return ""
+      })
 
       const outputPath = convertImageToJpeg(inputPath, "image/heic")
 
-      const [command, args] = execFileSyncSpy.mock.calls[0] as [string, string[]]
+      const [command, args] = execFileSyncMock.mock.calls[0] as [string, string[]]
       expect(command).toBe("magick")
       expect(args).toContain("--")
       expect(args.indexOf("--") < args.indexOf(inputPath)).toBe(true)
@@ -159,22 +142,19 @@ describe("image-converter command execution safety", () => {
     })
   })
 
-  test("applies timeout when executing conversion commands", async () => {
+  test("applies timeout when executing conversion commands", () => {
     const testDir = mkdtempSync(join(tmpdir(), "img-converter-timeout-test-"))
     const inputPath = join(testDir, "photo.heic")
     writeFileSync(inputPath, "fake-heic-data")
-    const { convertImageToJpeg, cleanupConvertedImage } = await loadImageConverter()
 
-    execFileSyncSpy.mockImplementation(
-      ((command: string, args: string[]) => {
-        writeConvertedOutput(command, args)
-        return ""
-      }) as typeof childProcess.execFileSync,
-    )
+    execFileSyncMock.mockImplementation((command: string, args: string[]) => {
+      writeConvertedOutput(command, args)
+      return ""
+    })
 
     const outputPath = convertImageToJpeg(inputPath, "image/heic")
 
-    const options = execFileSyncSpy.mock.calls[0]?.[2] as { timeout?: number } | undefined
+    const options = execFileSyncMock.mock.calls[0]?.[2] as { timeout?: number } | undefined
     expect(options).toBeDefined()
     expect(typeof options?.timeout).toBe("number")
     expect((options?.timeout ?? 0) > 0).toBe(true)
@@ -184,16 +164,15 @@ describe("image-converter command execution safety", () => {
     rmSync(testDir, { recursive: true, force: true })
   })
 
-  test("attaches temporary output path to conversion errors", async () => {
-    await withMockPlatform("linux", async () => {
+  test("attaches temporary output path to conversion errors", () => {
+    withMockPlatform("linux", () => {
       const testDir = mkdtempSync(join(tmpdir(), "img-converter-failure-test-"))
       const inputPath = join(testDir, "photo.heic")
       writeFileSync(inputPath, "fake-heic-data")
-      const { convertImageToJpeg } = await loadImageConverter()
 
-      execFileSyncSpy.mockImplementation((() => {
+      execFileSyncMock.mockImplementation(() => {
         throw new Error("conversion process failed")
-      }) as typeof childProcess.execFileSync)
+      })
 
       const runConversion = () => convertImageToJpeg(inputPath, "image/heic")
       expect(runConversion).toThrow("No image conversion tool available")
