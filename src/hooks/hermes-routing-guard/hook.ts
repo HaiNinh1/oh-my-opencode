@@ -10,6 +10,13 @@ import { isHermesAgent } from "./agent-matcher"
 import { getAgentFromSession } from "../prometheus-md-only/agent-resolution"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
 import { log } from "../../shared/logger"
+import { HermesProxyState } from "../../shared/hermes-proxy-state"
+
+const HERMES_BLOCKED_TOOLS_WHEN_PINNED = new Set([
+  "get_agent_prompts",
+  "resolve_atlas_context",
+  "resolve_heracles_context",
+])
 
 export function createHermesRoutingGuardHook(ctx: PluginInput) {
   return {
@@ -17,16 +24,128 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
       input: { tool: string; sessionID: string; callID: string },
       output: { args: Record<string, unknown> },
     ): Promise<void> => {
-      if (input.tool !== "task") {
-        return
-      }
-
       const agentName = await getAgentFromSession(input.sessionID, ctx.directory, ctx.client)
 
       if (!isHermesAgent(agentName)) {
         return
       }
 
+      // Proxy enforcement: block helper tools when session is pinned
+      if (HERMES_BLOCKED_TOOLS_WHEN_PINNED.has(input.tool) && HermesProxyState.hasTarget(input.sessionID)) {
+        log(`[${HOOK_NAME}] Blocked: helper tool in pinned proxy session`, {
+          sessionID: input.sessionID,
+          tool: input.tool,
+        })
+        throw new Error(
+          `[${HOOK_NAME}] Tool '${input.tool}' is blocked in pinned proxy session. ` +
+          `The session is pinned to '${HermesProxyState.get(input.sessionID)?.targetAgent}'. ` +
+          `Forward the user's request using task(session_id=..., prompt=...) instead.`
+        )
+      }
+
+      if (input.tool !== "task") {
+        return
+      }
+
+      const proxyState = HermesProxyState.get(input.sessionID)
+
+      // Proxy enforcement for task() calls when proxy target is set
+      if (proxyState) {
+        // Block background mode in proxy sessions
+        if (output.args.run_in_background === true) {
+          log(`[${HOOK_NAME}] Blocked: background mode in proxy session`, {
+            sessionID: input.sessionID,
+          })
+          throw new Error(
+            `[${HOOK_NAME}] Background routing is not supported in proxy mode. ` +
+            `Use synchronous task() calls to route to '${proxyState.targetAgent}'.`
+          )
+        }
+
+        // Block category routing (existing behavior, reinforced)
+        const category = typeof output.args.category === "string" ? output.args.category : undefined
+        if (category) {
+          log(`[${HOOK_NAME}] Blocked: category routing in proxy session`, {
+            sessionID: input.sessionID,
+            category,
+          })
+          throw new Error(buildCategoryViolationMessage(category))
+        }
+
+        if (proxyState.childSessionID) {
+          // Post-pin: rewrite all task() calls to use the pinned child session
+          const existingSessionId = typeof output.args.session_id === "string"
+            ? output.args.session_id
+            : undefined
+
+          // Allow if task already targets the correct child session
+          if (existingSessionId === proxyState.childSessionID) {
+            log(`[${HOOK_NAME}] Allowed: task() targeting pinned child session`, {
+              sessionID: input.sessionID,
+              childSessionID: proxyState.childSessionID,
+            })
+            return
+          }
+
+          // Rewrite task() to target pinned child session
+          output.args.session_id = proxyState.childSessionID
+          delete output.args.category
+          delete output.args.subagent_type
+          log(`[${HOOK_NAME}] Rewrote: task() args to pinned child session`, {
+            sessionID: input.sessionID,
+            childSessionID: proxyState.childSessionID,
+            targetAgent: proxyState.targetAgent,
+          })
+          return
+        }
+
+        // Pre-pin: validate that the first task() call matches the declared target
+      const subagentType = typeof output.args.subagent_type === "string" ? output.args.subagent_type : undefined
+
+        if (subagentType) {
+          const normalizedType = getAgentConfigKey(resolveAgentAbbreviation(subagentType.trim()))
+          if (normalizedType !== proxyState.targetAgent) {
+            log(`[${HOOK_NAME}] Blocked: task() target mismatch with proxy target`, {
+              sessionID: input.sessionID,
+              declaredTarget: proxyState.targetAgent,
+              attemptedTarget: subagentType,
+            })
+            throw new Error(
+              `[${HOOK_NAME}] Cannot route to '${subagentType}'. ` +
+              `Session is pinned to '${proxyState.targetAgent}'. ` +
+              `Use task(subagent_type="${proxyState.targetAgent}", prompt="...") instead.`
+            )
+          }
+
+          log(`[${HOOK_NAME}] Allowed: first task() matches proxy target`, {
+            sessionID: input.sessionID,
+            targetAgent: proxyState.targetAgent,
+          })
+          return
+        }
+
+        // Pre-pin: reject session_id since no child session has been created yet.
+        // Hermes should not have a valid session_id to continue before the first successful task().
+        const sessionId = typeof output.args.session_id === "string"
+          ? output.args.session_id
+          : undefined
+        if (sessionId) {
+          log(`[${HOOK_NAME}] Blocked: task() with session_id before child session is pinned`, {
+            sessionID: input.sessionID,
+            attemptedSessionID: sessionId,
+            targetAgent: proxyState.targetAgent,
+          })
+          throw new Error(
+            `[${HOOK_NAME}] Cannot continue session '${sessionId}' before first task completion. ` +
+            `Call task(subagent_type="${proxyState.targetAgent}", prompt="...") to start the proxy session.`
+          )
+        }
+
+        // No subagent_type and no session_id - allow through (Hermes may still be deciding)
+        return
+      }
+
+      // Original guard logic for non-proxy Hermes sessions
       const category = typeof output.args.category === "string" ? output.args.category : undefined
       const subagentType = typeof output.args.subagent_type === "string" ? output.args.subagent_type : undefined
 

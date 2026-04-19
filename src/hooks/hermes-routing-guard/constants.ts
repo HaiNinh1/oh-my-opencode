@@ -15,6 +15,12 @@ export const HERMES_ALLOWED_SUBAGENT_TYPES = [
   "sisyphus",
 ] as const
 
+/**
+ * Set-based lookup for Hermes allowed targets.
+ * Used by chat-message proxy parsing and routing guard enforcement.
+ */
+export const HERMES_ALLOWED_AGENTS_SET = new Set<string>(HERMES_ALLOWED_SUBAGENT_TYPES)
+
 const MIN_PREFIX_LENGTH = 3
 
 /**

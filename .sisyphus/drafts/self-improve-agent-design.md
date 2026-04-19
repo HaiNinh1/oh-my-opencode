@@ -23,19 +23,18 @@ The system is a **3-stage loop** built on an **immune-system lifecycle** with a 
 
 ### 1. The LearningCard: Core Unit
 
-Each learning is a structured, evidence-backed card - not free-form text.
+Each learning is a structured, evidence-backed card - not free-form text. The schema is intentionally slim: only fields that cannot be derived from the evidence array are persisted. Derived metrics (trust, confidence, reinforcements) are computed at query time from evidence entries. See Section 14 for the full rationale.
 
 ```typescript
 interface LearningCard {
-  id: string                    // unique identifier
+  id: string
   state: "candidate" | "active" | "quarantined" | "promoted" | "retired"
-  kind: "semantic" | "procedural" | "self-model" | "anti-pattern"
   
   // The learning itself
-  claim: string                 // what was learned (1-2 sentences)
+  claim: string                 // what was learned (1-2 sentences, dedup key)
   instruction: string           // actionable guidance to inject (1 line, compact)
   
-  // When to activate
+  // When to activate (non-negotiable: v1 retrieval primitive without embeddings)
   trigger: {
     paths?: string[]            // file globs: ["src/features/*/index.ts"]
     tools?: string[]            // tool names: ["edit", "bash"]
@@ -44,39 +43,128 @@ interface LearningCard {
     keywords?: string[]         // task keywords: ["barrel export", "migration"]
   }
   
-  // Provenance
-  evidence: Array<{
-    sessionId: string
-    source: "error-recovery" | "oracle-review" | "momus-correction" 
-            | "human-correction" | "notepad" | "circuit-breaker"
-            | "memory-capture" | "remember-command" | "memory-reminder"
-            | "reflection-review" | "history-backfill"  // Letta-inspired sources
-    timestamp: number
-    summary: string             // what happened
-  }>
-  
   // Scope (Letta-inspired: scoped overlays with precedence)
   // Precedence: session > plan > project > user
   // Default to 'session'; only broaden through explicit promotion
   scope: "session" | "plan" | "project" | "user"
   
-  // Rich metadata (Letta-inspired: structured metadata for retrieval without embeddings)
-  tags: string[]               // freeform tags: ["barrel-export", "bun", "test-config"]
-  sourceAgent: string           // which agent created it
-  sourceCapturePath: string     // how it was captured: "hook:tool.execute.after" | "memory_capture" | "remember" | "reminder"
+  // Retrieval metadata (structured matching without embeddings)
+  tags: string[]               // freeform tags: ["barrel-export", "bun", "test-config", "anti-pattern"]
+                               // NOTE: 'kind' (semantic/procedural/self-model/anti-pattern) is folded
+                               // into tags rather than a separate enum. Add back as enum only if
+                               // code branches on it at the reducer/retrieval level.
   
-  // Lifecycle metadata
-  confidence: number            // 0-1, increases with independent reinforcement
-  trust: number                 // 0-1, weighted by evidence quality (human > oracle > single-agent)
-  reinforcements: number        // successful applications across sessions
-  lastReinforced: number        // timestamp
-  lastSeen: number              // last time this card was relevant (injected or matched)
-  evidenceCount: number         // total evidence entries (denormalized for fast ranking)
-  ttl: number                   // days before decay check
+  // Provenance (source of truth for ALL derived metrics)
+  evidence: Array<{
+    sessionId: string
+    source: "error-recovery" | "oracle-review" | "momus-correction" 
+            | "human-correction" | "notepad" | "circuit-breaker"
+            | "memory-capture" | "remember-command" | "memory-reminder"
+            | "reflection-review" | "history-backfill"
+            | "staleness-check"   // trigger path no longer exists in codebase
+    timestamp: number
+    summary: string             // what happened
+    agent?: string              // which agent created this entry (for diversity weighting)
+    isReinforcement?: boolean   // card was injected + task succeeded (positive feedback)
+    isContradiction?: boolean   // card's claim was disproven or instruction caused failure
+  }>
+  
+  // Operational (must be persisted, cannot derive from evidence)
   createdAt: number
-  derivedFrom?: string[]        // parent card IDs (genealogy)
+  lastSeen: number              // last time this card was matched/injected (for recency ranking)
 }
 ```
+
+#### 1a. Derived Metrics (computed at query time, not persisted)
+
+All ranking/lifecycle metrics are derived from the evidence array via a single pure function. This keeps evidence as the single source of truth and eliminates denormalized-field drift.
+
+```typescript
+interface DerivedMetrics {
+  trust: number                 // 0-1, weighted by evidence source quality
+  confidence: number            // 0-1, function of evidence count, diversity, and reinforcements
+  evidenceCount: number         // evidence.length
+  reinforcements: number        // evidence.filter(e => e.isReinforcement).length
+  contradictions: number        // evidence.filter(e => e.isContradiction).length
+  lastReinforced: number | null // max timestamp of reinforcement evidence
+  sourceCapturePath: string     // evidence[0].source (how the card was originally created)
+  sourceAgent: string           // evidence[0].agent (which agent created the card)
+  instructionEffectiveness: number  // reinforcements / (reinforcements + contradictions) or 0
+}
+
+// Source weights for trust derivation (centralized, deterministic)
+const SOURCE_WEIGHTS: Record<string, number> = {
+  "human-correction": 0.7,
+  "remember-command": 0.7,
+  "oracle-review": 0.5,
+  "momus-correction": 0.5,
+  "reflection-review": 0.4,
+  "error-recovery": 0.3,
+  "memory-capture": 0.3,
+  "memory-reminder": 0.3,
+  "circuit-breaker": 0.3,
+  "notepad": 0.2,
+  "history-backfill": 0.2,
+  "staleness-check": 0.0,  // negative signal, not trust-building
+}
+
+function deriveMetrics(evidence: Evidence[]): DerivedMetrics {
+  // Trust: weighted average of evidence source quality
+  const trust = evidence.length > 0
+    ? evidence.reduce((sum, e) => sum + (SOURCE_WEIGHTS[e.source] ?? 0.2), 0) / evidence.length
+    : 0
+  
+  // Evidence diversity: cross-session and cross-agent confirmation
+  const uniqueSessions = new Set(evidence.map(e => e.sessionId)).size
+  const uniqueAgents = new Set(evidence.filter(e => e.agent).map(e => e.agent)).size
+  const diversityBonus = Math.min(
+    (uniqueSessions - 1) * 0.1 +  // cross-session confirmation
+    (uniqueAgents - 1) * 0.15,    // cross-agent confirmation
+    0.4                            // cap
+  )
+  
+  const reinforcements = evidence.filter(e => e.isReinforcement).length
+  const contradictions = evidence.filter(e => e.isContradiction).length
+  const baseConfidence = Math.min(evidence.length * 0.15, 0.6) // saturates at ~4 evidence entries
+  const confidence = Math.min(baseConfidence + diversityBonus - (contradictions * 0.2), 1.0)
+  
+  return {
+    trust,
+    confidence: Math.max(0, confidence),
+    evidenceCount: evidence.length,
+    reinforcements,
+    contradictions,
+    lastReinforced: reinforcements > 0
+      ? Math.max(...evidence.filter(e => e.isReinforcement).map(e => e.timestamp))
+      : null,
+    sourceCapturePath: evidence[0]?.source ?? "unknown",
+    sourceAgent: evidence[0]?.agent ?? "unknown",
+    instructionEffectiveness: (reinforcements + contradictions) > 0
+      ? reinforcements / (reinforcements + contradictions)
+      : 0,
+  }
+}
+```
+
+**Why derive instead of persist (Option B rationale, see Section 14 for full analysis):**
+- With <100 cards and <10 evidence entries per card, derivation is trivial (O(n) where n < 1000 total)
+- Evidence array is the single source of truth; no risk of drift between evidence and denormalized scores
+- Smaller persisted schema = fewer fields to validate, migrate, and merge in the single reducer
+- Clean upgrade path: materialize derived fields later (Option D) if card count grows beyond ~500
+
+**Removed fields and their replacements:**
+
+| Removed Field | Replacement |
+|---|---|
+| `kind` | Folded into `tags` (e.g., tag `"anti-pattern"` instead of `kind: "anti-pattern"`). Add back as enum only if reducer/retrieval code branches on it. |
+| `confidence` | Derived from evidence count + diversity + reinforcements - contradictions |
+| `trust` | Derived from weighted average of `evidence[].source` quality |
+| `reinforcements` / `lastReinforced` | Derived from `evidence.filter(e => e.isReinforcement)` |
+| `evidenceCount` | `evidence.length` |
+| `sourceAgent` | `evidence[0].agent` |
+| `sourceCapturePath` | `evidence[0].source` |
+| `ttl` | **Removed.** No calendar-based decay. Decay is purely evidence-based: trigger staleness (paths no longer exist) and contradiction accumulation. Session/plan cards use scope lifecycle (session end / plan completion). Project cards persist indefinitely unless contradicted or stale. A dormant project resumed after months should find its learnings intact. |
+| `derivedFrom` | Deferred to P1 defrag. Add when merge tracking is needed. |
 
 ### 2. Behavior Ladder (Graduated Expression)
 
@@ -294,9 +382,9 @@ Agents call `memory_capture` to propose a candidate LearningCard. The tool write
 interface MemoryCaptureInput {
   claim: string              // what was learned (required, 1-2 sentences)
   instruction: string        // actionable guidance (required, 1 line)
-  kind: "semantic" | "procedural" | "self-model" | "anti-pattern"
   scope: "session" | "plan" | "project"  // default: "session"
   tags: string[]             // freeform tags for retrieval (required, min 1)
+                             // Include kind-like tags: "procedural", "anti-pattern", etc.
   evidence: string           // what happened (required, grounded in specific event)
   trigger?: {
     paths?: string[]
@@ -308,9 +396,10 @@ interface MemoryCaptureInput {
 
 // All memory_capture calls create candidate LearningCards with:
 //   state: "candidate"
-//   sourceCapturePath: "memory_capture"
-//   confidence: 0.3 (default for agent-initiated capture)
-//   trust: weighted by evidence quality
+//   evidence[0].source: "memory-capture"
+//   evidence[0].agent: current agent name
+//   trust/confidence: DERIVED at query time from evidence[].source weights
+//   (no persisted confidence/trust fields; see Section 1a for derivation)
 ```
 
 **Constraints:**
@@ -332,14 +421,17 @@ Flow:
   1. Command handler extracts user text
   2. Injects system reminder: "The user wants you to remember this.
      Determine the right memory plane and use memory_capture to store it.
-     User-stated preferences start with higher trust (0.7) but still enter
-     as candidates, not promoted rules."
+     User preferences carry high trust because evidence[].source will be
+     'remember-command' (source weight: 0.7). They still enter as candidates,
+     not promoted rules."
   3. Agent calls memory_capture with:
      - claim: extracted from user text
      - scope: "project" (user explicitly stated)
-     - sourceCapturePath: "remember"
-     - trust: 0.7 (elevated for explicit user request)
-  4. Candidate enters normal lifecycle (can be promoted faster due to higher trust)
+     - tags: ["test-config", "bun"]
+     - evidence: "User explicitly requested this convention"
+     // trust is DERIVED from evidence[].source = "remember-command" (weight 0.7)
+     // No explicit trust parameter needed
+  4. Candidate enters normal lifecycle (promoted faster due to higher derived trust)
 ```
 
 **Memory-check reminders (P0, Letta-inspired)**
@@ -394,10 +486,9 @@ Implementation:
                             .sisyphus/learnings.json
                             (state: "candidate")
 
-  All entries carry:
-    scope, kind, tags, evidence,
-    sourceCapturePath, trust, sessionId
-```
+  All entries carry (slim schema):
+    claim, instruction, trigger, scope, state,
+    tags, evidence[], createdAt, lastSeen
 
 #### 4f. Scoped Overlays and Dynamic Injection (new, Letta-inspired)
 
@@ -597,29 +688,82 @@ TOOL OUTPUT (reactive, appended to specific tool results)
 **Reactive channel** (on `tool.execute.after`):
 - When tool output matches a card's error trigger
 - Append specific guidance: "Previous learning: [instruction]"
-- Updates reinforcement counter on successful application
+- Updates card evidence: adds reinforcement entry (isReinforcement: true) on successful application
 - No fencing needed (appended directly to tool output)
 ### 6. Reinforcement, Decay, and Clustering
 
 ```
-Reinforcement:
+Reinforcement (positive feedback loop):
   - Only counts across SEPARATE sessions or DISTINCT agents
   - One long failing loop cannot self-reinforce
   - Human-accepted outcomes count double
   - Oracle/Momus agreement with a card's claim counts as reviewer-source reinforcement
   - Successful reuse (card injected + task completed successfully) counts as application reinforcement
+  - Each reinforcement adds an evidence entry with isReinforcement: true
 
-Feedback-weighted ranking:
-  - Human corrections: highest weight (explicit signal)
-  - Oracle/Momus disagreement resolution: high weight (reviewer-originated)
-  - Successful application across agents: medium weight (cross-validated)
-  - Single-agent single-session observation: low weight (needs confirmation)
-  - Staleness: negative weight (decay over time/codebase drift)
+Negative evidence (immune-system feedback loop, P0):
+  - When a card is injected and the task FAILS, add an evidence entry with isContradiction: true
+  - When a card's claim is explicitly disproven, add contradiction evidence
+  - Contradictions weigh more heavily than reinforcements in derived confidence:
+    - Each reinforcement: +0.15 confidence
+    - Each contradiction: -0.20 confidence (asymmetric, like Holographic's -0.10 vs +0.05)
+  - If contradictions > reinforcements: auto-transition state to 'quarantined'
+  - Quarantined cards can be revived by new matching evidence (reinforcements)
 
-Decay:
-  - Cards decay toward "quarantined" if not reinforced within TTL
-  - Codebase drift detection: if file paths in trigger no longer exist, quarantine
-  - Quarantined cards can be revived by new matching evidence
+Injection-outcome correlation (P0):
+  - Track which cards were injected each turn in learning-state.json:
+    injectedThisTurn: string[]   // card IDs injected via <memory-context>
+    reactiveThisTurn: string[]   // card IDs injected via tool.execute.after
+  - After each turn, in tool.execute.after:
+    - If tool SUCCEEDED and a card was injected: add reinforcement evidence to that card
+    - If tool FAILED and a card was injected: do NOT auto-add contradiction
+      (failure may be unrelated). Flag for reflection subagent review instead.
+  - This closes the feedback loop: reinforcement is grounded in actual outcomes,
+    not vague 'successful application'
+
+Evidence diversity weighting (P0, in derived confidence):
+  - Cross-session bonus: +0.10 per unique sessionId beyond the first
+  - Cross-agent bonus:  +0.15 per unique agent beyond the first
+  - Diversity cap: 0.4 max bonus
+  - A card with 5 evidence entries from 1 agent in 1 session ranks lower
+    than a card with 3 entries from 2 agents across 2 sessions
+  - Prevents echo-chamber cards where one long failing loop
+    accumulates multiple evidence entries from the same flawed reasoning
+
+Feedback-weighted ranking (derived at query time, see Section 1a):
+  - Human corrections: weight 0.7 (explicit signal)
+  - /remember command: weight 0.7 (explicit user request)
+  - Oracle/Momus review: weight 0.5 (reviewer-originated)
+  - Reflection review: weight 0.4 (second-perspective review)
+  - Error recovery, memory capture, circuit breaker, reminders: weight 0.3
+  - Notepad, history backfill: weight 0.2
+  - Staleness check: weight 0.0 (negative signal, not trust-building)
+
+Instruction effectiveness (P1):
+  - Derived metric: reinforcements / (reinforcements + contradictions)
+  - Cards with low effectiveness (<0.3) are deprioritized in injection ranking
+  - Reflection subagent can assess whether agents followed the instruction
+  - Enables instruction rewrite during P1 defrag (refine wording, not just claim)
+
+Decay (purely evidence-based, NO calendar TTL):
+  - Project cards NEVER expire by time alone. A project dormant for 6 months
+    and then resumed should find all learnings intact. Time is not evidence
+    against a card's validity.
+  - Session cards: cleaned up at session end (scope lifecycle, not TTL)
+  - Plan cards: cleaned up when plan completes (scope lifecycle, not TTL)
+  - Project cards: persist indefinitely unless one of these signals fires:
+    1. Trigger staleness: glob(trigger.paths) finds no matches at session start
+       -> add contradiction evidence (source: 'staleness-check')
+    2. Contradiction accumulation: contradictions > reinforcements
+       -> auto-quarantine
+    3. Explicit retirement: human or adversarial promotion pipeline
+       marks card as retired
+  - Cards with no negative evidence and no staleness are ALWAYS valid,
+    whether they are 30 days old or 3 years old. Silence is not evidence.
+  - Quarantined cards can be revived by new matching evidence (reinforcement)
+  - Relevance-based decay (P2): if a card hasn't been *matched* in N sessions
+    where its trigger context was active, flag for review. NOT auto-quarantine.
+    This catches cards whose triggers still exist but are never relevant.
 
 Clustering:
   - N similar reinforced cards (same trigger pattern, related claims)
@@ -689,7 +833,9 @@ Reducer responsibilities:
      Reject malformed entries without corrupting existing data.
   4. Audit: append a MemoryJournalEntry for every mutation.
   5. Conflict resolution: if two sources capture overlapping claims,
-     merge evidence arrays and keep the higher confidence/trust.
+     merge evidence arrays. No need to compare persisted confidence/trust
+     because these are DERIVED from evidence. Merged evidence array
+     naturally produces the correct derived metrics.
   6. Session isolation: tag each write with sessionId and source
      for provenance tracking.
 ```
@@ -721,7 +867,7 @@ interface MemoryJournalEntry {
   sessionId: string
   metadata?: {
     scope?: string            // scope at time of write
-    confidence?: number       // confidence at time of write
+    derivedConfidence?: number // confidence derived from evidence at time of write
     mergedFrom?: string[]     // for defrag-merge: source card IDs
   }
 }
@@ -780,11 +926,11 @@ Trigger: On session.idle when card count exceeds threshold (default: 50 candidat
 Defrag operations (deterministic, no LLM needed):
   1. Exact-claim dedup: merge cards with identical claims
      - Union tags and evidence arrays
-     - Keep highest confidence/trust
+     - Derived metrics naturally recalculate from merged evidence
      - Log merge in audit journal (action: "defrag-merge")
   2. Tag normalization: lowercase, trim, dedup tag lists
-  3. Stale candidate pruning: remove candidates with no reinforcement
-     and TTL expired (action: "defrag-prune")
+  3. Stale candidate pruning: remove candidates with no reinforcement evidence
+     and either trigger staleness or state=quarantined (action: "defrag-prune")
   4. Evidence compaction: if a card has >10 evidence entries,
      keep the 5 most recent + the original
 
@@ -827,9 +973,9 @@ Backfill flow:
      - Explicit preference statements
   2. For each matching session, use session_read to get context
   3. Extract candidate LearningCards via memory_capture
-     - sourceCapturePath: "history-backfill"
+     - evidence[0].source: "history-backfill"
      - Default scope: "project" (historical patterns are likely project-wide)
-     - Higher initial confidence if pattern appears in 3+ sessions
+     - Higher initial evidence count if pattern appears in 3+ sessions
   4. Run normal promotion pipeline on backfilled candidates
 
 Safety:
@@ -848,8 +994,8 @@ Safety:
 
 | Phase | Scope | Effort |
 |-------|-------|--------|
-| **P0** | LearningCard schema + store + Curated Facts store + basic capture from error hooks + proactive injection via `experimental.chat.system.transform` with `<memory-context>` fencing + **`memory_capture` tool** + **`/remember` command** + **memory-check reminders (state-based triggers)** + **scoped overlays (session/plan/project)** + **memory audit journal** + **single reducer** (owns learnings.json, lock+temp+rename+fingerprint) + **strong reflection subagent** (capable model, incremental review with lastReviewedRawMessageId) + **pre-compression flush** (DCP compress as primary trigger, native compaction as fallback) + **DCP compatibility layer** (system transform injection, compress tool hooks, state-based reminders) + **learning-state.json** (lastReviewedRawMessageId, learning metadata) | Large (3-5d) |
-| **P1** | Reactive injection on `tool.execute.after` + episodic recall index (compaction summaries) + **memory defragmentation (deterministic)** + **history analyzer/backfill** + **`memory_restore` command** + **background review hook** (optional, for teams wanting mid-session periodic review) | Medium (2-3d) |
+| **P0** | Slim LearningCard schema (~10 persisted fields) + derived metrics helper (Section 1a) + store + Curated Facts store + basic capture from error hooks + proactive injection via `experimental.chat.system.transform` with `<memory-context>` fencing + **`memory_capture` tool** + **`/remember` command** + **memory-check reminders (state-based triggers)** + **scoped overlays (session/plan/project)** + **memory audit journal** + **single reducer** (owns learnings.json, lock+temp+rename+fingerprint) + **strong reflection subagent** (capable model, incremental review with lastReviewedRawMessageId) + **pre-compression flush** (DCP compress as primary trigger, native compaction as fallback) + **DCP compatibility layer** (system transform injection, compress tool hooks, state-based reminders) + **learning-state.json** (lastReviewedRawMessageId, injection-outcome correlation tracking) + **negative evidence** (isContradiction on evidence entries, evidence-based quarantine) + **injection-outcome correlation** (injectedThisTurn tracking, reinforcement grounded in actual outcomes) + **evidence diversity weighting** (cross-session/cross-agent bonuses in derived confidence) | Large (3-5d) |
+| **P1** | Reactive injection on `tool.execute.after` + episodic recall index (compaction summaries) + **memory defragmentation (deterministic)** + **history analyzer/backfill** + **`memory_restore` command** + **trigger staleness detection** (glob check trigger.paths at session start) + **instruction effectiveness tracking** (instructionFollowed evidence, deprioritize low-compliance cards) + **background review hook** (optional, for teams wanting mid-session periodic review) | Medium (2-3d) |
 | **P2** | Behavior ladder (graduated expression) + feedback-weighted ranking + clustering + shadow mode + episodic recall prefetch + **LLM-assisted defrag (near-duplicate clustering, contradiction detection)** | Large (3-5d) |
 | **P3** | Adversarial promotion (Oracle/Momus/Metis) + introspection + procedural memory (playbook candidates from promoted cards) + **block-based curated facts** (if retrieval quality warrants it) | Large (3-5d) |
 
@@ -867,7 +1013,7 @@ From Letta:
 5. `/remember` command for user-triggered memory persistence
 6. Memory-check reminders on strong signals (corrections, compaction, every N turns)
 7. Scoped overlays with precedence (session > plan > project > user)
-8. Rich metadata on every memory (scope, kind, tags, source, trust) for retrieval without embeddings
+8. Slim persisted schema with derived metrics (evidence as single source of truth, see Section 14)
 9. Append-only memory audit journal for governance, rollback, and introspection
 10. History analyzer/backfill to seed learning store from existing session history
 
@@ -875,6 +1021,9 @@ From architecture evaluation (B + Bounded A):
 11. Strong reflection subagent at session boundaries (capable model, advisory, second perspective)
 12. Single reducer pattern (owns learnings.json, prevents parallel-writer conflicts)
 13. Background review deprioritized in favor of boundary-based reflection
+14. Negative evidence (isContradiction) for evidence-based quarantine instead of TTL-only decay
+15. Injection-outcome correlation (injectedThisTurn tracking, reinforcement grounded in outcomes)
+16. Evidence diversity weighting (cross-session/cross-agent bonuses in derived confidence)
 
 ---
 
@@ -897,9 +1046,11 @@ From architecture evaluation (B + Bounded A):
 | **Hybrid retrieval** (Turbopuffer vector ANN + BM25 + RRF) | **Skip for v1** | No embeddings needed yet. Structured trigger matching (paths, tools, errors, keywords, tags) is sufficient. Add lexical index if retrieval quality degrades. |
 | **Conversation isolation** (per-conversation block overrides) | **Covered by scope hierarchy** | Session-scoped memories are already conversation-isolated. Plan-scoped memories cover multi-session continuity. |
 | **Block version history / undo-redo** | **Adapt as audit journal** (P0 log, P1 restore) | Append-only JSONL journal with before/after hashes instead of per-block snapshots. Simpler, more general. |
-| **Confidence/trust scores on memories** | **Our design is stronger** | Letta has no confidence or trust fields on blocks. We have confidence, trust, reinforcements, TTL, evidence-weighted ranking, and immune-system lifecycle. |
+| **Confidence/trust scores on memories** | **Our design is stronger (derived, not persisted)** | Letta has no confidence or trust fields. Hermes Holographic has `trust_score` + `helpful_count` (3 fields). We derive trust, confidence, reinforcements, contradictions, and diversity metrics from the evidence array at query time (Section 1a). Same retrieval accuracy, fewer persisted fields, no drift risk. |
 | **Adversarial promotion** | **Our design is unique** | Letta has no adversarial review. We require Oracle + Momus + Metis + shadow mode before promotion. |
 | **Behavior ladder** | **Our design is unique** | Letta has no graduated expression. We have whisper > nudge > checklist > guardrail > rule-candidate. |
+| **Feedback-based trust scoring** (Hermes Holographic: +0.05/-0.10) | **Adapted as evidence-based feedback** (P0) | Holographic uses persisted trust_score with binary helpful/not-helpful. We use evidence entries with `isReinforcement`/`isContradiction` flags, deriving trust from source weights and confidence from diversity. Richer provenance trail: can explain WHY trust changed, not just the current number. Asymmetric weighting preserved: contradictions weigh -0.20 vs reinforcements +0.15. |
+| **Schema richness** (Hermes Holographic: 10 fields, Letta: ~5 fields) | **Slim schema: ~10 persisted fields** (P0) | Holographic has trust_score, retrieval_count, helpful_count, category, tags, hrr_vector, timestamps. Letta has description, read_only, value. We persist claim, instruction, trigger, scope, state, tags, evidence[], createdAt, lastSeen. All ranking/lifecycle metrics derived from evidence at query time (Section 1a). Best of both: richer than Letta, leaner than our original 25-field design, with zero denormalized-field drift. |
 
 **Key insight from Oracle:** "Copy Letta's control loop, not its storage stack." We import the explicit memory workflow (capture tool, reminders, /remember) while keeping our stronger governance (immune lifecycle, adversarial promotion, behavior ladder). The B + Bounded A architecture adds a strong reflection subagent at session boundaries as the secondary capture path, with a single reducer preventing parallel-writer conflicts on file-based storage.
 
@@ -1004,6 +1155,48 @@ AFTER (DCP-compatible):
 - This prevents re-reviewing the entire transcript on every boundary event
 - State stored in `.sisyphus/learning-state.json` alongside other learning metadata
 
+**Learning state (`.sisyphus/learning-state.json`, P0):**
+
+Per-session operational state for the learning system. Tracks reflection progress and injection-outcome correlation.
+
+```typescript
+interface LearningState {
+  // Incremental reflection tracking (DCP-compatible)
+  lastReviewedRawMessageId: string | null  // last raw message ID reviewed by reflection subagent
+  
+  // Injection-outcome correlation (P0, closes the feedback loop)
+  injectedThisTurn: string[]   // card IDs injected via <memory-context> proactive channel
+  reactiveThisTurn: string[]   // card IDs injected via tool.execute.after reactive channel
+  
+  // Session metadata
+  sessionId: string
+  sessionStartedAt: number
+  totalCaptures: number         // count of memory_capture calls this session
+  lastCaptureAt: number | null  // timestamp of last memory_capture call
+  lastReminderAt: number | null // timestamp of last memory-check reminder
+}
+```
+
+**Injection-outcome correlation flow:**
+```
+Turn N:
+  1. System transform queries learnings.json for matching cards
+  2. Top cards injected into <memory-context>
+  3. Card IDs recorded in learning-state.json as injectedThisTurn
+
+Turn N (tool execution):
+  4. If reactive card injected via tool.execute.after:
+     Card ID added to reactiveThisTurn
+
+Turn N (after final tool result):
+  5. For each card in injectedThisTurn + reactiveThisTurn:
+     - If task SUCCEEDED: add reinforcement evidence (isReinforcement: true)
+     - If task FAILED: do NOT auto-add contradiction
+       (failure may be unrelated to the injected card)
+       Instead: flag for reflection subagent review
+  6. Clear injectedThisTurn and reactiveThisTurn for next turn
+```
+
 **Hard token budget on dynamic memory in system transform:**
 - Default: 500 tokens (200 for cards, 300 for recall)
 - Enforced per-request in `experimental.chat.system.transform`
@@ -1029,3 +1222,94 @@ AFTER (DCP-compatible):
 | `session.idle` | Reflection + promotion | N/A | No | Unchanged |
 | Stable prompt prefix | Curated facts (loaded once) | Not touched | No | Unchanged |
 | `memory_capture` tool output | Persisted to learnings.json | May be pruned later | No (beneficial) | Pruning reduces noise after persist |
+
+### 14. Schema Design Rationale (Option B: Slim Persisted, Derive at Query Time)
+
+The LearningCard schema was evaluated against four options after researching Hermes Agent (Holographic provider: 10 fields with trust_score), Letta-Code (thin metadata + embeddings), and our original 25-field design. The evaluation assumed <100 cards and <10 evidence entries per card for v1.
+
+#### 14a. Options Evaluated
+
+| Option | Description | Persisted Fields | Retrieval Accuracy | Implementation Complexity |
+|--------|-------------|-----------------|-------------------|--------------------------|
+| **A (Full Rich)** | Original 25-field schema with persisted trust, confidence, reinforcements, TTL, etc. | 25 | Highest (precomputed) | High (25 fields to validate, migrate, merge in reducer) |
+| **B (Slim + Derive)** | ~10 essential fields, derive ranking metrics from evidence at query time | 10 | Same as A for <100 cards | **Low** (fewer fields, evidence is single source of truth) |
+| **C (Evidence-Only)** | Drop trigger, rely on evidence text for retrieval | ~6 | **Degraded** (no structured matching without embeddings) | Lowest | 
+| **D (Slim + Materialized)** | Slim schema + separate materialized view cache | 10 + cache | Same as A | Medium (cache invalidation, two storage layers) |
+
+#### 14b. Decision: Option B
+
+**Why B:** With <100 cards, deriving trust/confidence/reinforcements from evidence at query time is trivial (O(n) where n < 1000 total evidence entries). The evidence array is the single source of truth. No risk of denormalized fields drifting out of sync with their evidence backing.
+
+**Why not A:** Over-engineered for v1. 25 persisted fields means 25 fields to validate in Zod, migrate on schema changes, and merge correctly in the single reducer. Most of these fields can be derived in microseconds from the evidence array.
+
+**Why not C:** Drops structured triggers, which are the v1 retrieval primitive. Without embeddings, retrieval degrades to text search over evidence summaries. This would require adding embeddings to compensate, which we explicitly defer.
+
+**Why not D:** Adds a materialized cache layer on top of slim storage. Unnecessary complexity for <100 cards. Clean upgrade path FROM B to D if card count grows beyond ~500.
+
+#### 14c. Field-by-Field Analysis
+
+| Field | Status | Rationale |
+|-------|--------|-----------|
+| `id` | **Persisted** | Card identity. Cannot derive. |
+| `state` | **Persisted** | Lifecycle state drives retrieval filtering and injection behavior. Cannot derive without replay. |
+| `claim` | **Persisted** | The learned fact. Dedup key (with trigger). Cannot derive. |
+| `instruction` | **Persisted** | The compact text injected into context. Cannot derive. |
+| `trigger` | **Persisted** | v1 retrieval primitive. Deterministic matching without embeddings. Non-negotiable. |
+| `scope` | **Persisted** | Visibility/precedence gate. Cannot derive from evidence alone. |
+| `tags` | **Persisted** | Secondary retrieval metadata. `kind` (semantic/procedural/anti-pattern) folded in as a tag. |
+| `evidence[]` | **Persisted** | Single source of truth for all derived metrics. Enhanced with `agent`, `isReinforcement`, `isContradiction`. |
+| `createdAt` | **Persisted** | Creation timestamp. Needed for age-based ranking. Cannot derive from evidence[0].timestamp reliably (evidence may be reordered). |
+| `lastSeen` | **Persisted** | Last time card was matched/injected. Must be persisted because it tracks retrieval events, not evidence writes. |
+| `kind` | **Removed** (folded into `tags`) | "semantic", "procedural", "anti-pattern" become tags. Add back as enum only if reducer/retrieval code branches on it. |
+| `confidence` | **Derived** | `f(evidence.length, diversity, reinforcements, contradictions)`. See Section 1a. |
+| `trust` | **Derived** | Weighted average of `evidence[].source` quality via SOURCE_WEIGHTS. See Section 1a. |
+| `reinforcements` | **Derived** | `evidence.filter(e => e.isReinforcement).length`. |
+| `lastReinforced` | **Derived** | `max(evidence.filter(e => e.isReinforcement).map(e => e.timestamp))`. |
+| `evidenceCount` | **Derived** | `evidence.length`. |
+| `contradictions` | **Derived** (new) | `evidence.filter(e => e.isContradiction).length`. |
+| `sourceCapturePath` | **Derived** | `evidence[0].source`. |
+| `sourceAgent` | **Derived** | `evidence[0].agent`. |
+| `instructionEffectiveness` | **Derived** (new) | `reinforcements / (reinforcements + contradictions)`. |
+| `ttl` | **Removed** | No calendar-based decay. Decay is purely evidence-based: trigger staleness (paths gone) and contradiction accumulation. Project cards persist indefinitely unless contradicted. A dormant project resumed after months finds its learnings intact. |
+| `derivedFrom` | **Removed** | Deferred to P1 defrag merge tracking. |
+
+**Summary: 10 persisted, 10 derived, 3 removed.**
+
+#### 14d. Evidence Entry Enhancements
+
+Three new fields on each evidence entry enable the derived metrics system:
+
+```typescript
+evidence: Array<{
+  // ... existing fields (sessionId, source, timestamp, summary) ...
+  agent?: string              // which agent created this entry (for diversity weighting)
+  isReinforcement?: boolean   // card was injected + task succeeded (positive feedback loop)
+  isContradiction?: boolean   // card's claim was disproven or instruction caused failure (negative feedback)
+}>
+```
+
+**Why `agent`:** Enables cross-agent diversity weighting. A card confirmed by both Sisyphus and Heracles is stronger than one confirmed only by Sisyphus.
+
+**Why `isReinforcement`:** Closes the positive feedback loop. Without this, reinforcement is vague ("successful application" with no mechanism to detect it). With injection-outcome correlation (Section 6, Section 9 learning-state.json), reinforcement is grounded in actual tool outcomes.
+
+**Why `isContradiction`:** Enables evidence-based quarantine. Without this, cards can only be removed by manual deletion or trigger staleness. With contradiction evidence, the immune-system lifecycle actually functions: cards are quarantined when concrete evidence accumulates against them (trigger paths gone, instruction led to failure), not by arbitrary timers.
+
+#### 14e. Competitor Schema Comparison
+
+| System | Persisted Fields | Retrieval | Trust/Confidence | Feedback Loop | Provenance |
+|--------|-----------------|-----------|-----------------|---------------|------------|
+| **Hermes Holographic** | ~10 (fact, category, tags, trust_score, retrieval_count, helpful_count, timestamps, hrr_vector) | FTS5 + trust-weighted scoring | Persisted `trust_score` (binary +0.05/-0.10) | helpful/not-helpful binary | None (bare score) |
+| **Letta-Code** | ~3 (description, read_only, value) + embeddings | Hybrid vector ANN + BM25 | None | None | Git history |
+| **Hermes Built-in** | ~2 (content string, target file) | Exact string match | None | None | None |
+| **Our Design (v1)** | **10** (claim, instruction, trigger, scope, state, tags, evidence[], createdAt, lastSeen) | **Structured trigger matching** (paths, tools, errors, agents, keywords) | **Derived** from evidence at query time (source weights, diversity, reinforcements, contradictions) | **Rich** (isReinforcement, isContradiction, injection-outcome correlation, evidence diversity) | **Full** (every evidence entry carries sessionId, source, agent, timestamp, summary) |
+
+#### 14f. Escalation Triggers (when to revisit this decision)
+
+| Trigger | Revisit | Action |
+|---------|---------|--------|
+| Card count grows beyond ~500 | Option B → D | Materialize derived metrics into a separate cache for faster reads |
+| Evidence arrays grow beyond ~50 entries per card | Computation cost | Add evidence compaction earlier (currently P1 defrag) |
+| Multiple concurrent readers need precomputed metrics | Option B → D | Same as card count trigger |
+| Trigger matching becomes insufficient for retrieval | Add embeddings | But try lexical index first before adding vector DB |
+| `kind` enum is needed for code branching | Restore `kind` field | Extract from tags, add as persisted enum |
+| Per-card TTL is needed for specific use cases | Restore `ttl` field | Add optional field, but default remains evidence-based decay (no calendar expiry) |

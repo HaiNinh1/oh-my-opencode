@@ -3,6 +3,9 @@ import { readState, writeState } from "../hooks/ralph-loop/storage";
 import type { CreatedHooks } from "../create-hooks";
 import { log } from "../shared";
 import type { PluginContext } from "./types";
+import { HermesProxyState } from "../shared/hermes-proxy-state";
+import { isHermesAgent } from "../hooks/hermes-routing-guard/agent-matcher";
+import { getSessionAgent } from "../features/claude-code-session-state";
 
 const VERIFICATION_ATTEMPT_PATTERN =
   /<ulw_verification_attempt_id>(.*?)<\/ulw_verification_attempt_id>/i;
@@ -126,6 +129,37 @@ export function createToolExecuteAfterHandler(args: {
             extractedAttemptId: verificationAttemptId,
           },
         );
+      }
+    }
+
+    // Hermes proxy: capture child session ID on first successful task()
+    if (input.tool === "task") {
+      const parentAgent = getSessionAgent(input.sessionID);
+      if (
+        isHermesAgent(parentAgent) &&
+        HermesProxyState.hasTarget(input.sessionID) &&
+        !HermesProxyState.isPinned(input.sessionID)
+      ) {
+        // Try metadata first, then parse from output text
+        let childSessionId = getMetadataString(output.metadata, [
+          "sessionId",
+          "sessionID",
+          "session_id",
+        ]);
+
+        if (!childSessionId && typeof output.output === "string") {
+          const match = output.output.match(/session_id:\s*(ses_[a-zA-Z0-9]+)/);
+          childSessionId = match?.[1];
+        }
+
+        if (childSessionId) {
+          HermesProxyState.pinChildSession(input.sessionID, childSessionId);
+          log("[hermes-proxy] Child session pinned via tool.execute.after", {
+            parentSessionID: input.sessionID,
+            childSessionID: childSessionId,
+            targetAgent: HermesProxyState.get(input.sessionID)?.targetAgent,
+          });
+        }
       }
     }
 
