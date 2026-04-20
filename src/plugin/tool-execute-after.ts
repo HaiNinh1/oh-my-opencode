@@ -135,11 +135,9 @@ export function createToolExecuteAfterHandler(args: {
     // Hermes proxy: capture child session ID on first successful task()
     if (input.tool === "task") {
       const parentAgent = getSessionAgent(input.sessionID);
-      if (
-        isHermesAgent(parentAgent) &&
-        HermesProxyState.hasTarget(input.sessionID) &&
-        !HermesProxyState.isPinned(input.sessionID)
-      ) {
+      const isHermesProxy = isHermesAgent(parentAgent) && HermesProxyState.hasTarget(input.sessionID);
+
+      if (isHermesProxy && !HermesProxyState.isPinned(input.sessionID)) {
         // Try metadata first, then parse from output text
         let childSessionId = getMetadataString(output.metadata, [
           "sessionId",
@@ -160,6 +158,13 @@ export function createToolExecuteAfterHandler(args: {
             targetAgent: HermesProxyState.get(input.sessionID)?.targetAgent,
           });
         }
+      }
+
+      // Abort Hermes session after every task() completion — its job is done for this turn.
+      // This prevents Hermes from generating further text or making additional tool calls.
+      // Works on both turn 1 (after pinning) and turn 2+ (already pinned).
+      if (isHermesProxy) {
+        ctx.client.session.abort({ path: { id: input.sessionID } }).catch(() => {});
       }
     }
 

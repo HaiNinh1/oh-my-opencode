@@ -51,6 +51,10 @@ export type PromptProps = {
     normal?: string[]
     shell?: string[]
   }
+  /** Hermes proxy: send prompt to this session instead of sessionID */
+  submitSessionID?: string
+  /** Hermes proxy: called with prompt text before clearing, for optimistic echo */
+  onProxySubmit?: (text: string) => void
 }
 
 export type PromptRef = {
@@ -85,7 +89,13 @@ export function Prompt(props: PromptProps) {
   const sync = useSync()
   const dialog = useDialog()
   const toast = useToast()
-  const status = createMemo(() => sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" })
+  const status = createMemo(() => {
+    const childStatus = sync.data.session_status?.[props.sessionID ?? ""] ?? { type: "idle" }
+    if (!props.submitSessionID) return childStatus
+    const parentStatus = sync.data.session_status?.[props.submitSessionID] ?? { type: "idle" }
+    if (parentStatus.type !== "idle") return parentStatus
+    return childStatus
+  })
   const history = usePromptHistory()
   const stash = usePromptStash()
   const command = useCommandDialog()
@@ -95,7 +105,6 @@ export function Prompt(props: PromptProps) {
   const list = createMemo(() => props.placeholders?.normal ?? [])
   const shell = createMemo(() => props.placeholders?.shell ?? [])
   const [auto, setAuto] = createSignal<AutocompleteRef>()
-  const currentProviderLabel = createMemo(() => local.model.parsed().provider)
   const hasRightContent = createMemo(() => Boolean(props.right))
 
   function promptModelWarning() {
@@ -271,7 +280,7 @@ export function Prompt(props: PromptProps) {
         keybind: "session_interrupt",
         category: "Session",
         hidden: true,
-        enabled: status().type !== "idle",
+        enabled: status().type !== "idle" || !!props.submitSessionID,
         onSelect: (dialog) => {
           if (autocomplete.visible) return
           if (!input.focused) return
@@ -280,7 +289,7 @@ export function Prompt(props: PromptProps) {
             setStore("mode", "normal")
             return
           }
-          if (!props.sessionID) return
+          if (!props.sessionID && !props.submitSessionID) return
 
           setStore("interrupt", store.interrupt + 1)
 
@@ -289,9 +298,15 @@ export function Prompt(props: PromptProps) {
           }, 5000)
 
           if (store.interrupt >= 2) {
-            sdk.client.session.abort({
-              sessionID: props.sessionID,
-            })
+            // Hermes proxy: abort both parent and child to ensure full stop
+            if (props.submitSessionID && props.sessionID) {
+              sdk.client.session.abort({ sessionID: props.submitSessionID })
+              sdk.client.session.abort({ sessionID: props.sessionID })
+            } else {
+              sdk.client.session.abort({
+                sessionID: props.submitSessionID ?? props.sessionID!,
+              })
+            }
             setStore("interrupt", 0)
           }
           dialog.clear()
@@ -663,7 +678,7 @@ export function Prompt(props: PromptProps) {
 
     if (store.mode === "shell") {
       sdk.client.session.shell({
-        sessionID,
+        sessionID: props.submitSessionID ?? sessionID,
         agent: local.agent.current().name,
         model: {
           providerID: selectedModel.providerID,
@@ -688,7 +703,7 @@ export function Prompt(props: PromptProps) {
       const args = firstLineArgs.join(" ") + (restOfInput ? "\n" + restOfInput : "")
 
       sdk.client.session.command({
-        sessionID,
+        sessionID: props.submitSessionID ?? sessionID,
         command: command.slice(1),
         arguments: args,
         agent: local.agent.current().name,
@@ -705,7 +720,7 @@ export function Prompt(props: PromptProps) {
     } else {
       sdk.client.session
         .prompt({
-          sessionID,
+          sessionID: props.submitSessionID ?? sessionID,
           ...selectedModel,
           messageID,
           agent: local.agent.current().name,
@@ -726,6 +741,9 @@ export function Prompt(props: PromptProps) {
       ...store.prompt,
       mode: currentMode,
     })
+    if (props.submitSessionID) {
+      props.onProxySubmit?.(inputText)
+    }
     input.extmarks.clear()
     setStore("prompt", {
       input: "",
@@ -834,12 +852,6 @@ export function Prompt(props: PromptProps) {
     return local.agent.color(proxyTarget() ?? local.agent.current().name)
   })
 
-  const showVariant = createMemo(() => {
-    const variants = local.model.variant.list()
-    if (variants.length === 0) return false
-    const current = local.model.variant.current()
-    return !!current
-  })
 
   const placeholderText = createMemo(() => {
     if (props.showPlaceholder === false) return undefined
@@ -896,6 +908,7 @@ export function Prompt(props: PromptProps) {
         fileStyleId={fileStyleId}
         agentStyleId={agentStyleId}
         promptPartTypeId={() => promptPartTypeId}
+        disableAgentMentions={!!props.submitSessionID}
       />
       <box ref={(r) => (anchor = r)} visible={props.visible !== false}>
         <box
@@ -1105,22 +1118,8 @@ export function Prompt(props: PromptProps) {
             />
             <box flexDirection="row" flexShrink={0} paddingTop={1} gap={1} justifyContent="space-between">
               <box flexDirection="row" gap={1}>
-                <text fg={highlight()}>
-                  {store.mode === "shell" ? "Shell" : proxyTarget() ? Locale.titlecase(proxyTarget()!) : Locale.titlecase(local.agent.current().name)}{" "}
-                </text>
-                <Show when={store.mode === "normal"}>
-                  <box flexDirection="row" gap={1}>
-                    <text flexShrink={0} fg={keybind.leader ? theme.textMuted : theme.text}>
-                      {local.model.parsed().model}
-                    </text>
-                    <text fg={theme.textMuted}>{currentProviderLabel()}</text>
-                    <Show when={showVariant()}>
-                      <text fg={theme.textMuted}>·</text>
-                      <text>
-                        <span style={{ fg: theme.warning, bold: true }}>{local.model.variant.current()}</span>
-                      </text>
-                    </Show>
-                  </box>
+                <Show when={store.mode === "shell"}>
+                  <text fg={highlight()}>Shell </text>
                 </Show>
               </box>
               <Show when={hasRightContent()}>

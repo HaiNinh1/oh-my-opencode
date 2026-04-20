@@ -51,8 +51,7 @@ ${allowedList}
 HOW TO FIX:
 1. Identify the correct target agent from your AVAILABLE AGENTS table
 2. Use subagent_type="<agent>" instead of category="<category>"
-3. For Sisyphus Default, Mnemosyne, or Hephaestus: just forward directly — task(subagent_type="<agent>", prompt="<user request>")
-4. For other agents: fetch the agent's prompt template with get_agent_prompts() first
+3. Forward directly: task(subagent_type="<agent>", prompt="<user request>")
 
 Example: task(subagent_type="sisyphus", prompt="...")`
 }

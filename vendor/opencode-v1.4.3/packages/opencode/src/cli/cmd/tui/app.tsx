@@ -27,13 +27,12 @@ import { SDKProvider, useSDK } from "@tui/context/sdk"
 import { StartupLoading } from "@tui/component/startup-loading"
 import { SyncProvider, useSync } from "@tui/context/sync"
 import { LocalProvider, useLocal } from "@tui/context/local"
-import { DialogModel, useConnected } from "@tui/component/dialog-model"
+import { useConnected } from "@tui/component/dialog-model"
 import { DialogMcp } from "@tui/component/dialog-mcp"
 import { DialogStatus } from "@tui/component/dialog-status"
 import { DialogThemeList } from "@tui/component/dialog-theme-list"
 import { DialogHelp } from "./ui/dialog-help"
 import { CommandProvider, useCommandDialog } from "@tui/component/dialog-command"
-import { DialogAgent } from "@tui/component/dialog-agent"
 import { DialogSessionList } from "@tui/component/dialog-session-list"
 import { DialogWorkspaceList } from "@tui/component/dialog-workspace-list"
 import { DialogConsoleOrg } from "@tui/component/dialog-console-org"
@@ -499,71 +498,6 @@ function App(props: { onSnapshot?: () => Promise<string[]> }) {
           workspaceID,
         })
         dialog.clear()
-      },
-    },
-    {
-      title: "Switch model",
-      value: "model.list",
-      keybind: "model_list",
-      suggested: true,
-      category: "Agent",
-      slash: {
-        name: "models",
-      },
-      onSelect: () => {
-        dialog.replace(() => <DialogModel />)
-      },
-    },
-    {
-      title: "Model cycle",
-      value: "model.cycle_recent",
-      keybind: "model_cycle_recent",
-      category: "Agent",
-      hidden: true,
-      onSelect: () => {
-        local.model.cycle(1)
-      },
-    },
-    {
-      title: "Model cycle reverse",
-      value: "model.cycle_recent_reverse",
-      keybind: "model_cycle_recent_reverse",
-      category: "Agent",
-      hidden: true,
-      onSelect: () => {
-        local.model.cycle(-1)
-      },
-    },
-    {
-      title: "Favorite cycle",
-      value: "model.cycle_favorite",
-      keybind: "model_cycle_favorite",
-      category: "Agent",
-      hidden: true,
-      onSelect: () => {
-        local.model.cycleFavorite(1)
-      },
-    },
-    {
-      title: "Favorite cycle reverse",
-      value: "model.cycle_favorite_reverse",
-      keybind: "model_cycle_favorite_reverse",
-      category: "Agent",
-      hidden: true,
-      onSelect: () => {
-        local.model.cycleFavorite(-1)
-      },
-    },
-    {
-      title: "Switch agent",
-      value: "agent.list",
-      keybind: "agent_list",
-      category: "Agent",
-      slash: {
-        name: "agents",
-      },
-      onSelect: () => {
-        dialog.replace(() => <DialogAgent />)
       },
     },
     {

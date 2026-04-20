@@ -76,6 +76,8 @@ export function Autocomplete(props: {
   fileStyleId: number
   agentStyleId: number
   promptPartTypeId: () => number
+  /** When true, @agent autocomplete is disabled (e.g., proxy child sessions) */
+  disableAgentMentions?: boolean
 }) {
   const sdk = useSDK()
   const sync = useSync()
@@ -336,6 +338,7 @@ export function Autocomplete(props: {
 
   const HERMES_ALLOWED_TARGETS = new Set(["atlas", "prometheus", "mnemosyne", "heracles", "hephaestus", "sisyphus"])
   const agents = createMemo(() => {
+    if (props.disableAgentMentions) return []
     const agents = sync.data.agent
     return agents
       .filter((agent) => !agent.hidden && HERMES_ALLOWED_TARGETS.has(agent.name.toLowerCase().split(" ")[0]))

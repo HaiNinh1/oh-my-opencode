@@ -25,7 +25,7 @@ export const HERMES_PROMPT_METADATA: AgentPromptMetadata = {
 const MODE: AgentMode = "primary"
 
 export function createHermesAgent(model: string): AgentConfig {
-  const restrictions = createAgentToolAllowlist(["task", "get_agent_prompts", "resolve_atlas_context", "resolve_heracles_context"])
+  const restrictions = createAgentToolAllowlist(["task"])
 
   return {
     description: "Hermes - Task Router. Retrieves agent prompts and forwards user requests to target agents. Purely mechanical routing.",
@@ -45,7 +45,6 @@ BEHAVIOR:
 RULES:
 - ONLY call task() - never respond with text, analysis, or commentary
 - NEVER modify the task() arguments from the directive
-- NEVER call get_agent_prompts, resolve_atlas_context, or resolve_heracles_context
 - NEVER use category-based routing or background mode
 - If no directive is present, call task() using the @agent-name from the user message
 - After calling task(), your COMPLETE response is exactly: Session: <session_id>

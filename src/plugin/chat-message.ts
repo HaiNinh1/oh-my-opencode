@@ -87,6 +87,11 @@ export function createChatMessageHandler(args: {
       return
     }
 
+    // Hermes proxy: reset per-turn task limit flag
+    if (isHermesAgent(input.agent)) {
+      HermesProxyState.resetTurnFlag(input.sessionID)
+    }
+
     // Hermes proxy: parse @agent-name from first message and pin session target
     if (isHermesAgent(input.agent) && !HermesProxyState.hasTarget(input.sessionID)) {
       const isFirstRootMessage = firstMessageVariantGate.shouldOverride(input.sessionID)
@@ -96,35 +101,47 @@ export function createChatMessageHandler(args: {
         )
 
         if (agentParts.length === 0) {
-          const allowedList = HERMES_ALLOWED_SUBAGENT_TYPES.join(", ")
-          throw new Error(
-            `Start your message with @agent-name to choose a target agent. Available: ${allowedList}`
-          )
-        }
-
-        if (agentParts.length > 1) {
+          // Default to Sisyphus when no @agent specified
+          const defaultTarget = "sisyphus"
+          HermesProxyState.setTarget(input.sessionID, defaultTarget)
+          // Inject AgentPart so TUI can detect this as a Hermes proxy parent for auto-navigate
+          // Must include id/sessionID/messageID for OpenCode's persistence layer (SyncEvent)
+          const messageID = (output.message as { id?: string }).id ?? ""
+          output.parts.push({
+            type: "agent",
+            name: defaultTarget,
+            id: `prt_hermes_default_agent_${input.sessionID}`,
+            sessionID: input.sessionID,
+            messageID,
+          })
+          log("[hermes-proxy] No @agent specified, defaulting to sisyphus", {
+            sessionID: input.sessionID,
+            targetAgent: defaultTarget,
+          })
+          firstMessageVariantGate.markApplied(input.sessionID)
+        } else if (agentParts.length > 1) {
           throw new Error(
             "Only one @agent-name allowed per session. Choose a single target agent."
           )
+        } else {
+          const rawAgentName = agentParts[0].name as string
+          const normalizedName = getAgentConfigKey(resolveAgentAbbreviation(rawAgentName.trim()))
+
+          if (!HERMES_ALLOWED_AGENTS_SET.has(normalizedName)) {
+            const allowedList = HERMES_ALLOWED_SUBAGENT_TYPES.join(", ")
+            throw new Error(
+              `Agent '${rawAgentName}' is not available for Hermes proxy routing. Use one of: ${allowedList}`
+            )
+          }
+
+          HermesProxyState.setTarget(input.sessionID, normalizedName)
+          log("[hermes-proxy] First message proxy target set", {
+            sessionID: input.sessionID,
+            targetAgent: normalizedName,
+            rawAgentName,
+          })
+          firstMessageVariantGate.markApplied(input.sessionID)
         }
-
-        const rawAgentName = agentParts[0].name as string
-        const normalizedName = getAgentConfigKey(resolveAgentAbbreviation(rawAgentName.trim()))
-
-        if (!HERMES_ALLOWED_AGENTS_SET.has(normalizedName)) {
-          const allowedList = HERMES_ALLOWED_SUBAGENT_TYPES.join(", ")
-          throw new Error(
-            `Agent '${rawAgentName}' is not available for Hermes proxy routing. Use one of: ${allowedList}`
-          )
-        }
-
-        HermesProxyState.setTarget(input.sessionID, normalizedName)
-        log("[hermes-proxy] First message proxy target set", {
-          sessionID: input.sessionID,
-          targetAgent: normalizedName,
-          rawAgentName,
-        })
-        firstMessageVariantGate.markApplied(input.sessionID)
       }
     }
 

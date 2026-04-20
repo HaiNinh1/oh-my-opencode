@@ -246,58 +246,6 @@ describe("hermes-routing-guard proxy enforcement", () => {
     })
   })
 
-  describe("#given hermes session with proxy target - helper tool blocking", () => {
-    describe("#when calling get_agent_prompts in pinned session", () => {
-      test("#then should block the tool", async () => {
-        // given
-        setupHermesSession(SESSION_ID)
-        HermesProxyState.setTarget(SESSION_ID, "sisyphus")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        // when / then
-        await expect(
-          hook["tool.execute.before"](
-            makeBeforeInput("get_agent_prompts"),
-            { args: { agent: "sisyphus" } }
-          )
-        ).rejects.toThrow("blocked in pinned proxy session")
-      })
-    })
-
-    describe("#when calling resolve_atlas_context in pinned session", () => {
-      test("#then should block the tool", async () => {
-        // given
-        setupHermesSession(SESSION_ID)
-        HermesProxyState.setTarget(SESSION_ID, "sisyphus")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        // when / then
-        await expect(
-          hook["tool.execute.before"](
-            makeBeforeInput("resolve_atlas_context"),
-            { args: { planName: "test-plan" } }
-          )
-        ).rejects.toThrow("blocked in pinned proxy session")
-      })
-    })
-
-    describe("#when calling resolve_heracles_context in pinned session", () => {
-      test("#then should block the tool", async () => {
-        // given
-        setupHermesSession(SESSION_ID)
-        HermesProxyState.setTarget(SESSION_ID, "sisyphus")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        // when / then
-        await expect(
-          hook["tool.execute.before"](
-            makeBeforeInput("resolve_heracles_context"),
-            { args: { planName: "test-plan" } }
-          )
-        ).rejects.toThrow("blocked in pinned proxy session")
-      })
-    })
-  })
 
   describe("#given non-hermes session with proxy state", () => {
     describe("#when calling task", () => {

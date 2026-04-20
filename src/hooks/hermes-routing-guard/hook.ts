@@ -12,11 +12,6 @@ import { getAgentConfigKey } from "../../shared/agent-display-names"
 import { log } from "../../shared/logger"
 import { HermesProxyState } from "../../shared/hermes-proxy-state"
 
-const HERMES_BLOCKED_TOOLS_WHEN_PINNED = new Set([
-  "get_agent_prompts",
-  "resolve_atlas_context",
-  "resolve_heracles_context",
-])
 
 export function createHermesRoutingGuardHook(ctx: PluginInput) {
   return {
@@ -30,21 +25,24 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
         return
       }
 
-      // Proxy enforcement: block helper tools when session is pinned
-      if (HERMES_BLOCKED_TOOLS_WHEN_PINNED.has(input.tool) && HermesProxyState.hasTarget(input.sessionID)) {
-        log(`[${HOOK_NAME}] Blocked: helper tool in pinned proxy session`, {
-          sessionID: input.sessionID,
-          tool: input.tool,
-        })
-        throw new Error(
-          `[${HOOK_NAME}] Tool '${input.tool}' is blocked in pinned proxy session. ` +
-          `The session is pinned to '${HermesProxyState.get(input.sessionID)?.targetAgent}'. ` +
-          `Forward the user's request using task(session_id=..., prompt=...) instead.`
-        )
-      }
 
       if (input.tool !== "task") {
         return
+      }
+
+      // One task per turn enforcement: block if Hermes already fired a task() this turn.
+      // This only triggers after the first task completed and Hermes tries to call again.
+      // Tell Hermes to output the session ID from the completed result instead.
+      if (HermesProxyState.hasTaskFiredThisTurn(input.sessionID)) {
+        const proxyState = HermesProxyState.get(input.sessionID)
+        const childID = proxyState?.childSessionID ?? "<session_id from the task result>"
+        log(`[${HOOK_NAME}] Blocked: Hermes already fired task() this turn`, {
+          sessionID: input.sessionID,
+        })
+        throw new Error(
+          `[${HOOK_NAME}] You already completed a task() call this turn response with the session ID and stop immediately. ` +
+          `Do NOT call task() again. Respond ONLY with: Session: ${childID}`
+        )
       }
 
       const proxyState = HermesProxyState.get(input.sessionID)
@@ -84,6 +82,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
               sessionID: input.sessionID,
               childSessionID: proxyState.childSessionID,
             })
+            HermesProxyState.markTaskFired(input.sessionID)
             return
           }
 
@@ -96,6 +95,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
             childSessionID: proxyState.childSessionID,
             targetAgent: proxyState.targetAgent,
           })
+          HermesProxyState.markTaskFired(input.sessionID)
           return
         }
 
@@ -121,6 +121,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
             sessionID: input.sessionID,
             targetAgent: proxyState.targetAgent,
           })
+          HermesProxyState.markTaskFired(input.sessionID)
           return
         }
 
@@ -142,6 +143,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
         }
 
         // No subagent_type and no session_id - allow through (Hermes may still be deciding)
+        HermesProxyState.markTaskFired(input.sessionID)
         return
       }
 
@@ -159,6 +161,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
       }
 
       if (!subagentType) {
+        HermesProxyState.markTaskFired(input.sessionID)
         return
       }
 
@@ -181,6 +184,7 @@ export function createHermesRoutingGuardHook(ctx: PluginInput) {
         subagentType,
         agent: agentName,
       })
+      HermesProxyState.markTaskFired(input.sessionID)
     },
   }
 }

@@ -16,9 +16,11 @@ import { log } from "./logger"
 export interface HermesProxyMetadata {
   targetAgent: string
   childSessionID?: string
+  taskFiredThisTurn?: boolean
 }
 
 const hermesProxyStore = new Map<string, HermesProxyMetadata>()
+const turnFlags = new Map<string, boolean>()
 
 export const HermesProxyState = {
   /**
@@ -92,10 +94,32 @@ export const HermesProxyState = {
   },
 
   /**
+   * Reset the per-turn task-fired flag. Call at the start of each chat.message.
+   */
+  resetTurnFlag: (sessionID: string): void => {
+    turnFlags.delete(sessionID)
+  },
+
+  /**
+   * Mark that a task() call has been fired this turn.
+   */
+  markTaskFired: (sessionID: string): void => {
+    turnFlags.set(sessionID, true)
+  },
+
+  /**
+   * Check whether a task() call has already been fired this turn.
+   */
+  hasTaskFiredThisTurn: (sessionID: string): boolean => {
+    return turnFlags.get(sessionID) === true
+  },
+
+  /**
    * Clear proxy state for a session (cleanup on session.deleted).
    */
   clear: (sessionID: string): void => {
     const existed = hermesProxyStore.delete(sessionID)
+    turnFlags.delete(sessionID)
     if (existed) {
       log("[hermes-proxy-state] Proxy state cleared", { sessionID })
     }
@@ -113,5 +137,6 @@ export const HermesProxyState = {
    */
   clearAll: (): void => {
     hermesProxyStore.clear()
+    turnFlags.clear()
   },
 }

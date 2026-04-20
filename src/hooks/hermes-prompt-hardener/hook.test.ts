@@ -85,7 +85,11 @@ describe("hermes-prompt-hardener", () => {
         message: {},
         parts: [
           { type: "text", text: "@Sisyphus (Ultraworker) hi" },
-          { type: "agent", name: "Sisyphus (Ultraworker)" },
+          {
+            type: "agent",
+            name: "Sisyphus (Ultraworker)",
+            source: { value: "@Sisyphus (Ultraworker)" },
+          },
           {
             type: "text",
             text: " Use the above message and context to generate a prompt and call the task tool with subagent: Sisyphus (Ultraworker)",
@@ -98,34 +102,92 @@ describe("hermes-prompt-hardener", () => {
       await hook["chat.message"](input, output)
 
       // then - the directive's prompt arg should contain only clean user text
-      const injectedText = output.parts[0].text!
-      const directiveSection = injectedText.split("---")[0]
-      expect(directiveSection).toContain('prompt="hi"')
-      expect(directiveSection).not.toContain("Use the above message and context")
-      expect(directiveSection).not.toContain("generate a prompt and call the task tool")
-      expect(directiveSection).not.toContain("@Sisyphus")
+      // synthetic parts are stripped from output
+      const textPart = output.parts.find((p) => p.type === "text" && !p.synthetic)
+      expect(textPart).toBeDefined()
+      expect(textPart!.text).toContain('prompt="hi"')
+      expect(textPart!.text).not.toContain("Use the above message and context")
+      expect(textPart!.text).not.toContain("@Sisyphus")
+      // synthetic parts should be removed
+      expect(output.parts.filter((p) => p.synthetic)).toHaveLength(0)
     })
 
-    test("strips @agent mention from user text in prompt arg", async () => {
-      // given
+    test("strips @agent mention from user text using agent part source.value", async () => {
+      // given - agent part has source.value for precise stripping
       HermesProxyState.setTarget("hermes_at_mention", "atlas")
       const input = { sessionID: "hermes_at_mention", agent: "Hermes \u2624 (Task Router)" }
       const output = {
         message: {},
-        parts: [{ type: "text", text: "@Atlas create a plan for this" }],
+        parts: [
+          { type: "text", text: "@Atlas create a plan for this" },
+          { type: "agent", name: "Atlas", source: { value: "@Atlas" } },
+        ],
       }
 
       // when
       await hook["chat.message"](input, output)
 
       // then - the directive's prompt arg should not have @agent mention
-      const injectedText = output.parts[0].text!
-      const directiveSection = injectedText.split("---")[0]
-      expect(directiveSection).toContain('prompt="create a plan for this"')
-      expect(directiveSection).not.toContain("@Atlas")
+      const injectedText = output.parts.find((p) => p.type === "text" && !p.synthetic)!.text!
+      expect(injectedText).toContain('prompt="create a plan for this"')
+      expect(injectedText).not.toContain("@Atlas")
     })
 
-    test("preserves original user text after directive", async () => {
+    test("strips @agent mention using name-based fallback when no source.value", async () => {
+      // given - agent part without source.value, falls back to name pattern
+      HermesProxyState.setTarget("hermes_name_fallback", "atlas")
+      const input = { sessionID: "hermes_name_fallback", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "@atlas create a plan" },
+          { type: "agent", name: "atlas" },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then
+      const injectedText = output.parts.find((p) => p.type === "text" && !p.synthetic)!.text!
+      expect(injectedText).toContain('prompt="create a plan"')
+      expect(injectedText).not.toContain("@atlas")
+    })
+
+    test("does not strip @filename references (only agent mentions)", async () => {
+      // given - text has @filename reference and agent mention
+      HermesProxyState.setTarget("hermes_file_mention", "sisyphus")
+      const input = { sessionID: "hermes_file_mention", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "@Sisyphus (Ultraworker) read @src/index.ts" },
+          {
+            type: "agent",
+            name: "Sisyphus (Ultraworker)",
+            source: { value: "@Sisyphus (Ultraworker)" },
+          },
+          {
+            type: "file",
+            url: "file:///home/user/project/src/index.ts",
+            mime: "text/plain",
+            filename: "src/index.ts",
+            source: { type: "file", path: "src/index.ts", text: { value: "@src/index.ts" } },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - @agent is stripped, @filename is replaced with resolved path
+      const injectedText = output.parts.find((p) => p.type === "text" && !p.synthetic)!.text!
+      expect(injectedText).not.toContain("@Sisyphus")
+      expect(injectedText).not.toContain("@src/index.ts")
+      expect(injectedText).toContain("/home/user/project/src/index.ts")
+    })
+
+    test("replaces user text entirely with directive", async () => {
       // given
       HermesProxyState.setTarget("hermes_preserve", "atlas")
       const input = { sessionID: "hermes_preserve", agent: "Hermes \u2624 (Task Router)" }
@@ -137,9 +199,12 @@ describe("hermes-prompt-hardener", () => {
       // when
       await hook["chat.message"](input, output)
 
-      // then
+      // then - text should be only the directive, no trailing user text
       const injectedText = output.parts[0].text!
-      expect(injectedText).toEndWith("---\n\ncreate a plan")
+      expect(injectedText).toContain("[HERMES ROUTING DIRECTIVE]")
+      expect(injectedText).toContain('[END DIRECTIVE]')
+      expect(injectedText).not.toContain("---")
+      expect(injectedText).toEndWith("[END DIRECTIVE]")
     })
   })
 
@@ -204,9 +269,10 @@ describe("hermes-prompt-hardener", () => {
       // when
       await hook["chat.message"](input, output)
 
-      // then - synthetic parts should not be treated as user text
-      expect(output.parts.length).toBe(2)
-      expect(output.parts[1].text).toContain("Use the above message")
+      // then - synthetic parts should not be treated as user text, no injection
+      const syntheticParts = output.parts.filter((p) => p.type === "text" && p.synthetic)
+      // synthetic parts may be stripped but there was no user text to inject into
+      expect(output.parts.some((p) => p.type === "agent")).toBe(true)
     })
   })
 
@@ -226,6 +292,225 @@ describe("hermes-prompt-hardener", () => {
       // then
       const injectedText = output.parts[0].text!
       expect(injectedText).toContain('fix the \\"broken\\" test')
+    })
+  })
+
+  describe("#given a message with file parts", () => {
+    test("strips file parts and appends orphan file paths to prompt", async () => {
+      // given - file parts without source.text.value are orphan paths
+      HermesProxyState.setTarget("hermes_files", "sisyphus")
+      const input = { sessionID: "hermes_files", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "read these files" },
+          {
+            type: "file",
+            url: "file:///home/user/project/src/index.ts",
+            mime: "text/plain",
+            filename: "index.ts",
+            source: { type: "file", path: "src/index.ts" },
+          },
+          {
+            type: "file",
+            url: "file:///home/user/project/README.md",
+            mime: "text/plain",
+            filename: "README.md",
+            source: { type: "file", path: "README.md" },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - file parts should be stripped (in-place)
+      expect(output.parts.filter((p) => p.type === "file")).toHaveLength(0)
+      // prompt should contain file paths as "Referenced files"
+      const textPart = output.parts.find((p) => p.type === "text" && !p.synthetic)
+      expect(textPart).toBeDefined()
+      expect(textPart!.text).toContain("Referenced files:")
+      expect(textPart!.text).toContain("/home/user/project/src/index.ts")
+      expect(textPart!.text).toContain("/home/user/project/README.md")
+    })
+
+    test("replaces @filename references inline with resolved paths", async () => {
+      // given - file parts with source.text.value get inline replacement
+      HermesProxyState.setTarget("hermes_inline_files", "sisyphus")
+      const input = { sessionID: "hermes_inline_files", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "read @src/index.ts and explain it" },
+          {
+            type: "file",
+            url: "file:///home/user/project/src/index.ts",
+            mime: "text/plain",
+            filename: "src/index.ts",
+            source: { type: "file", path: "src/index.ts", text: { value: "@src/index.ts" } },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - @filename replaced with resolved path inline, not in "Referenced files"
+      const injectedText = output.parts.find((p) => p.type === "text" && !p.synthetic)!.text!
+      expect(injectedText).toContain("/home/user/project/src/index.ts")
+      expect(injectedText).not.toContain("@src/index.ts")
+      expect(injectedText).not.toContain("Referenced files:")
+    })
+
+    test("replaces [Image N] placeholder with /tmp path", async () => {
+      // given - pasted image with [Image 1] virtual text
+      HermesProxyState.setTarget("hermes_image_replace", "sisyphus")
+      const input = { sessionID: "hermes_image_replace", agent: "Hermes \u2624 (Task Router)" }
+      const base64Content = Buffer.from("fake-png-data").toString("base64")
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "analyze this [Image 1] for me" },
+          {
+            type: "file",
+            url: `data:image/png;base64,${base64Content}`,
+            mime: "image/png",
+            filename: "clipboard",
+            source: { type: "file", path: "clipboard", text: { value: "[Image 1]" } },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - [Image 1] replaced with /tmp path
+      const injectedText = output.parts.find((p) => p.type === "text" && !p.synthetic)!.text!
+      expect(injectedText).toContain("/tmp/hermes-attachments/")
+      expect(injectedText).toContain(".png")
+      expect(injectedText).not.toContain("[Image 1]")
+      expect(injectedText).not.toContain("Referenced files:")
+    })
+
+    test("saves data: URL images to /tmp and includes path as orphan", async () => {
+      // given - data: URL image without source.text.value
+      HermesProxyState.setTarget("hermes_image", "sisyphus")
+      const input = { sessionID: "hermes_image", agent: "Hermes \u2624 (Task Router)" }
+      const base64Content = Buffer.from("fake-png-data").toString("base64")
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "analyze this image" },
+          {
+            type: "file",
+            url: `data:image/png;base64,${base64Content}`,
+            mime: "image/png",
+            filename: "clipboard",
+            source: { type: "file", path: "clipboard" },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - file parts should be stripped
+      expect(output.parts.filter((p) => p.type === "file")).toHaveLength(0)
+      // prompt should reference a /tmp path
+      const textPart = output.parts.find((p) => p.type === "text" && !p.synthetic)
+      expect(textPart).toBeDefined()
+      expect(textPart!.text).toContain("Referenced files:")
+      expect(textPart!.text).toContain("/tmp/hermes-attachments/")
+      expect(textPart!.text).toContain(".png")
+    })
+
+    test("strips synthetic text parts from file content resolution", async () => {
+      // given - server resolves file:// URLs into synthetic text parts
+      HermesProxyState.setTarget("hermes_synthetic_file", "sisyphus")
+      const input = { sessionID: "hermes_synthetic_file", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "check this file" },
+          {
+            type: "text",
+            text: "[file content injected by server: lots of code here]",
+            synthetic: true,
+          },
+          {
+            type: "file",
+            url: "file:///home/user/project/main.ts",
+            mime: "text/plain",
+            source: { type: "file", path: "main.ts" },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - both file and synthetic text parts should be stripped
+      expect(output.parts.filter((p) => p.type === "file")).toHaveLength(0)
+      expect(output.parts.filter((p) => p.synthetic)).toHaveLength(0)
+      // only the directive text part and agent parts should remain
+      const textPart = output.parts.find((p) => p.type === "text" && !p.synthetic)
+      expect(textPart).toBeDefined()
+      expect(textPart!.text).toContain("Referenced files:")
+      expect(textPart!.text).not.toContain("file content injected by server")
+    })
+
+    test("handles mixed file and text parts without file references", async () => {
+      // given - no file parts, should not add Referenced files section
+      HermesProxyState.setTarget("hermes_no_files", "sisyphus")
+      const input = { sessionID: "hermes_no_files", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [{ type: "text", text: "just a normal message" }],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - no Referenced files section
+      const textPart = output.parts.find((p) => p.type === "text" && !p.synthetic)
+      expect(textPart).toBeDefined()
+      expect(textPart!.text).not.toContain("Referenced files:")
+    })
+
+    test("handles mix of inline file references and orphan file paths", async () => {
+      // given - one file with source.text.value, one without
+      HermesProxyState.setTarget("hermes_mixed_files", "sisyphus")
+      const input = { sessionID: "hermes_mixed_files", agent: "Hermes \u2624 (Task Router)" }
+      const output = {
+        message: {},
+        parts: [
+          { type: "text", text: "read @src/index.ts and also check this" },
+          {
+            type: "file",
+            url: "file:///home/user/project/src/index.ts",
+            mime: "text/plain",
+            filename: "src/index.ts",
+            source: { type: "file", path: "src/index.ts", text: { value: "@src/index.ts" } },
+          },
+          {
+            type: "file",
+            url: "file:///home/user/project/README.md",
+            mime: "text/plain",
+            filename: "README.md",
+            source: { type: "file", path: "README.md" },
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then - @src/index.ts replaced inline, README.md as orphan in "Referenced files"
+      const injectedText = output.parts.find((p) => p.type === "text" && !p.synthetic)!.text!
+      expect(injectedText).toContain("/home/user/project/src/index.ts")
+      expect(injectedText).not.toContain("@src/index.ts")
+      expect(injectedText).toContain("Referenced files:")
+      expect(injectedText).toContain("/home/user/project/README.md")
     })
   })
 })

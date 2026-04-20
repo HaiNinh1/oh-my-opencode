@@ -45,6 +45,7 @@ export function createPluginInterface(args: {
     output: { description: string; parameters: unknown },
   ): Promise<void> => {
     await hooks.todoDescriptionOverride?.["tool.definition"]?.(input, output);
+    await hooks.hermesTaskDescription?.["tool.definition"]?.(input, output);
   };
 
   return {

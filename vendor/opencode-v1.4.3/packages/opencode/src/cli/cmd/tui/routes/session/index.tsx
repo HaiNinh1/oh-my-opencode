@@ -85,6 +85,12 @@ import { getScrollAcceleration } from "../../util/scroll"
 import { TuiPluginRuntime } from "../../plugin"
 import { DialogGoUpsell } from "../../component/dialog-go-upsell"
 import { SessionRetry } from "@/session/retry"
+import {
+  isHermesAgent,
+  isHermesProxyParent,
+  findHermesProxyChild,
+  getProxyTarget,
+} from "../../util/hermes-proxy"
 
 addDefaultParsers(parsers.parsers)
 
@@ -130,8 +136,29 @@ export function Session() {
   })
   const messages = createMemo(() => sync.data.message[route.sessionID] ?? [])
 
-  // Hermes proxy: find the proxy target from the first user message's AgentPart
+  // Hermes proxy: detect if this is a proxy child (parent is a Hermes proxy session)
+  // Sync parent session data so we can inspect its messages
+  createEffect(() => {
+    const parentID = session()?.parentID
+    if (parentID) sync.session.sync(parentID).catch(() => {})
+  })
+
+  const proxyChild = createMemo(() => {
+    const s = session()
+    if (!s?.parentID) return false
+    const parentMessages = sync.data.message[s.parentID] ?? []
+    const firstParentUser = parentMessages.find((m) => m.role === "user")
+    if (!firstParentUser) return false
+    if (!isHermesAgent(firstParentUser.agent)) return false
+    return getProxyTarget(s.parentID, sync.data.message, sync.data.part) !== undefined
+  })
+
+  // Hermes proxy: find the proxy target from first user message's AgentPart
+  // For proxy children, derive the target from the parent session
   const sessionProxyTarget = createMemo(() => {
+    if (proxyChild() && session()?.parentID) {
+      return getProxyTarget(session()!.parentID!, sync.data.message, sync.data.part)
+    }
     const msgs = messages()
     const firstUser = msgs.find((m) => m.role === "user")
     if (!firstUser) return undefined
@@ -141,15 +168,31 @@ export function Session() {
     if (agentPart && "name" in agentPart) return (agentPart as { name: string }).name
     return undefined
   })
+
   const permissions = createMemo(() => {
+    if (proxyChild()) {
+      return [
+        ...(sync.data.permission[route.sessionID] ?? []),
+        ...(sync.data.permission[session()!.parentID!] ?? []),
+      ]
+    }
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.permission[x.id] ?? [])
   })
   const questions = createMemo(() => {
+    if (proxyChild()) {
+      return [
+        ...(sync.data.question[route.sessionID] ?? []),
+        ...(sync.data.question[session()!.parentID!] ?? []),
+      ]
+    }
     if (session()?.parentID) return []
     return children().flatMap((x) => sync.data.question[x.id] ?? [])
   })
-  const visible = createMemo(() => !session()?.parentID && permissions().length === 0 && questions().length === 0)
+  const visible = createMemo(() => {
+    if (proxyChild()) return permissions().length === 0 && questions().length === 0
+    return !session()?.parentID && permissions().length === 0 && questions().length === 0
+  })
   const disabled = createMemo(() => permissions().length > 0 || questions().length > 0)
 
   const pending = createMemo(() => {
@@ -175,7 +218,7 @@ export function Session() {
 
   const wide = createMemo(() => dimensions().width > 120)
   const sidebarVisible = createMemo(() => {
-    if (session()?.parentID) return false
+    if (session()?.parentID && !proxyChild()) return false
     if (sidebarOpen()) return true
     if (sidebar() === "auto" && wide()) return true
     return false
@@ -200,6 +243,69 @@ export function Session() {
         })
         return navigate({ type: "home" })
       })
+  })
+
+  // Hermes proxy: auto-navigate from proxy parent to child when child has messages
+  let autoNavChildID: string | undefined
+  createEffect(() => {
+    const s = session()
+    if (!s || s.parentID) return
+    if (!isHermesProxyParent(s, sync.data.message, sync.data.part)) return
+    const child = findHermesProxyChild(s.id, sync.data.session, sync.data.message)
+    if (!child) return
+    if (child.id === autoNavChildID) return // already navigated to this child
+    const childMessages = sync.data.message[child.id]
+    if (!childMessages || childMessages.length === 0) return
+    autoNavChildID = child.id
+    navigate({ type: "session", sessionID: child.id })
+  })
+
+  // Hermes proxy: if on an orphaned proxy child and a newer sibling appears, switch to it
+  // This handles recovery after interrupted first messages
+  createEffect(() => {
+    if (!proxyChild() || !session()?.parentID) return
+    const bestChild = findHermesProxyChild(session()!.parentID!, sync.data.session, sync.data.message)
+    if (!bestChild || bestChild.id === route.sessionID) return
+    const bestMessages = sync.data.message[bestChild.id]
+    if (!bestMessages || bestMessages.length === 0) return
+    navigate({ type: "session", sessionID: bestChild.id })
+  })
+
+  // Hermes proxy: optimistic user echo for proxy child submissions
+  const [optimisticText, setOptimisticText] = createSignal<string | null>(null)
+  // Clear optimistic text when session changes (e.g., auto-navigate parent -> child)
+  createEffect(on(() => route.sessionID, () => {
+    setOptimisticText(null)
+  }))
+  // Clear optimistic text when a new user message arrives in the child session
+  createEffect(on(
+    () => proxyChild() ? messages().filter((m) => m.role === "user").length : -1,
+    (count, prevCount) => {
+      if (prevCount !== undefined && prevCount >= 0 && count > prevCount && optimisticText() !== null) {
+        setOptimisticText(null)
+      }
+    },
+  ))
+
+  // Hermes proxy: surface parent session errors in child view
+  let lastParentErrorMessageID: string | undefined
+  createEffect(() => {
+    if (!proxyChild() || !session()?.parentID) return
+    const parentMessages = sync.data.message[session()!.parentID!] ?? []
+    const lastAssistant = parentMessages.findLast((m) => m.role === "assistant")
+    if (!lastAssistant || lastAssistant.role !== "assistant") return
+    const assistantMsg = lastAssistant as import("@opencode-ai/sdk/v2").AssistantMessage
+    if (assistantMsg.error && assistantMsg.id !== lastParentErrorMessageID) {
+      // Skip aborted errors — these are expected when the user interrupts
+      const errorName = "name" in assistantMsg.error ? assistantMsg.error.name : undefined
+      if (errorName === "MessageAbortedError") return
+      lastParentErrorMessageID = assistantMsg.id
+      toast.show({
+        message: "message" in assistantMsg.error ? String(assistantMsg.error.message) : "Parent session error",
+        variant: "error",
+        duration: 5000,
+      })
+    }
   })
 
   const toast = useToast()
@@ -278,6 +384,7 @@ export function Session() {
 
   useKeyboard((evt) => {
     if (!session()?.parentID) return
+    if (proxyChild()) return // Prompt handles exit for proxy children
     if (keybind.match("app_exit", evt)) {
       exit()
     }
@@ -454,6 +561,7 @@ export function Session() {
       value: "session.fork",
       keybind: "session_fork",
       category: "Session",
+      enabled: !proxyChild(),
       slash: {
         name: "fork",
       },
@@ -533,6 +641,11 @@ export function Session() {
       onSelect: async (dialog) => {
         const status = sync.data.session_status?.[route.sessionID]
         if (status?.type !== "idle") await sdk.client.session.abort({ sessionID: route.sessionID }).catch(() => {})
+        // Hermes proxy: also abort the parent to prevent it from sending new prompts after revert
+        if (proxyChild() && session()?.parentID) {
+          const parentStatus = sync.data.session_status?.[session()!.parentID!]
+          if (parentStatus?.type !== "idle") await sdk.client.session.abort({ sessionID: session()!.parentID! }).catch(() => {})
+        }
         const revert = session()?.revert?.messageID
         const message = messages().findLast((x) => (!revert || x.id < revert) && x.role === "user")
         if (!message) return
@@ -955,7 +1068,7 @@ export function Session() {
       keybind: "session_parent",
       category: "Session",
       hidden: true,
-      enabled: !!session()?.parentID,
+      enabled: !!session()?.parentID && !proxyChild(),
       onSelect: childSessionHandler((dialog) => {
         const parentID = session()?.parentID
         if (parentID) {
@@ -973,7 +1086,7 @@ export function Session() {
       keybind: "session_child_cycle",
       category: "Session",
       hidden: true,
-      enabled: !!session()?.parentID,
+      enabled: !!session()?.parentID && !proxyChild(),
       onSelect: childSessionHandler((dialog) => {
         moveChild(1)
         dialog.clear()
@@ -985,7 +1098,7 @@ export function Session() {
       keybind: "session_child_cycle_reverse",
       category: "Session",
       hidden: true,
-      enabled: !!session()?.parentID,
+      enabled: !!session()?.parentID && !proxyChild(),
       onSelect: childSessionHandler((dialog) => {
         moveChild(-1)
         dialog.clear()
@@ -1179,6 +1292,28 @@ export function Session() {
                   </Switch>
                 )}
               </For>
+              {/* Hermes proxy: optimistic user message echo */}
+              <Show when={optimisticText()}>
+                <box
+                  border={["left"]}
+                  borderColor={local.agent.color(sessionProxyTarget() ?? local.agent.current().name)}
+                  customBorderChars={SplitBorder.customBorderChars}
+                  marginTop={messages().length > 0 ? 1 : 0}
+                >
+                  <box
+                    paddingTop={1}
+                    paddingBottom={1}
+                    paddingLeft={2}
+                    backgroundColor={theme.backgroundPanel}
+                    flexShrink={0}
+                  >
+                    <text fg={theme.text}>{optimisticText()}</text>
+                    <text fg={theme.textMuted}>
+                      <span style={{ bg: local.agent.color(sessionProxyTarget() ?? local.agent.current().name), fg: selectedForeground(theme, local.agent.color(sessionProxyTarget() ?? local.agent.current().name)), bold: true }}> SENDING </span>
+                    </text>
+                  </box>
+                </box>
+              </Show>
             </scrollbox>
             <box flexShrink={0}>
               <Show when={permissions().length > 0}>
@@ -1187,7 +1322,7 @@ export function Session() {
               <Show when={permissions().length === 0 && questions().length > 0}>
                 <QuestionPrompt request={questions()[0]} />
               </Show>
-              <Show when={session()?.parentID}>
+              <Show when={session()?.parentID && !proxyChild()}>
                 <SubagentFooter />
               </Show>
               <Show when={visible()}>
@@ -1208,6 +1343,8 @@ export function Session() {
                       toBottom()
                     }}
                     sessionID={route.sessionID}
+                    submitSessionID={proxyChild() ? session()!.parentID! : undefined}
+                    onProxySubmit={proxyChild() ? (text) => setOptimisticText(text) : undefined}
                     right={<TuiPluginRuntime.Slot name="session_prompt_right" session_id={route.sessionID} />}
                   />
                 </TuiPluginRuntime.Slot>

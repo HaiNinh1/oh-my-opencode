@@ -16,6 +16,7 @@ import {
   createJsonErrorRecoveryHook,
   createTodoDescriptionOverrideHook,
   createHermesRoutingGuardHook,
+  createHermesTaskDescriptionHook,
 } from "../../hooks";
 import {
   getOpenCodeVersion,
@@ -51,6 +52,7 @@ export type ToolGuardHooks = {
     typeof createTodoDescriptionOverrideHook
   > | null;
   hermesRoutingGuard: ReturnType<typeof createHermesRoutingGuardHook> | null;
+  hermesTaskDescription: ReturnType<typeof createHermesTaskDescriptionHook> | null;
 };
 
 export function createToolGuardHooks(args: {
@@ -162,6 +164,10 @@ export function createToolGuardHooks(args: {
   const hermesRoutingGuard = isHookEnabled("hermes-routing-guard")
     ? safeHook("hermes-routing-guard", () => createHermesRoutingGuardHook(ctx))
     : null;
+  const hermesTaskDescription = isHookEnabled("hermes-routing-guard")
+    ? safeHook("hermes-routing-guard", () => createHermesTaskDescriptionHook())
+    : null;
+
 
   return {
     commentChecker,
@@ -177,5 +183,6 @@ export function createToolGuardHooks(args: {
     readImageResizer,
     todoDescriptionOverride,
     hermesRoutingGuard,
+    hermesTaskDescription,
   };
 }
