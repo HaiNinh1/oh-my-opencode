@@ -3,6 +3,7 @@ import type { SessionMessage } from "./executor-types"
 import { getDefaultSyncPollTimeoutMs, getTimingConfig } from "./timing"
 import { log } from "../../shared/logger"
 import { normalizeSDKResponse } from "../../shared"
+import { getMessagesAfterAnchor, type SyncMessageAnchor } from "./sync-message-anchor"
 
 const NON_TERMINAL_FINISH_REASONS = new Set(["tool-calls", "unknown"])
 
@@ -14,12 +15,22 @@ function wait(milliseconds: number): Promise<void> {
 }
 
 function abortSyncSession(client: OpencodeClient, sessionID: string, reason: string): void {
+  if (typeof client.session.abort !== "function") {
+    log("[task] Sync session abort unavailable", { sessionID, reason })
+    return
+  }
+
   log("[task] Aborting sync session", { sessionID, reason })
   void client.session.abort({
     path: { id: sessionID },
   }).catch((error: unknown) => {
     log("[task] Failed to abort sync session", { sessionID, reason, error: String(error) })
   })
+}
+
+function hasTerminalAssistantFinish(message: SessionMessage | undefined): boolean {
+  if (!message?.info?.finish) return false
+  return !NON_TERMINAL_FINISH_REASONS.has(message.info.finish)
 }
 
 export function isSessionComplete(messages: SessionMessage[]): boolean {
@@ -33,10 +44,31 @@ export function isSessionComplete(messages: SessionMessage[]): boolean {
     if (lastUser && lastAssistant) break
   }
 
-  if (!lastAssistant?.info?.finish) return false
-  if (NON_TERMINAL_FINISH_REASONS.has(lastAssistant.info.finish)) return false
+  if (!hasTerminalAssistantFinish(lastAssistant)) return false
   if (!lastUser?.info?.id || !lastAssistant?.info?.id) return false
   return lastUser.info.id < lastAssistant.info.id
+}
+
+function isAnchoredSessionComplete(messages: SessionMessage[]): boolean {
+  let lastUserIndex = -1
+  let lastAssistantIndex = -1
+  let lastAssistant: SessionMessage | undefined
+
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i]
+    if (lastAssistantIndex === -1 && msg.info?.role === "assistant") {
+      lastAssistant = msg
+      lastAssistantIndex = i
+    }
+    if (lastUserIndex === -1 && msg.info?.role === "user") {
+      lastUserIndex = i
+    }
+    if (lastAssistantIndex !== -1 && lastUserIndex !== -1) break
+  }
+
+  if (!hasTerminalAssistantFinish(lastAssistant)) return false
+  if (lastUserIndex === -1) return true
+  return lastAssistantIndex > lastUserIndex
 }
 
 export async function pollSyncSession(
@@ -47,7 +79,7 @@ export async function pollSyncSession(
     agentToUse: string
     toastManager: { removeTask: (id: string) => void } | null | undefined
     taskId: string | undefined
-    anchorMessageCount?: number
+    anchorMessage?: SyncMessageAnchor | number
   },
   timeoutMs?: number
 ): Promise<string | null> {
@@ -102,18 +134,23 @@ export async function pollSyncSession(
     }
     const rawData = (messagesResult as { data?: unknown })?.data ?? messagesResult
     const msgs = Array.isArray(rawData) ? (rawData as SessionMessage[]) : []
+    const messagesToEvaluate = getMessagesAfterAnchor(msgs, input.anchorMessage)
 
-    if (input.anchorMessageCount !== undefined && msgs.length <= input.anchorMessageCount) {
+    if (input.anchorMessage !== undefined && messagesToEvaluate.length === 0) {
       continue
     }
 
-    if (isSessionComplete(msgs)) {
+    const sessionComplete = input.anchorMessage === undefined
+      ? isSessionComplete(messagesToEvaluate)
+      : isAnchoredSessionComplete(messagesToEvaluate)
+
+    if (sessionComplete) {
       log("[task] Poll complete - terminal finish detected", { sessionID: input.sessionID, pollCount })
       break
     }
 
-    const lastAssistant = [...msgs].reverse().find((m) => m.info?.role === "assistant")
-    const hasAssistantText = msgs.some((m) => {
+    const lastAssistant = [...messagesToEvaluate].reverse().find((m) => m.info?.role === "assistant")
+    const hasAssistantText = messagesToEvaluate.some((m) => {
       if (m.info?.role !== "assistant") return false
       const parts = m.parts ?? []
       return parts.some((p) => {

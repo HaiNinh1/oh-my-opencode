@@ -1,11 +1,12 @@
 import type { OpencodeClient } from "./types"
 import type { SessionMessage } from "./executor-types"
 import { normalizeSDKResponse } from "../../shared"
+import { getMessagesAfterAnchor, type SyncMessageAnchor } from "./sync-message-anchor"
 
 export async function fetchSyncResult(
   client: OpencodeClient,
   sessionID: string,
-  anchorMessageCount?: number
+  anchorMessage?: SyncMessageAnchor | number
 ): Promise<{ ok: true; textContent: string } | { ok: false; error: string }> {
   const messagesResult = await client.session.messages({
     path: { id: sessionID },
@@ -19,9 +20,9 @@ export async function fetchSyncResult(
     preferResponseOnMissingData: true,
   })
 
-  const messagesAfterAnchor = anchorMessageCount !== undefined ? messages.slice(anchorMessageCount) : messages
+  const messagesAfterAnchor = getMessagesAfterAnchor(messages, anchorMessage)
 
-  if (anchorMessageCount !== undefined && messagesAfterAnchor.length === 0) {
+  if (anchorMessage !== undefined && messagesAfterAnchor.length === 0) {
     return {
       ok: false,
       error: `Session completed but no new response was generated. The model may have failed silently.\n\nSession ID: ${sessionID}`,
@@ -33,7 +34,7 @@ export async function fetchSyncResult(
     .sort((a, b) => (b.info?.time?.created ?? 0) - (a.info?.time?.created ?? 0))
   const lastMessage = assistantMessages[0]
 
-  if (anchorMessageCount !== undefined && !lastMessage) {
+  if (anchorMessage !== undefined && !lastMessage) {
     return {
       ok: false,
       error: `Session completed but no new response was generated. The model may have failed silently.\n\nSession ID: ${sessionID}`,

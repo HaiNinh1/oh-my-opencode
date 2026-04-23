@@ -13,6 +13,7 @@ import { setSessionTools } from "../../shared/session-tools-store"
 import { normalizeSDKResponse } from "../../shared"
 import { buildTaskPrompt } from "./prompt-builder"
 import { getTaskOutputContent } from "./task-output-pruner"
+import { createSyncMessageAnchor, type SyncMessageAnchor } from "./sync-message-anchor"
 
 export async function executeSyncContinuation(
   args: DelegateTaskArgs,
@@ -40,13 +41,13 @@ export async function executeSyncContinuation(
   let resumeAgent: string | undefined
   let resumeModel: { providerID: string; modelID: string } | undefined
   let resumeVariant: string | undefined
-  let anchorMessageCount: number | undefined
+  let anchorMessage: SyncMessageAnchor | undefined
 
   try {
     try {
       const messagesResp = await client.session.messages({ path: { id: args.session_id! } })
       const messages = normalizeSDKResponse(messagesResp, [] as SessionMessage[])
-      anchorMessageCount = messages.length
+      anchorMessage = createSyncMessageAnchor(messages)
       for (let i = messages.length - 1; i >= 0; i--) {
         const info = messages[i].info
         if (info?.agent || info?.model || (info?.modelID && info?.providerID)) {
@@ -119,13 +120,13 @@ export async function executeSyncContinuation(
         agentToUse: resumeAgent ?? "continue",
         toastManager,
         taskId,
-        anchorMessageCount,
+        anchorMessage,
       }, syncPollTimeoutMs)
       if (pollError) {
         return pollError
       }
 
-      const result = await deps.fetchSyncResult(client, args.session_id!, anchorMessageCount)
+      const result = await deps.fetchSyncResult(client, args.session_id!, anchorMessage)
       if (!result.ok) {
         return result.error
       }
