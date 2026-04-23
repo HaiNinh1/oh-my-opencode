@@ -179,7 +179,7 @@ describe("buildParallelDelegationSection", () => {
   const unspecifiedHighCategory: AvailableCategory = { name: "unspecified-high", description: "High effort tasks" }
   const otherCategory: AvailableCategory = { name: "quick", description: "Trivial tasks" }
 
-  it("#given non-Claude model with deep category #when building #then returns aggressive delegation section", () => {
+  it("#given non-Claude model with deep category #when building #then returns strategic delegation section", () => {
     //#given
     const model = "google/gemini-3-pro"
     const categories = [deepCategory, otherCategory]
@@ -188,14 +188,13 @@ describe("buildParallelDelegationSection", () => {
     const result = buildParallelDelegationSection(model, categories)
 
     //#then
-    expect(result).toContain("DECOMPOSE AND DELEGATE")
-    expect(result).toContain("NOT AN IMPLEMENTER")
-    expect(result).toContain("run_in_background=true")
-    expect(result).toContain("4 independent units")
-    expect(result).toContain("NEVER implement directly")
+    expect(result).toContain("Strategic Delegation For Non-Claude Models")
+    expect(result).toContain("genuine edge")
+    expect(result).toContain("Do the work yourself")
+    expect(result).toContain("Delegate strategically, not by default")
   })
 
-  it("#given non-Claude model with unspecified-high category #when building #then returns aggressive delegation section", () => {
+  it("#given non-Claude model with unspecified-high category #when building #then returns strategic delegation section", () => {
     //#given
     const model = "openai/gpt-5.4"
     const categories = [unspecifiedHighCategory, otherCategory]
@@ -204,9 +203,9 @@ describe("buildParallelDelegationSection", () => {
     const result = buildParallelDelegationSection(model, categories)
 
     //#then
-    expect(result).toContain("DECOMPOSE AND DELEGATE")
-    expect(result).toContain("`deep` or `unspecified-high`")
-    expect(result).toContain("NEVER work sequentially")
+    expect(result).toContain("Strategic Delegation For Non-Claude Models")
+    expect(result).toContain("another model or category has a genuine edge")
+    expect(result).toContain("Multiple independent specialist units exist")
   })
 
   it("#given Claude model #when building #then returns empty", () => {
@@ -271,5 +270,4 @@ describe("buildNonClaudePlannerSection", () => {
     expect(result).not.toBe("")
   })
 })
-
 

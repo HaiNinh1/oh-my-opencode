@@ -341,14 +341,16 @@ export function buildNonClaudePlannerSection(model: string): string {
 
   return `### Plan Agent Dependency (Non-Claude)
 
-Multi-step task? **ALWAYS consult Plan Agent first.** Do NOT start implementation without a plan.
+If Oracle is required for the task, the valid order is: research → consult Oracle → create your own task/todo plan or invoke Plan Agent if still needed → execute. Never invoke Plan Agent before Oracle or in parallel with Oracle for the same task.
 
 - Single-file fix or trivial change → proceed directly
-- Anything else (2+ steps, unclear scope, architecture) → \`task(subagent_type="plan", ...)\` FIRST
+- Multi-step work after Oracle has clarified the approach → create your own task/todo plan, or use \`task(subagent_type="plan", ...)\` when decomposition or execution sequencing is still unclear
 - Use \`session_id\` to resume the same Plan Agent — ask follow-up questions aggressively
-- If ANY part of the task is ambiguous, ask Plan Agent before guessing
+- Requirements ambiguity after research → use the Question tool
+- Architecture or risky tradeoff ambiguity after research → consult Oracle
+- Decomposition ambiguity after Oracle → use Plan Agent
 
-Plan Agent returns a structured work breakdown with parallel execution opportunities. Follow it.`
+Plan Agent returns a structured work breakdown with parallel execution opportunities. Use it after direction is clear.`
 }
 
 export function buildParallelDelegationSection(model: string, categories: AvailableCategory[]): string {
@@ -357,16 +359,16 @@ export function buildParallelDelegationSection(model: string, categories: Availa
 
   if (!isNonClaude || !hasDelegationCategory) return ""
 
-  return `### DECOMPOSE AND DELEGATE — YOU ARE NOT AN IMPLEMENTER
+  return `### Strategic Delegation For Non-Claude Models
 
-**YOUR FAILURE MODE: You attempt to do work yourself instead of decomposing and delegating.** When you implement directly, the result is measurably worse than when specialized subagents do it. Subagents have domain-specific configurations, loaded skills, and tuned prompts that you lack.
+Use delegation when another model or category has a genuine edge, or when the work is better isolated than done inline. You are still expected to implement directly when that is the best path.
 
-**MANDATORY — for ANY implementation task:**
+**When delegation is the right choice:**
 
-1. **ALWAYS decompose** the task into independent work units. No exceptions. Even if the task "feels small", decompose it.
-2. **ALWAYS delegate** EACH unit to a \`deep\` or \`unspecified-high\` agent in parallel (\`run_in_background=true\`).
-3. **NEVER work sequentially.** If 4 independent units exist, spawn 4 agents simultaneously. Not 1 at a time. Not 2 then 2.
-4. **NEVER implement directly** when delegation is possible. You write prompts, not code.
+1. **Decompose only real independent work units.** Do not split purely for ceremony.
+2. **Delegate specialized units** to the category that clearly fits best.
+3. **Do not work sequentially** when the delegated units are genuinely independent.
+4. **Verify delegated output yourself.** Delegation never removes your responsibility for correctness.
 
 **YOUR PROMPT TO EACH AGENT MUST INCLUDE:**
 - GOAL with explicit success criteria (what "done" looks like)
@@ -376,13 +378,13 @@ export function buildParallelDelegationSection(model: string, categories: Availa
 
 **Vague delegation = failed delegation.** If your prompt to the subagent is shorter than 5 lines, it is too vague.
 
-| You Want To Do | You MUST Do Instead |
+| Situation | Best Move |
 |---|---|
-| Write code yourself | Delegate to \`deep\` or \`unspecified-high\` agent |
-| Handle 3 changes sequentially | Spawn 3 agents in parallel |
-| "Quickly fix this one thing" | Still delegate — your "quick fix" is slower and worse than a subagent's |
+| You can implement directly after research and Oracle guidance | Do the work yourself |
+| Another category/model clearly has the edge | Delegate that unit |
+| Multiple independent specialist units exist | Delegate them in parallel |
 
-**Your value is orchestration, decomposition, and quality control. Delegating with crystal-clear prompts IS your work.**`
+**Your value is research, judgment, implementation, and verification. Delegate strategically, not by default.**`
 }
 
 export function buildUltraworkSection(
