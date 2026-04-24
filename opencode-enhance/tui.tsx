@@ -7,6 +7,7 @@ import {
   useTerminalDimensions,
 } from "@opentui/solid";
 import { TextAttributes, RGBA } from "@opentui/core";
+import { join } from "path";
 
 const PLUGIN_ID = "opencode-enhance";
 const DEFAULT_SYSTEM = `You are a prompt enhancement assistant. Your job is to take a user's draft prompt and rewrite it to be clearer, more specific, and more effective for an AI coding assistant.
@@ -18,6 +19,7 @@ Rules:
 - Keep it concise — don't add unnecessary verbosity
 - Output ONLY the enhanced prompt text, nothing else
 - Do not wrap in quotes or markdown code blocks
+- If project instructions are provided in <project_instructions> tags, follow those conventions and constraints when enhancing the prompt (naming, structure, patterns, etc.).
 - If session context is provided in <session_context> tags, use it to resolve references and understand the user's current work, but do not assume the user wants to continue in the same direction. If the prompt signals a pivot, enhance it on its own terms.`;
 
 function enhance(api, opts, text, sid) {
@@ -37,9 +39,13 @@ function enhance(api, opts, text, sid) {
       const system = opts?.system || DEFAULT_SYSTEM;
 
       const ctx = await context(api, sid);
-      const prompt = ctx
-        ? `<prompt-to-enhance>\n${text}\n</prompt-to-enhance>\n\n${ctx}\nREMINDER: Output ONLY the enhanced prompt. No preamble, no explanation, no wrapping.`
-        : text;
+      const instructions = await agents(api);
+      const parts = [];
+      parts.push(`<prompt-to-enhance>\n${text}\n</prompt-to-enhance>`);
+      if (instructions) parts.push(instructions.trim());
+      if (ctx) parts.push(ctx.trim());
+      if (ctx || instructions) parts.push("REMINDER: Output ONLY the enhanced prompt. No preamble, no explanation, no wrapping.");
+      const prompt = parts.length > 1 ? parts.join("\n\n") : text;
 
       const result = await api.client.session.prompt({
         sessionID: ephemeral,
@@ -78,6 +84,21 @@ function parse(spec) {
     providerID: spec.slice(0, idx),
     modelID: spec.slice(idx + 1),
   };
+}
+
+async function agents(api) {
+  const root = api.state.path.worktree || api.state.path.directory;
+  if (!root) return "";
+  try {
+    const file = Bun.file(join(root, "AGENTS.md"));
+    if (!(await file.exists())) return "";
+    const text = await file.text();
+    const trimmed = text.trim();
+    if (!trimmed) return "";
+    return `<project_instructions>\n${trimmed}\n</project_instructions>\n\n`;
+  } catch {
+    return "";
+  }
 }
 
 async function context(api, sid, budget = 50000) {
