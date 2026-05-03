@@ -3,6 +3,7 @@ import type { OpencodeClient, OnSubagentSessionCreated, QueueItem } from "./cons
 import { TMUX_CALLBACK_DELAY_MS } from "./constants"
 import { log, getAgentToolRestrictions, promptWithModelSuggestionRetry, createInternalAgentTextPart } from "../../shared"
 import { shouldAllowQuestion } from "../../tools/delegate-task/constants"
+import { withMetisNestedReminder } from "../../tools/delegate-task/metis-nested-reminder"
 import { subagentSessions } from "../claude-code-session-state"
 import { getTaskToastManager } from "../task-toast-manager"
 import { isInsideTmux } from "../../shared/tmux"
@@ -140,7 +141,7 @@ export async function startTask(
       agent: input.agent,
       ...(launchModel ? { model: launchModel } : {}),
       ...(launchVariant ? { variant: launchVariant } : {}),
-      system: input.skillContent,
+      system: withMetisNestedReminder(input.agent, input.parentAgent, input.skillContent),
       tools: {
         task: getAgentToolRestrictions(input.agent).task ?? true,
         call_omo_agent: true,

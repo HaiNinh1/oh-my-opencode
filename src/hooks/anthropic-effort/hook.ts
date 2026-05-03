@@ -1,6 +1,6 @@
 import { log, normalizeModelID } from "../../shared"
 
-const OPUS_4_6_PATTERN = /claude-opus-4[-.]6/i
+const OPUS_MAX_EFFORT_PATTERN = /claude-opus-4[-.]\d+/i
 
 function isClaudeProvider(providerID: string, modelID: string): boolean {
   if (["anthropic", "google-vertex-anthropic", "opencode"].includes(providerID)) return true
@@ -8,9 +8,9 @@ function isClaudeProvider(providerID: string, modelID: string): boolean {
   return false
 }
 
-function isOpus46(modelID: string): boolean {
+function isOpusMaxEffortEligible(modelID: string): boolean {
   const normalized = normalizeModelID(modelID)
-  return OPUS_4_6_PATTERN.test(normalized)
+  return OPUS_MAX_EFFORT_PATTERN.test(normalized)
 }
 
 interface ChatParamsInput {
@@ -38,7 +38,7 @@ export function createAnthropicEffortHook() {
       if (!model?.modelID || !model?.providerID) return
       if (message.variant !== "max") return
       if (!isClaudeProvider(model.providerID, model.modelID)) return
-      if (!isOpus46(model.modelID)) return
+      if (!isOpusMaxEffortEligible(model.modelID)) return
       if (output.options.effort !== undefined) return
 
       output.options.effort = "max"
