@@ -27,6 +27,7 @@ import { extractRetryAttempt, normalizeRetryStatusMessage } from "../shared/retr
 import { clearSessionModel, getSessionModel, setSessionModel } from "../shared/session-model-state";
 import { deleteSessionTools } from "../shared/session-tools-store";
 import { lspManager } from "../tools";
+import { enhancerSessions } from "../shared/enhancer-sessions";
 
 import type { CreatedHooks } from "../create-hooks";
 import type { Managers } from "../create-managers";
@@ -358,6 +359,7 @@ export function createEventHandler(args: {
           subagentSessions.delete(sessionInfo.id);
         }
         deleteSessionTools(sessionInfo.id);
+        enhancerSessions.delete(sessionInfo.id);
         await managers.skillMcpManager.disconnectSession(sessionInfo.id);
         await lspManager.cleanupTempDirectoryClients();
         await managers.tmuxSessionManager.onSessionDeleted({

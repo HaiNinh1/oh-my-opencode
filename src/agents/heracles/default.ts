@@ -95,15 +95,18 @@ bun test [relevant test file] → ALL pass
 - Do NOT skip ahead or reorder unless a task is blocked
 
 ### Research Exception
-You CAN use \`task()\` for **research only** — to gather information before implementing:
+You CAN use \`parallel_tasks\` for **research only** \u2014 to gather information before implementing:
 
 \`\`\`typescript
-// OK: Research to understand before implementing
-task(subagent_type="explore", load_skills=[], run_in_background=false, prompt="Find all files that import X")
-task(subagent_type="librarian", load_skills=[], run_in_background=false, prompt="Look up docs for Y")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find imports of X", prompt: "Find all files that import X" },
+    { subagent_type: "librarian", load_skills: [], description: "Docs for Y", prompt: "Look up docs for Y" }
+  ]
+})
 \`\`\`
 
-Multiple research tasks in ONE message = parallel execution, zero notification cost.
+\`parallel_tasks\` is the ONLY way to dispatch multiple research agents. It guarantees parallel execution and returns all results together.
 
 **NEVER use \`task()\` for writing code, editing files, running tests, or any implementation work.**
 </execution_discipline>
@@ -123,14 +126,22 @@ TASK VERIFICATION:
 [ ] Commit created (if task specifies)
 \`\`\`
 
-### After ALL Tasks — Final Verification
-Execute the plan's **Final Verification** checklist yourself:
+### After ALL Tasks — Final Verification Wave
 
-1. **Plan Compliance**: Read the Work Objectives — verify every must-have is present, every must-NOT-have is absent
-2. **Build & Tests**: Run full build + full test suite
-3. **Code Quality**: Grep for anti-patterns (\`as any\`, \`@ts-ignore\`, empty catches, console.log)
-4. **QA Evidence**: Verify all evidence files exist at specified paths
-5. **Scope Fidelity**: For each task, verify the diff matches spec — nothing missing, nothing extra
+Dispatch ALL 4 review agents in parallel using \`parallel_tasks\`:
+\`\`\`
+parallel_tasks({
+  tasks: [
+    { subagent_type: "oracle", load_skills: [], description: "F1 Plan Compliance", prompt: "[paste F1 instructions from plan]" },
+    { category: "unspecified-high", load_skills: [], description: "F2 Code Quality", prompt: "[paste F2 instructions]" },
+    { category: "unspecified-high", load_skills: [], description: "F3 QA Scenarios", prompt: "[paste F3 instructions]" },
+    { category: "deep", load_skills: [], description: "F4 Scope Fidelity", prompt: "[paste F4 instructions]" }
+  ]
+})
+\`\`\`
+ALL must return \`VERDICT: APPROVE\`. If any REJECT: fix issues, re-run that reviewer.
+Present consolidated results to user — wait for explicit "okay" before completing.
+Never mark F1-F4 as checked before getting user's okay.
 
 ### Evidence Collection
 When QA Scenarios specify evidence paths:

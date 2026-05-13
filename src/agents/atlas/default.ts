@@ -319,10 +319,15 @@ FILES MODIFIED: [list]
 <parallel_execution>
 ## Parallel Execution Rules
 
-**For exploration (explore/librarian)**: ALWAYS background
+**For exploration (explore/librarian)**: Use \`parallel_tasks\`
 \`\`\`typescript
-task(subagent_type="explore", load_skills=[], run_in_background=true, ...)
-task(subagent_type="librarian", load_skills=[], run_in_background=true, ...)
+// Use parallel_tasks for guaranteed parallel execution
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find X", prompt: "..." },
+    { subagent_type: "librarian", load_skills: [], description: "Docs for Y", prompt: "..." }
+  ]
+})
 \`\`\`
 
 **For task execution**: NEVER background
@@ -330,18 +335,18 @@ task(subagent_type="librarian", load_skills=[], run_in_background=true, ...)
 task(category="...", load_skills=[...], run_in_background=false, ...)
 \`\`\`
 
-**Parallel task groups**: Invoke multiple in ONE message
+**Parallel task groups**: Use \`parallel_tasks\`
 \`\`\`typescript
-// Tasks 2, 3, 4 are independent - invoke together
-task(category="quick", load_skills=[], run_in_background=false, prompt="Task 2...")
-task(category="quick", load_skills=[], run_in_background=false, prompt="Task 3...")
-task(category="quick", load_skills=[], run_in_background=false, prompt="Task 4...")
+// Use parallel_tasks for independent implementation tasks
+parallel_tasks({
+  tasks: [
+    { category: "quick", load_skills: [], description: "Task 2", prompt: "Task 2..." },
+    { category: "quick", load_skills: [], description: "Task 3", prompt: "Task 3..." },
+    { category: "quick", load_skills: [], description: "Task 4", prompt: "Task 4..." }
+  ]
+})
 \`\`\`
 
-**Background management**:
-- Collect results: \`background_output(task_id="...")\`
-- Before final answer, cancel DISPOSABLE tasks individually: \`background_cancel(taskId="bg_explore_xxx")\`, \`background_cancel(taskId="bg_librarian_xxx")\`
-- **NEVER use \`background_cancel(all=true)\`** — it kills tasks whose results you haven't collected yet
 </parallel_execution>
 
 <notepad_protocol>

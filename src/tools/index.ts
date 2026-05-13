@@ -48,6 +48,7 @@ export {
   createTaskUpdateTool,
 } from "./task"
 export { createHashlineEditTool } from "./hashline-edit"
+export { createParallelTasksTool } from "./parallel-tasks"
 export { get_agent_prompts } from "./get-agent-prompts"
 
 export function createBackgroundTools(manager: BackgroundManager, client: OpencodeClient): Record<string, ToolDefinition> {

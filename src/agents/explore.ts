@@ -8,7 +8,7 @@ export const EXPLORE_PROMPT_METADATA: AgentPromptMetadata = {
   category: "exploration",
   cost: "FREE",
   promptAlias: "Explore",
-  keyTrigger: "2+ modules involved → fire `explore` background",
+  keyTrigger: "2+ modules involved \u2192 use `parallel_tasks` with explore agents",
   triggers: [
     { domain: "Explore", trigger: "Find existing codebase structure, patterns and styles" },
   ],
@@ -30,6 +30,7 @@ export function createExploreAgent(model: string): AgentConfig {
     "edit",
     "apply_patch",
     "task",
+    "parallel_tasks",
     "call_omo_agent",
   ])
 

@@ -16,6 +16,7 @@ import { createHephaestusAgent } from "./hephaestus"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import { createMnemosyneAgent } from "./mnemosyne"
 import { createHeraclesAgent } from "./heracles"
+import { createEnhancerAgent } from "./enhancer"
 import {
   fetchAvailableModels,
   readConnectedProvidersCache,
@@ -50,6 +51,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as unknown as AgentFactory,
   mnemosyne: createMnemosyneAgent,
   heracles: createHeraclesAgent,
+  enhancer: createEnhancerAgent,
 }
 
 /**

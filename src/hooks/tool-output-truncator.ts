@@ -21,6 +21,11 @@ const TRUNCATABLE_TOOLS = [
   "WebFetch",
 ]
 
+const NEVER_TRUNCATE_TOOLS = [
+  "task",
+  "parallel_tasks",
+]
+
 const TOOL_SPECIFIC_MAX_TOKENS: Record<string, number> = {
   webfetch: WEBFETCH_MAX_TOKENS,
   WebFetch: WEBFETCH_MAX_TOKENS,
@@ -42,6 +47,7 @@ export function createToolOutputTruncatorHook(ctx: PluginInput, options?: ToolOu
     input: { tool: string; sessionID: string; callID: string },
     output: { title: string; output: string; metadata: unknown }
   ) => {
+    if (NEVER_TRUNCATE_TOOLS.includes(input.tool)) return
     if (!truncateAll && !TRUNCATABLE_TOOLS.includes(input.tool)) return
     if (typeof output.output !== 'string') return
 

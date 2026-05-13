@@ -10,6 +10,7 @@ import { getAgentToolRestrictions } from "../../shared/agent-tool-restrictions"
 import { setSessionTools } from "../../shared/session-tools-store"
 import { createInternalAgentTextPart } from "../../shared/internal-initiator-marker"
 import { isHermesAgent } from "../../hooks/hermes-routing-guard/agent-matcher"
+import { withMetisNestedReminder } from "./metis-nested-reminder"
 
 type SendSyncPromptDeps = {
   promptWithModelSuggestionRetry: typeof promptWithModelSuggestionRetry
@@ -60,7 +61,7 @@ export async function sendSyncPrompt(
     path: { id: input.sessionID },
     body: {
       agent: input.agentToUse,
-      system: input.systemContent,
+      system: withMetisNestedReminder(input.agentToUse, input.parentAgent, input.systemContent),
       tools,
       parts: [isHermesAgent(input.parentAgent)
         ? { type: "text" as const, text: effectivePrompt }

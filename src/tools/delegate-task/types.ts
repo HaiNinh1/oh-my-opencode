@@ -71,6 +71,8 @@ export interface DelegateTaskToolOptions {
   agentOverrides?: AgentOverrides
   onSyncSessionCreated?: (event: SyncSessionCreatedEvent) => Promise<void>
   syncPollTimeoutMs?: number
+  /** When true, forces run_in_background=true to be treated as false. Set by background_task.force_sync config. */
+  forceSyncEnabled?: boolean
 }
 
 export interface BuildSystemContentInput {

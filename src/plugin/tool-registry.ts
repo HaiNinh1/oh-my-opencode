@@ -28,6 +28,7 @@ import {
   createHashlineEditTool,
   createResolveAtlasContextTool,
   createResolveHeraclesContextTool,
+  createParallelTasksTool,
 } from "../tools"
 import { getMainSessionID } from "../features/claude-code-session-state"
 import { filterDisabledTools } from "../shared/disabled-tools"
@@ -52,7 +53,11 @@ export function createToolRegistry(args: {
 }): ToolRegistryResult {
   const { ctx, pluginConfig, managers, skillContext, availableCategories } = args
 
-  const backgroundTools = createBackgroundTools(managers.backgroundManager, ctx.client)
+  const forceSyncEnabled = pluginConfig.background_task?.force_sync === true
+
+  const backgroundTools = forceSyncEnabled
+    ? {}
+    : createBackgroundTools(managers.backgroundManager, ctx.client)
   const callOmoAgent = createCallOmoAgent(
     ctx,
     managers.backgroundManager,
@@ -68,7 +73,7 @@ export function createToolRegistry(args: {
 
   let toolInfosHolder: AvailableToolInfo[] = []
 
-  const delegateTask = createDelegateTask({
+  const delegateTaskToolOptions = {
     manager: managers.backgroundManager,
     client: ctx.client,
     directory: ctx.directory,
@@ -82,7 +87,8 @@ export function createToolRegistry(args: {
     availableSkills: skillContext.availableSkills,
     getAvailableToolInfos: () => toolInfosHolder,
     syncPollTimeoutMs: pluginConfig.background_task?.syncPollTimeoutMs,
-    onSyncSessionCreated: async (event) => {
+    forceSyncEnabled,
+    onSyncSessionCreated: async (event: { sessionID: string; parentID: string; title: string }) => {
       log("[index] onSyncSessionCreated callback", {
         sessionID: event.sessionID,
         parentID: event.parentID,
@@ -99,7 +105,10 @@ export function createToolRegistry(args: {
         },
       })
     },
-  })
+  }
+  const delegateTask = createDelegateTask(delegateTaskToolOptions)
+
+  const parallelTasks = createParallelTasksTool(delegateTaskToolOptions)
 
   const getSessionIDForMcp = (): string => getMainSessionID() || ""
 
@@ -149,6 +158,7 @@ export function createToolRegistry(args: {
     call_omo_agent: callOmoAgent,
     ...(lookAt ? { look_at: lookAt } : {}),
     task: delegateTask,
+    parallel_tasks: parallelTasks,
     skill_mcp: skillMcpTool,
     resolve_atlas_context: resolveAtlasContextTool,
     resolve_heracles_context: resolveHeraclesContextTool,

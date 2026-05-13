@@ -28,6 +28,9 @@ export const ORACLE_PROMPT_METADATA: AgentPromptMetadata = {
     },
   ],
   useWhen: [
+    "User requests implementation of any feature or change (MANDATORY - always consult before starting implementation)",
+    "User requests creating a plan or strategy (MANDATORY - always consult before planning)",
+    "User requests designing any system, architecture, or solution (MANDATORY - always consult before designing)",
     "Architecture design or multi-system tradeoffs",
     "After completing significant work (self-review)",
     "Complex debugging with non-obvious root cause",

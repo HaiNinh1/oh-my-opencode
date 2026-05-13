@@ -234,7 +234,16 @@ Oracle is a read-only, high-quality reasoning model. Consultation only — Oracl
 
 **Oracle is encouraged, not rationed.** It costs the same as explore/librarian. Use it whenever a second opinion would improve your confidence or catch blind spots. The only prerequisite: do your research first so Oracle has concrete material to reason about.
 
-### WHEN to Consult:
+### MANDATORY Oracle Consultation (ALWAYS — no exceptions):
+
+You MUST consult Oracle BEFORE starting work when the user asks you to:
+- **Implement** anything ("implement X", "add Y", "create Z", "build W")
+- **Create a plan** ("plan for X", "create a plan", "make a strategy", "design a plan")
+- **Design** anything ("design X", "architect Y", "how should we structure Z")
+
+This is NON-NEGOTIABLE. Even if the task seems straightforward, consult Oracle first. Oracle catches blind spots, validates your approach, and prevents wasted effort. Do your research (explore/librarian) first, then consult Oracle with your findings and proposed approach BEFORE writing any code or finalizing any plan.
+
+### WHEN to Consult (recommended):
 
 ${useWhen.map((w) => `- ${w}`).join("\n")}
 
@@ -300,7 +309,7 @@ export function buildAntiPatternsSection(): string {
     "- **Testing**: Deleting failing tests to \"pass\"",
     "- **Search**: Firing agents for single-line typos or obvious syntax errors",
     "- **Debugging**: Shotgun debugging, random changes",
-    "- **Sequential Research**: Firing one explore/librarian agent, waiting for results, then firing the next — fire ALL in parallel in the same response",
+    "- **Sequential Research**: Firing one explore/librarian agent, waiting for results, then firing the next \u2014 use `parallel_tasks` to fire ALL in parallel",
     "- **Delegation Duplication**: Delegating exploration to explore/librarian and then manually doing the same search yourself",
   ]
 
@@ -462,26 +471,22 @@ When you need the delegated results but they're not ready:
 
 1. **End your response** — do NOT continue with work that depends on those results
 2. **Wait for the completion notification** — the system will trigger your next turn
-3. **Then** collect results via \`background_output(task_id="...")\`
-4. **Do NOT** impatiently re-search the same topics while waiting
+3. **Do NOT** impatiently re-search the same topics while waiting
 
-### Why This Matters:
+### Preferred: Use \`parallel_tasks\` for Guaranteed Parallel Research
 
-- **Wasted tokens**: Duplicate exploration wastes your context budget
-- **Confusion**: You might contradict the agent's findings
-- **Efficiency**: The whole point of delegation is parallel throughput
-
-### Example:
+\`parallel_tasks\` is the ONLY way to dispatch multiple research agents in parallel:
 
 \`\`\`typescript
-// WRONG: After delegating, re-doing the search
-task(subagent_type="explore", run_in_background=true, ...)
-// Then immediately grep for the same thing yourself — FORBIDDEN
-
-// CORRECT: Continue non-overlapping work
-task(subagent_type="explore", run_in_background=true, ...)
-// Work on a different, unrelated file while they search
-// End your response and wait for the notification
+// BEST: Single tool call, guaranteed parallel
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find X", prompt: "..." },
+    { subagent_type: "explore", load_skills: [], description: "Find Y", prompt: "..." },
+    { subagent_type: "librarian", load_skills: [], description: "Docs for Z", prompt: "..." }
+  ]
+})
+// All 3 run simultaneously, results return together
 \`\`\`
 </Anti_Duplication>`
 }

@@ -1,5 +1,5 @@
 # Dependencies
-.sisyphus/*
+.sisyphus/boulder.json
 !.sisyphus/rules/
 node_modules/
 

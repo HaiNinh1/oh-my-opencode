@@ -28,8 +28,11 @@ import { buildGeminiSisyphusJuniorPrompt } from "./gemini"
 const MODE: AgentMode = "subagent"
 
 // Core tools that Sisyphus-Junior must NEVER have access to
+// - task: prevents recursive delegation (Junior is the leaf executor)
+// - question: Junior is a sub-subagent; there is NO human in its turn.
+//   Asking the user would block the parent agent indefinitely.
 // Note: call_omo_agent is ALLOWED so subagents can spawn explore/librarian
-const BLOCKED_TOOLS = ["task"]
+const BLOCKED_TOOLS = ["task", "question"]
 
 export const SISYPHUS_JUNIOR_DEFAULTS = {
   model: "anthropic/claude-sonnet-4-6",

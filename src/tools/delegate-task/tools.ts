@@ -95,6 +95,9 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
   - Multi-turn conversation with same agent → always session_id instead of new task
   
   Prompts MUST be in English.`
+  + (options.forceSyncEnabled
+    ? `\n\n  **NOTE: force_sync is ENABLED.** All tasks run synchronously regardless of run_in_background value. Background tools are disabled. For parallel execution of multiple tasks, use the \`parallel_tasks\` tool instead.`
+    : "")
 
   return tool({
     description,
@@ -142,7 +145,15 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         throw new Error(`Invalid arguments: load_skills=null is not allowed. Pass [] if no skills needed.`)
       }
 
-      const runInBackground = args.run_in_background === true
+      const forceSyncOverride = options.forceSyncEnabled && args.run_in_background === true
+      if (forceSyncOverride) {
+        log("[task] force_sync enabled - overriding run_in_background=true to false", {
+          description: args.description,
+          category: args.category,
+          subagent_type: args.subagent_type,
+        })
+      }
+      const runInBackground = forceSyncOverride ? false : args.run_in_background === true
 
       const { content: skillContent, contents: skillContents, error: skillError } = await resolveSkillContent(args.load_skills, {
         gitMasterConfig: options.gitMasterConfig,

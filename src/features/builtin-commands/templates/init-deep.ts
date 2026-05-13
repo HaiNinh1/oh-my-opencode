@@ -39,18 +39,21 @@ TodoWrite([
 
 **Mark "discovery" as in_progress.**
 
-### Fire Background Explore Agents IMMEDIATELY
+### Fire Explore Agents IMMEDIATELY via parallel_tasks
 
-Don't wait—these run async while main session works.
+Don't wait\u2014these run concurrently and return results together.
 
 \`\`\`
-// Fire all at once, collect results later
-task(subagent_type="explore", load_skills=[], description="Explore project structure", run_in_background=true, prompt="Project structure: PREDICT standard patterns for detected language → REPORT deviations only")
-task(subagent_type="explore", load_skills=[], description="Find entry points", run_in_background=true, prompt="Entry points: FIND main files → REPORT non-standard organization")
-task(subagent_type="explore", load_skills=[], description="Find conventions", run_in_background=true, prompt="Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) → REPORT project-specific rules")
-task(subagent_type="explore", load_skills=[], description="Find anti-patterns", run_in_background=true, prompt="Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments → LIST forbidden patterns")
-task(subagent_type="explore", load_skills=[], description="Explore build/CI", run_in_background=true, prompt="Build/CI: FIND .github/workflows, Makefile → REPORT non-standard patterns")
-task(subagent_type="explore", load_skills=[], description="Find test patterns", run_in_background=true, prompt="Test patterns: FIND test configs, test structure → REPORT unique conventions")
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Explore project structure", prompt: "Project structure: PREDICT standard patterns for detected language \u2192 REPORT deviations only" },
+    { subagent_type: "explore", load_skills: [], description: "Find entry points", prompt: "Entry points: FIND main files \u2192 REPORT non-standard organization" },
+    { subagent_type: "explore", load_skills: [], description: "Find conventions", prompt: "Conventions: FIND config files (.eslintrc, pyproject.toml, .editorconfig) \u2192 REPORT project-specific rules" },
+    { subagent_type: "explore", load_skills: [], description: "Find anti-patterns", prompt: "Anti-patterns: FIND 'DO NOT', 'NEVER', 'ALWAYS', 'DEPRECATED' comments \u2192 LIST forbidden patterns" },
+    { subagent_type: "explore", load_skills: [], description: "Explore build/CI", prompt: "Build/CI: FIND .github/workflows, Makefile \u2192 REPORT non-standard patterns" },
+    { subagent_type: "explore", load_skills: [], description: "Find test patterns", prompt: "Test patterns: FIND test configs, test structure \u2192 REPORT unique conventions" }
+  ]
+})
 \`\`\`
 
 <dynamic-agents>
@@ -75,17 +78,20 @@ max_depth=$(find . -type d -not -path '*/node_modules/*' -not -path '*/.git/*' |
 
 Example spawning:
 \`\`\`
-// 500 files, 50k lines, depth 6, 15 large files → spawn 5+5+2+1 = 13 additional agents
-task(subagent_type="explore", load_skills=[], description="Analyze large files", run_in_background=true, prompt="Large file analysis: FIND files >500 lines, REPORT complexity hotspots")
-task(subagent_type="explore", load_skills=[], description="Explore deep modules", run_in_background=true, prompt="Deep modules at depth 4+: FIND hidden patterns, internal conventions")
-task(subagent_type="explore", load_skills=[], description="Find shared utilities", run_in_background=true, prompt="Cross-cutting concerns: FIND shared utilities across directories")
-// ... more based on calculation
-\`\`\`
+// 500 files, 50k lines, depth 6, 15 large files \u2192 spawn additional agents via parallel_tasks
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Analyze large files", prompt: "Large file analysis: FIND files >500 lines, REPORT complexity hotspots" },
+    { subagent_type: "explore", load_skills: [], description: "Explore deep modules", prompt: "Deep modules at depth 4+: FIND hidden patterns, internal conventions" },
+    { subagent_type: "explore", load_skills: [], description: "Find shared utilities", prompt: "Cross-cutting concerns: FIND shared utilities across directories" }
+    // ... more based on calculation
+  ]
+})
 </dynamic-agents>
 
 ### Main Session: Concurrent Analysis
 
-**While background agents run**, main session does:
+**While parallel_tasks agents run**, main session does:
 
 #### 1. Bash Structural Analysis
 \`\`\`bash
@@ -131,11 +137,11 @@ LspFindReferences(filePath="...", line=X, character=Y)
 
 **LSP Fallback**: If unavailable, rely on explore agents + AST-grep.
 
-### Collect Background Results
+### Collect Results
 
 \`\`\`
-// After main session analysis done, collect all task results
-for each task_id: background_output(task_id="...")
+// parallel_tasks returns all results together \u2014 no individual collection needed
+// Results are available inline from the parallel_tasks call above
 \`\`\`
 
 **Merge: bash + LSP + existing + explore findings. Mark "discovery" as completed.**

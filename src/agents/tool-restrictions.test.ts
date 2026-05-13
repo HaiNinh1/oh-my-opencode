@@ -96,6 +96,17 @@ describe("read-only agent tool restrictions", () => {
         expect(permission[tool]).toBe("deny")
       }
     })
+
+    test("denies question tool", () => {
+      // given
+      const agent = createMetisAgent(TEST_MODEL)
+
+      // when
+      const permission = agent.permission as Record<string, string>
+
+      // then
+      expect(permission["question"]).toBe("deny")
+    })
   })
 
   describe("Atlas", () => {

@@ -6,6 +6,7 @@ import { setSessionModel } from "../shared/session-model-state"
 import { setSessionAgent } from "../features/claude-code-session-state"
 import { applyUltraworkModelOverrideOnMessage } from "./ultrawork-model-override"
 import { parseRalphLoopArguments } from "../hooks/ralph-loop/command-arguments"
+import { enhancerSessions } from "../shared/enhancer-sessions"
 
 import type { CreatedHooks } from "../create-hooks"
 
@@ -70,6 +71,11 @@ export function createChatMessageHandler(args: {
     input: ChatMessageInput,
     output: ChatMessageHandlerOutput
   ): Promise<void> => {
+    if (input.agent === "enhancer") {
+      enhancerSessions.add(input.sessionID)
+      return
+    }
+
     if (input.agent) {
       setSessionAgent(input.sessionID, input.agent)
     }

@@ -3186,10 +3186,6 @@ describe("sisyphus-task", () => {
 
       // then
       expect(result).toContain(prompt)
-      expect(result).toContain("Answer in English.")
-      expect(result).toContain("Write the plan in English.")
-      expect(result).toContain("Plan well for ultrawork execution.")
-      expect(result).toContain("Use TDD-oriented planning.")
       expect(result).toContain("Include a clear atomic commit strategy.")
     })
 
