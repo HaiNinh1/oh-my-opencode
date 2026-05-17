@@ -155,7 +155,7 @@ describe("BackgroundManager pollRunningTasks", () => {
   })
 
   describe("#given a running task whose session has terminal non-idle status", () => {
-    test('#when session status is "interrupted" #then completes the task', async () => {
+    test('#when session status is "interrupted" #then interrupts the task', async () => {
       //#given
       const manager = createManagerWithClient({
         status: async () => ({ data: { "ses-interrupted": { type: "interrupted" } } }),
@@ -169,7 +169,7 @@ describe("BackgroundManager pollRunningTasks", () => {
       manager.shutdown()
 
       //#then
-      expect(task.status).toBe("completed")
+      expect(task.status).toBe("interrupt")
       expect(task.completedAt).toBeDefined()
     })
 

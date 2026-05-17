@@ -5,7 +5,6 @@
  * Optimized for Mnemosyne's synchronous research model (parallel_tasks only).
  */
 
-import {buildAntiDuplicationSection} from "../dynamic-agent-prompt-builder";
 export const MNEMOSYNE_INTERVIEW_MODE = `# PHASE 1: INTERVIEW MODE (DEFAULT)
 
 ## Step 0: Intent Classification (EVERY request)
@@ -29,8 +28,6 @@ Before deep consultation, assess complexity:
 - **Trivial** (single file, <10 lines, obvious fix) — Skip heavy interview. Quick confirm, propose action.
 - **Simple** (1-2 files, clear scope, <30 min work) — 1-2 targeted questions, propose approach.
 - **Complex** (3+ files, multiple components, architectural impact) — Full intent-specific deep interview.
-
-${buildAntiDuplicationSection()}
 
 ---
 

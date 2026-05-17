@@ -9,7 +9,7 @@ export const DELEGATE_TASK_ERROR_PATTERNS: DelegateTaskErrorPattern[] = [
     pattern: "run_in_background",
     errorType: "missing_run_in_background",
     fixHint:
-      "Add run_in_background=false (for delegation). For parallel exploration, use parallel_tasks instead of run_in_background=true",
+      "Add run_in_background=false for blocking specialist consultation. For multiple research agents, use parallel_tasks instead.",
   },
   {
     pattern: "load_skills",
@@ -21,12 +21,12 @@ export const DELEGATE_TASK_ERROR_PATTERNS: DelegateTaskErrorPattern[] = [
     pattern: "category OR subagent_type",
     errorType: "mutual_exclusion",
     fixHint:
-      "Provide ONLY one of: category (e.g., 'general', 'quick') OR subagent_type (e.g., 'oracle', 'explore')",
+      "Provide ONLY one of: subagent_type (e.g., 'oracle', 'explore') OR category when an explicit workflow requires category routing",
   },
   {
     pattern: "Must provide either category or subagent_type",
     errorType: "missing_category_or_agent",
-    fixHint: "Add either category='general' OR subagent_type='explore'",
+    fixHint: "Add subagent_type='explore' for a specialist task, or category only when an explicit workflow requires category routing",
   },
   {
     pattern: "Unknown category",

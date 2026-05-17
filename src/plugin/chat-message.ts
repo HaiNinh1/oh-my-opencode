@@ -7,6 +7,16 @@ import { setSessionAgent } from "../features/claude-code-session-state"
 import { applyUltraworkModelOverrideOnMessage } from "./ultrawork-model-override"
 import { parseRalphLoopArguments } from "../hooks/ralph-loop/command-arguments"
 import { enhancerSessions } from "../shared/enhancer-sessions"
+import { isHermesAgent } from "../hooks/hermes-routing-guard/agent-matcher"
+import {
+  HERMES_ALLOWED_AGENTS_SET,
+  HERMES_ALLOWED_SUBAGENT_TYPES,
+  resolveAgentAbbreviation,
+} from "../hooks/hermes-routing-guard/constants"
+import { getAgentConfigKey } from "../shared/agent-display-names"
+import { HermesProxyState } from "../shared/hermes-proxy-state"
+import { log } from "../shared/logger"
+import { createHermesPromptHardenerHook } from "../hooks/hermes-prompt-hardener"
 
 import type { CreatedHooks } from "../create-hooks"
 
@@ -46,6 +56,7 @@ export function createChatMessageHandler(args: {
   output: ChatMessageHandlerOutput
 ) => Promise<void> {
   const { ctx, pluginConfig, firstMessageVariantGate, hooks } = args
+  const hermesPromptHardener = createHermesPromptHardenerHook()
   const pluginContext = ctx as {
     client: {
       tui: {
@@ -75,6 +86,67 @@ export function createChatMessageHandler(args: {
       enhancerSessions.add(input.sessionID)
       return
     }
+
+    // Hermes proxy: reset per-turn task limit flag
+    if (isHermesAgent(input.agent)) {
+      HermesProxyState.resetTurnFlag(input.sessionID)
+    }
+
+    // Hermes proxy: parse @agent-name from first message and pin session target
+    if (isHermesAgent(input.agent) && !HermesProxyState.hasTarget(input.sessionID)) {
+      const isFirstRootMessage = firstMessageVariantGate.shouldOverride(input.sessionID)
+      if (isFirstRootMessage) {
+        const agentParts = output.parts.filter(
+          (p: ChatMessagePart) => p.type === "agent" && typeof p.name === "string"
+        )
+
+        if (agentParts.length === 0) {
+          // Default to Sisyphus when no @agent specified
+          const defaultTarget = "sisyphus"
+          HermesProxyState.setTarget(input.sessionID, defaultTarget)
+          // Inject AgentPart so TUI can detect this as a Hermes proxy parent for auto-navigate
+          // Must include id/sessionID/messageID for OpenCode's persistence layer (SyncEvent)
+          const messageID = (output.message as { id?: string }).id ?? ""
+          output.parts.push({
+            type: "agent",
+            name: defaultTarget,
+            id: `prt_hermes_default_agent_${input.sessionID}`,
+            sessionID: input.sessionID,
+            messageID,
+          })
+          log("[hermes-proxy] No @agent specified, defaulting to sisyphus", {
+            sessionID: input.sessionID,
+            targetAgent: defaultTarget,
+          })
+          firstMessageVariantGate.markApplied(input.sessionID)
+        } else if (agentParts.length > 1) {
+          throw new Error(
+            "Only one @agent-name allowed per session. Choose a single target agent."
+          )
+        } else {
+          const rawAgentName = agentParts[0].name as string
+          const normalizedName = getAgentConfigKey(resolveAgentAbbreviation(rawAgentName.trim()))
+
+          if (!HERMES_ALLOWED_AGENTS_SET.has(normalizedName)) {
+            const allowedList = HERMES_ALLOWED_SUBAGENT_TYPES.join(", ")
+            throw new Error(
+              `Agent '${rawAgentName}' is not available for Hermes proxy routing. Use one of: ${allowedList}`
+            )
+          }
+
+          HermesProxyState.setTarget(input.sessionID, normalizedName)
+          log("[hermes-proxy] First message proxy target set", {
+            sessionID: input.sessionID,
+            targetAgent: normalizedName,
+            rawAgentName,
+          })
+          firstMessageVariantGate.markApplied(input.sessionID)
+        }
+      }
+    }
+
+    // Hermes prompt hardener: inject exact task() call directive into user message
+    await hermesPromptHardener["chat.message"](input, output)
 
     if (input.agent) {
       setSessionAgent(input.sessionID, input.agent)

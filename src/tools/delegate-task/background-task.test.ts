@@ -201,4 +201,58 @@ describeFn("executeBackgroundTask output/session metadata compatibility", () => 
       { permission: "question", action: "deny", pattern: "*" },
     ])
   })
+
+  testFn("cancels launched background task when parent aborts before child session is available", async () => {
+    //#given - launch succeeds but parent aborts during startup wait
+    const abortController = new AbortController()
+    abortController.abort()
+    const cancelCalls: any[] = []
+    const manager = {
+      launch: async () => ({
+        id: "bg_abort_wait",
+        sessionID: undefined,
+        description: "Abort wait",
+        agent: "explore",
+        status: "pending",
+      }),
+      getTask: () => undefined,
+      cancelTask: async (...args: any[]) => {
+        cancelCalls.push(args)
+        return true
+      },
+    }
+
+    //#when
+    const result = await executeBackgroundTask(
+      {
+        description: "Abort wait",
+        prompt: "check",
+        run_in_background: true,
+        load_skills: [],
+      },
+      {
+        sessionID: "ses_parent",
+        callID: "call_abort",
+        metadata: async () => {},
+        abort: abortController.signal,
+      },
+      { manager },
+      { sessionID: "ses_parent", messageID: "msg_abort" },
+      "explore",
+      undefined,
+      undefined,
+      undefined,
+    )
+
+    //#then
+    expectFn(result).toContain("Task aborted while waiting for session to start")
+    expectFn(cancelCalls).toHaveLength(1)
+    expectFn(cancelCalls[0][0]).toBe("bg_abort_wait")
+    expectFn(cancelCalls[0][1]).toEqual({
+      source: "executeBackgroundTask.waitForSessionStart",
+      reason: "Parent aborted while waiting for background task session start",
+      abortSession: false,
+      skipNotification: true,
+    })
+  })
 })

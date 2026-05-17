@@ -28,6 +28,7 @@ import { clearSessionModel, getSessionModel, setSessionModel } from "../shared/s
 import { deleteSessionTools } from "../shared/session-tools-store";
 import { lspManager } from "../tools";
 import { enhancerSessions } from "../shared/enhancer-sessions";
+import { HermesProxyState } from "../shared/hermes-proxy-state";
 
 import type { CreatedHooks } from "../create-hooks";
 import type { Managers } from "../create-managers";
@@ -360,6 +361,7 @@ export function createEventHandler(args: {
         }
         deleteSessionTools(sessionInfo.id);
         enhancerSessions.delete(sessionInfo.id);
+        HermesProxyState.clear(sessionInfo.id);
         await managers.skillMcpManager.disconnectSession(sessionInfo.id);
         await lspManager.cleanupTempDirectoryClients();
         await managers.tmuxSessionManager.onSessionDeleted({

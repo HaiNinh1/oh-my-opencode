@@ -160,6 +160,31 @@ describe("sisyphus-task", () => {
     })
   })
 
+  describe("task tool prompt", () => {
+    test("describes specialist consultation before category compatibility", () => {
+      //#given
+      const { createDelegateTask } = require("./tools")
+      const delegateTask = createDelegateTask({
+        manager: { launch: async () => ({ id: "task-123", status: "pending", description: "Test", agent: "explore" }) },
+        client: { config: { get: async () => ({}) } },
+      })
+
+      //#when
+      const description = delegateTask.description
+
+      //#then
+      expect(description).toContain("Start or continue a specialist agent task")
+      expect(description).toContain("subagent_type: Preferred")
+      expect(description).toContain("session_id")
+      expect(description).toContain("category: Advanced compatibility")
+      expect(description).toContain("Do not use it as the default implementation path")
+      expect(description).not.toContain("category-based or direct agent selection")
+      expect(description).not.toContain("For task delegation")
+      expect(description).not.toContain("Sisyphus-Junior")
+      expect(description).not.toContain("task(category=\"quick\"")
+    })
+  })
+
   describe("isPlanAgent", () => {
     test("returns true for 'plan'", () => {
       // given / #when

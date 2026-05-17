@@ -2,6 +2,7 @@ import { describe, expect, test, afterEach, mock } from "bun:test"
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { clearSessionAgent } from "../../features/claude-code-session-state"
+import { HermesProxyState } from "../../shared/hermes-proxy-state"
 
 mock.module("../../shared/opencode-storage-detection", () => ({
   isSqliteBackend: () => false,
@@ -37,6 +38,7 @@ describe("hermes-routing-guard", () => {
 
   afterEach(() => {
     clearSessionAgent(TEST_SESSION_ID)
+    HermesProxyState.resetTurnFlag(TEST_SESSION_ID)
     if (testMessageDir) {
       try {
         rmSync(testMessageDir, { recursive: true, force: true })
@@ -210,26 +212,14 @@ describe("hermes-routing-guard", () => {
     })
 
     describe("#when calling non-task tools", () => {
-      test("#then should not interfere with get_agent_prompts", async () => {
+      test("#then should not interfere with other tools", async () => {
         setupMessageStorage(TEST_SESSION_ID, "hermes")
         const hook = createHermesRoutingGuardHook(createMockPluginInput())
 
         await expect(
           hook["tool.execute.before"](
-            { tool: "get_agent_prompts", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { agent: "prometheus" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should not interfere with resolve_atlas_context", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "resolve_atlas_context", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { planName: "add-dark-mode" } },
+            { tool: "read", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { filePath: "/tmp/test.ts" } },
           )
         ).resolves.toBeUndefined()
       })

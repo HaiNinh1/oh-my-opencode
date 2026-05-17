@@ -332,6 +332,43 @@ describe("pollSyncSession", () => {
        //#then - should have waited for idle before checking messages
        expect(result).toBeNull()
        expect(statusCallCount).toBeGreaterThanOrEqual(3)
+      })
+
+     test('returns interrupt error immediately when session status is "interrupted"', async () => {
+       //#given
+       const { pollSyncSession } = require("./sync-session-poller")
+
+       let messageCallCount = 0
+       const mockClient = {
+         session: {
+           messages: async () => {
+             messageCallCount++
+             return { data: [] }
+           },
+           status: async () => ({
+             data: {
+               "ses_interrupted": {
+                 type: "interrupted",
+                 message: "Subagent stopped responding",
+               },
+             },
+           }),
+         },
+       }
+
+       //#when
+       const result = await pollSyncSession(createMockCtx(), mockClient, {
+         sessionID: "ses_interrupted",
+         agentToUse: "test-agent",
+         toastManager: null,
+         taskId: undefined,
+       })
+
+       //#then
+       expect(result).toContain("Task interrupted")
+       expect(result).toContain("Status: interrupted")
+       expect(result).toContain("Subagent stopped responding")
+       expect(messageCallCount).toBe(0)
      })
    })
 

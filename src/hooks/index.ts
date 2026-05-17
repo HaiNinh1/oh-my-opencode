@@ -54,3 +54,4 @@ export { createJsonErrorRecoveryHook, JSON_ERROR_TOOL_EXCLUDE_LIST, JSON_ERROR_P
 export { createReadImageResizerHook } from "./read-image-resizer"
 export { createTodoDescriptionOverrideHook } from "./todo-description-override"
 export { createHermesRoutingGuardHook } from "./hermes-routing-guard"
+export { createHermesContextTruncatorHook } from "./hermes-context-truncator"

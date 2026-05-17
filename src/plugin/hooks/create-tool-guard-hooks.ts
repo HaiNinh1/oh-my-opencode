@@ -163,6 +163,7 @@ export function createToolGuardHooks(args: {
     ? safeHook("hermes-routing-guard", () => createHermesRoutingGuardHook(ctx))
     : null;
 
+
   return {
     commentChecker,
     toolOutputTruncator,

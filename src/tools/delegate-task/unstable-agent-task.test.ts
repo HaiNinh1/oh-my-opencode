@@ -221,4 +221,76 @@ describe("executeUnstableAgentTask - interrupt detection", () => {
     expect(result.toLowerCase()).toContain("stale timeout")
     expect(elapsed).toBeLessThan(400)
   })
+
+  test("should return interrupt immediately when child session status becomes interrupted", async () => {
+    //#given - manager still says running but session status is terminal non-idle
+    const taskState = {
+      id: "bg_test_session_interrupt",
+      sessionID: "ses_test_session_interrupt",
+      status: "running" as string,
+      description: "test session interrupted task",
+      prompt: "test prompt",
+      agent: "sisyphus-junior",
+      error: undefined as string | undefined,
+    }
+
+    const mockManager = {
+      launch: async () => taskState,
+      getTask: () => taskState,
+    }
+
+    const mockClient = {
+      session: {
+        status: async () => ({
+          data: {
+            [taskState.sessionID]: {
+              type: "interrupted",
+              message: "Subagent stalled",
+            },
+          },
+        }),
+        messages: async () => ({ data: [] }),
+      },
+    }
+
+    const { executeUnstableAgentTask } = require("./unstable-agent-task")
+
+    const args = {
+      prompt: "test prompt",
+      description: "test task",
+      category: "test",
+      load_skills: [],
+      run_in_background: false,
+    }
+
+    const mockCtx = {
+      sessionID: "parent-session",
+      callID: "call-123",
+      metadata: () => {},
+    }
+
+    const mockExecutorCtx = {
+      manager: mockManager,
+      client: mockClient,
+      directory: "/tmp",
+    }
+
+    const parentContext = {
+      sessionID: "parent-session",
+      messageID: "msg-123",
+    }
+
+    //#when
+    const startTime = Date.now()
+    const result = await executeUnstableAgentTask(
+      args, mockCtx, mockExecutorCtx, parentContext,
+      "test-agent", undefined, undefined, "test-model"
+    )
+    const elapsed = Date.now() - startTime
+
+    //#then
+    expect(result).toContain("FAILED (interrupt)")
+    expect(result).toContain("Subagent stalled")
+    expect(elapsed).toBeLessThan(400)
+  })
 })

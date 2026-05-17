@@ -31,13 +31,13 @@ export function buildRetryGuidance(errorInfo: DetectedError): string {
  
  Example of CORRECT call:
  \`\`\`
- task(
-   description="Task description",
-   prompt="Detailed prompt...",
-   category="unspecified-low",  // OR subagent_type="explore"
-   run_in_background=false,
-   load_skills=[]
- )
+  task(
+    description="Task description",
+    prompt="Detailed prompt...",
+    subagent_type="explore",
+    run_in_background=false,
+    load_skills=[]
+  )
  \`\`\`
  `
 

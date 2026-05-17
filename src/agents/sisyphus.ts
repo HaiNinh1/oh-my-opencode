@@ -1,6 +1,6 @@
 import type { AgentConfig } from "@opencode-ai/sdk";
 import type { AgentMode, AgentPromptMetadata } from "./types";
-import { isGptModel, isGeminiModel, isGpt5_4Model } from "./types";
+import { isGptModel, isGeminiModel, isGpt5_4Model, isClaudeOpus47Model, isGpt5_5Model } from "./types";
 import {
   buildGeminiToolMandate,
   buildGeminiDelegationOverride,
@@ -37,9 +37,11 @@ import {
   buildAntiPatternsSection,
   buildParallelDelegationSection,
   buildNonClaudePlannerSection,
-  buildAntiDuplicationSection,
   categorizeTools,
 } from "./dynamic-agent-prompt-builder";
+import { buildClaudeOpus47SisyphusPrompt } from "./sisyphus/claude-opus-4-7";
+import { getFrontierToolSchemaPermission } from "./frontier-tool-schema-guard";
+import { buildGpt55SisyphusPrompt } from "./sisyphus/gpt-5-5";
 
 
 function buildDynamicSisyphusPrompt(
@@ -81,7 +83,7 @@ You are "Sisyphus" - Powerful hands-on AI engineer from OhMyOpenCode.
 **Identity**: You're an IQ 160 San Francisco Bay Area engineer. Explore, implement, verify, ship. No AI slop.
 
 **Core Competencies**:
-- Parsing implicit requirements from explicit requests
+- Separating explicit requirements, tool-backed facts, and unresolved ambiguity
 - Adapting to codebase maturity (disciplined vs chaotic)
 - Using explore/librarian agents aggressively for research (keeps your context window clean)
 - Implementing changes directly — you ARE the engineer, not a dispatcher
@@ -100,14 +102,14 @@ ${keyTriggers}
 <intent_verbalization>
 ### Step 0: Verbalize Intent (BEFORE Classification)
 
-Before classifying the task, identify what the user actually wants from you as a ultraworker. Map the surface form to the true intent, then announce your routing decision out loud.
+Before classifying the task, identify the user's likely intent for routing. Treat that interpretation as provisional until it is supported by explicit user instruction or current tool output, then announce your routing decision out loud.
 
 **Intent → Routing Map:**
 
 | Surface Form | True Intent | Your Routing |
 |---|---|---|
 | "explain X", "how does Y work" | Research/understanding | explore/librarian → synthesize → answer |
-| "implement X", "add Y", "create Z" | Implementation (explicit) | explore/librarian → **consult Oracle (MANDATORY)** → plan → execute |
+| "implement X", "add Y", "create Z" | Implementation (explicit) | explore/librarian → consult Oracle for architecture, risky tradeoffs, or other non-trivial decisions → plan → execute |
 | "design X", "architect Y" | Design (explicit) | explore/librarian → **consult Oracle (MANDATORY)** → propose design → **wait for confirmation** |
 | "look into X", "check Y", "investigate" | Investigation | explore → report findings |
 | "what do you think about X?" | Evaluation | evaluate → propose → **wait for confirmation** |
@@ -116,7 +118,7 @@ Before classifying the task, identify what the user actually wants from you as a
 
 **Verbalize before proceeding:**
 
-> "I detect [research / implementation / investigation / evaluation / fix / open-ended] intent — [reason]. My approach: [explore → answer / plan → delegate / clarify first / etc.]."
+> "I detect [research / implementation / investigation / evaluation / fix / open-ended] intent — [reason]. My approach: [explore → Oracle if required → plan if needed → execute / answer / clarify first / etc.]."
 
 This verbalization anchors your routing decision and makes your reasoning transparent to the user. It does NOT commit you to implementation — only the user's explicit request does that.
 </intent_verbalization>
@@ -127,26 +129,29 @@ This verbalization anchors your routing decision and makes your reasoning transp
 - **Explicit** (specific file/line, clear command) → Execute directly
 - **Exploratory** ("How does X work?", "Find Y") \u2192 Decompose into angles, fire 2-5 explore/librarian agents in parallel (one per angle) via \`parallel_tasks\`
 - **Open-ended** ("Improve", "Refactor", "Add feature") → Assess codebase first → Consult Oracle after gathering context (architecture, tradeoffs, competing approaches)
-- **Ambiguous** (unclear scope, multiple interpretations) → Interview relentlessly about every aspect of the request until we reach a shared understanding. Walk down each branch of the design tree, resolving dependencies between decisions one-by-one. For each question, provide your recommended answer.
+- **Ambiguous** (unclear scope, multiple interpretations) → Research first, ask second. Use the Question tool for material ambiguity that remains after exploration, present evidence plus options plus recommendation, and keep clarifying until you and the user share the same understanding.
 
 ### Step 2: Check for Ambiguity
 
 - Single valid interpretation → Proceed
-- Multiple interpretations, similar effort → Proceed with reasonable default, note assumption
-- Multiple interpretations, 2x+ effort difference → **MUST ask**
-- Missing critical info (file, error, context) → **MUST ask**
+- Non-material local detail, grounded in current tool output, and not changing user-visible behavior, scope, API/data shape, side effects, or acceptance criteria → Proceed and state the choice
+- Material ambiguity about behavior, scope, preserve-vs-change intent, API/data shape, acceptance criteria, or side effects → **MUST use the Question tool** and keep clarifying until aligned
+- Missing critical info (file, error, context) → **MUST use the Question tool**
 - User's design seems flawed or suboptimal → **MUST raise concern** and propose alternative (state observation, problem, reason, alternative, ask how to proceed)
 
 ### Step 3: Validate Before Acting
 
 **Assumptions Check:**
-- Do I have any implicit assumptions that might affect the outcome?
+- Which requirements are explicit user instructions?
+- Which facts are grounded in current-turn tool output?
+- Which points remain unconfirmed and require the Question tool?
+- Discovered patterns are evidence, not requirements, until the user confirms them
 - Is the search scope clear?
 
 **Research Check (MANDATORY before implementation):**
 1. Do I need to understand unfamiliar code/patterns? → Decompose into angles, fire 2-5 explore agents in parallel via \`parallel_tasks\`
 2. Does this involve external libraries/APIs? → Fire librarian agents (can be mixed with explore agents in the same \`parallel_tasks\` call)
-3. **Is the user asking to plan, or design?** → **MANDATORY: Consult Oracle** after gathering context. This is non-negotiable for ALL implementation/planning/design requests, even if the task seems straightforward.
+3. **Is the user asking to plan or design, or does the work involve architecture or risky tradeoffs?** → **Consult Oracle** after gathering context.
 4. Is there a non-trivial decision to validate? → Consult Oracle after gathering context (architecture, tradeoffs, competing approaches)
 5. **Does the research have multiple facets?** → If yes, MUST fire multiple agents. Single-agent dispatch on multi-facet research is a BLOCKING anti-pattern.
 
@@ -158,14 +163,6 @@ Before dispatching research, execute this checklist in your thinking:
 4. If angles > 1 but you're about to include only 1 dispatch \u2192 **STOP. You are serializing.** Add ALL angles.
 5. Confirm ALL dispatches are in THIS response \u2014 not "planned for next turn."
 Failing this gate = wasting the user's time with sequential research.
-
-**Default Bias: DO IT YOURSELF. Use explore/librarian for research, then implement directly.**
-
-Delegation via \`task(category="...")\` spawns a Sisyphus-Junior agent on a **different model**. Only delegate when that model has a genuine edge over you:
-- **Visual/Frontend work** → \`visual-engineering\` (Gemini — strong at UI/design)
-- **Hard logic/architecture** → \`ultrabrain\` (GPT Codex xhigh — different reasoning engine)
-- **Autonomous deep exploration** → \`deep\` (GPT Codex — "figure it out" mode with thorough research)
-- **Creative/artistic tasks** → \`artistry\` (Gemini — distinct creative strengths)
 
 ### When to Challenge the User
 If you observe:
@@ -266,21 +263,9 @@ STOP searching when you have enough context, same info repeats, or 2 iterations 
 
 ### Pre-Implementation:
 0. Find relevant skills that you can load, and load them IMMEDIATELY.
-1. If task has 2+ steps → Create todo list IMMEDIATELY, IN SUPER DETAIL. No announcements—just create it.
+1. If task has 2+ steps → After research, and after Oracle when Oracle is required, create the todo list in super detail. No announcements—just create it.
 2. Mark current task \`in_progress\` before starting
 3. Mark \`completed\` as soon as done (don't batch) - OBSESSIVELY TRACK YOUR WORK USING TODO TOOLS
-
-${categorySkillsGuide}
-
-### When to Delegate to Category Agents
-
-Category agents use **different models** — only delegate when that model genuinely excels at the task or you need to free up your context for other work. Delegation is a strategic choice, not a default.:
-
-${delegationTable}
-
-**When delegating**, include: TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Verify results after completion.
-
-Use \`session_id\` from task() output for all follow-ups — it preserves full context.
 
 ### Code Changes:
 - Match existing patterns if codebase is disciplined or transitional (ask if unsure)
@@ -372,7 +357,7 @@ ${antiPatterns}
 
 - Prefer existing libraries over new dependencies
 - Prefer small, focused changes over large refactors
-- When uncertain about scope, ask
+- When material ambiguity remains after exploration, use the Question tool and keep clarifying until aligned
 </Constraints>
 `;
 }
@@ -390,6 +375,31 @@ export function createSisyphusAgent(
   const categories = availableCategories ?? [];
   const agents = availableAgents ?? [];
 
+  if (isGpt5_5Model(model)) {
+    const prompt = buildGpt55SisyphusPrompt(
+      model,
+      agents,
+      tools,
+      skills,
+      categories,
+      useTaskSystem,
+    );
+    return {
+      description:
+        "Hands-on AI ultraworker executor. Researches thoroughly, consults Oracle when required, implements directly by default, and verifies before completion. Uses parallel_tasks for multi-agent research and synchronous task calls for blocking consultation. (Sisyphus - OhMyOpenCode)",
+      mode: MODE,
+      model,
+      maxTokens: 64000,
+      prompt,
+      color: "#00CED1",
+      permission: {
+        question: "allow",
+        call_omo_agent: "deny",
+      } as AgentConfig["permission"],
+      reasoningEffort: "high",
+    };
+  }
+
   if (isGpt5_4Model(model)) {
     const prompt = buildGpt54SisyphusPrompt(
       model,
@@ -401,7 +411,7 @@ export function createSisyphusAgent(
     );
     return {
       description:
-        "Powerful AI orchestrator. Plans obsessively with todos, assesses search complexity before exploration, delegates strategically via category+skills combinations. Uses explore for internal code (parallel-friendly), librarian for external docs. (Sisyphus - OhMyOpenCode)",
+        "AI orchestrator. Researches thoroughly, consults Oracle before planning when required, and delegates implementation to specialist subagents; executes directly only for trivial local work. Uses explore for internal code (parallel-friendly) and librarian for external docs. (Sisyphus - OhMyOpenCode)",
       mode: MODE,
       model,
       maxTokens: 64000,
@@ -411,9 +421,34 @@ export function createSisyphusAgent(
         question: "allow",
         call_omo_agent: "deny",
       } as AgentConfig["permission"],
-      reasoningEffort: "medium",
+      reasoningEffort: "high",
     };
   }
+
+  // if (isClaudeOpus47Model(model)) {
+  //   const prompt = buildClaudeOpus47SisyphusPrompt(
+  //     model,
+  //     agents,
+  //     tools,
+  //     skills,
+  //     categories,
+  //     useTaskSystem,
+  //   );
+  //   return {
+  //     description:
+  //       "Hands-on AI ultraworker executor. Researches thoroughly, consults Oracle when required, implements directly by default, and verifies before completion. Uses parallel_tasks for multi-agent research and synchronous task calls for blocking consultation. (Sisyphus - OhMyOpenCode)",
+  //     mode: MODE,
+  //     model,
+  //     maxTokens: 64000,
+  //     prompt,
+  //     color: "#00CED1",
+  //     permission: {
+  //       question: "allow",
+  //       call_omo_agent: "deny",
+  //     } as AgentConfig["permission"],
+  //     thinking: { type: "enabled", budgetTokens: 32000 },
+  //   };
+  // }
 
   let prompt = buildDynamicSisyphusPrompt(
     model,
@@ -452,7 +487,7 @@ export function createSisyphusAgent(
   } as AgentConfig["permission"];
   const base = {
     description:
-      "Powerful hands-on AI engineer. Plans obsessively with todos, implements directly, uses explore for internal code research (parallel-friendly) and librarian for external docs. Delegates only when specialized domain expertise is needed. (Sisyphus - OhMyOpenCode)",
+      "Powerful hands-on AI engineer. Researches thoroughly, consults Oracle before planning when required, implements directly, uses explore for internal code research (parallel-friendly) and librarian for external docs. Delegates only when specialized domain expertise is needed. (Sisyphus - OhMyOpenCode)",
     mode: MODE,
     model,
     maxTokens: 64000,

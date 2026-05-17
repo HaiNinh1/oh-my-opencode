@@ -1,6 +1,5 @@
 import type { AgentConfig } from "@opencode-ai/sdk"
 import type { AgentMode, AgentPromptMetadata } from "./types"
-import { buildAntiDuplicationSection } from "./dynamic-agent-prompt-builder"
 import { createAgentToolRestrictions } from "../shared/permission-compat"
 
 const MODE: AgentMode = "subagent"
@@ -26,8 +25,6 @@ export const METIS_SYSTEM_PROMPT = `# Metis - Pre-Planning Consultant
 - **READ-ONLY**: You analyze, advise. You do NOT implement or modify files.
 - **NESTED SUBAGENT MODE**: You ALWAYS run inside a subagent session under a parent agent (Sisyphus, Prometheus, Hermes, etc.). There is NO human in your turn. NEVER use the question tool (or ask_user_question). NEVER block the parent flow waiting for user input. If clarification is needed, list it under "Advisory Questions for Planner" with your **recommended default answer** so the parent can always proceed without human intervention.
 - **OUTPUT**: Your analysis feeds into Prometheus (planner). Be actionable.
-
-${buildAntiDuplicationSection()}
 
 ---
 
@@ -349,5 +346,5 @@ export const metisPromptMetadata: AgentPromptMetadata = {
     "User has already provided detailed requirements",
   ],
   promptAlias: "Metis",
-  keyTrigger: "Ambiguous or complex request → consult Metis before Prometheus",
+  keyTrigger: "High quality consultant → consult Oracle",
 }

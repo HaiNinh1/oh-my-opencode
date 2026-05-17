@@ -49,6 +49,12 @@ export async function executeBackgroundTask(
     let sessionId = task.sessionID
     while (!sessionId && Date.now() - waitStart < timing.WAIT_FOR_SESSION_TIMEOUT_MS) {
       if (ctx.abort?.aborted) {
+        await manager.cancelTask(task.id, {
+          source: "executeBackgroundTask.waitForSessionStart",
+          reason: "Parent aborted while waiting for background task session start",
+          abortSession: false,
+          skipNotification: true,
+        })
         return `Task aborted while waiting for session to start.\n\nTask ID: ${task.id}`
       }
       await new Promise(resolve => setTimeout(resolve, timing.WAIT_FOR_SESSION_INTERVAL_MS))

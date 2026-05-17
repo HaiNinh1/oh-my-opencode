@@ -5,6 +5,7 @@ import {
   createClaudeCodeHooksHook,
   createKeywordDetectorHook,
   createThinkingBlockValidatorHook,
+  createHermesContextTruncatorHook,
 } from "../../hooks"
 import {
   contextCollector,
@@ -16,6 +17,7 @@ export type TransformHooks = {
   claudeCodeHooks: ReturnType<typeof createClaudeCodeHooksHook> | null
   keywordDetector: ReturnType<typeof createKeywordDetectorHook> | null
   contextInjectorMessagesTransform: ReturnType<typeof createContextInjectorMessagesTransformHook>
+  hermesContextTruncator: ReturnType<typeof createHermesContextTruncatorHook> | null
   thinkingBlockValidator: ReturnType<typeof createThinkingBlockValidatorHook> | null
 }
 
@@ -55,6 +57,14 @@ export function createTransformHooks(args: {
   const contextInjectorMessagesTransform =
     createContextInjectorMessagesTransformHook(contextCollector)
 
+  const hermesContextTruncator = isHookEnabled("hermes-context-truncator")
+    ? safeCreateHook(
+        "hermes-context-truncator",
+        () => createHermesContextTruncatorHook(),
+        { enabled: safeHookEnabled },
+      )
+    : null
+
   const thinkingBlockValidator = isHookEnabled("thinking-block-validator")
     ? safeCreateHook(
         "thinking-block-validator",
@@ -67,6 +77,7 @@ export function createTransformHooks(args: {
     claudeCodeHooks,
     keywordDetector,
     contextInjectorMessagesTransform,
+    hermesContextTruncator,
     thinkingBlockValidator,
   }
 }

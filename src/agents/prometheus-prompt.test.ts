@@ -84,22 +84,3 @@ describe("PROMETHEUS_SYSTEM_PROMPT zero human intervention", () => {
     expect(lowerPrompt).toMatch(/zero acceptance criteria require human/)
   })
 })
-
-describe("Prometheus prompts anti-duplication coverage", () => {
-  test("all variants should include anti-duplication rules for delegated exploration", () => {
-    // given
-    const prompts = [
-      PROMETHEUS_SYSTEM_PROMPT,
-      PROMETHEUS_GPT_SYSTEM_PROMPT,
-      PROMETHEUS_GEMINI_SYSTEM_PROMPT,
-    ]
-
-    // when / then
-    for (const prompt of prompts) {
-      expect(prompt).toContain("<Anti_Duplication>")
-      expect(prompt).toContain("Anti-Duplication Rule")
-      expect(prompt).toContain("DO NOT perform the same search yourself")
-      expect(prompt).toContain("non-overlapping work")
-    }
-  })
-})

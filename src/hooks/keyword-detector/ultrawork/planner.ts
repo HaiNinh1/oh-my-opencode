@@ -106,8 +106,8 @@ Each TODO item MUST include:
   **Blocks**: [Task numbers that depend on this]
   **Parallel Group**: Wave N (with Tasks X, Y)
   
-  **Recommended Agent Profile**:
-  - **Category**: \`[visual-engineering | ultrabrain | artistry | quick | unspecified-low | unspecified-high | writing]\`
+  **Recommended Specialist Input**:
+  - **Consultants**: [\`explore\`, \`librarian\`, \`oracle\`, or none]
   - **Skills**: [\`skill-1\`, \`skill-2\`]
   
   **Acceptance Criteria**: [Verifiable conditions]
@@ -115,17 +115,17 @@ Each TODO item MUST include:
 
 ### 4. Agent Dispatch Summary (REQUIRED)
 
-| Wave | Tasks | Dispatch Command |
-|------|-------|------------------|
-| 1 | 1, 4 | \`task(category="...", load_skills=[...], run_in_background=false)\` × 2 |
-| 2 | 2, 3, 5 | \`task(...)\` × 3 after Wave 1 completes |
-| 3 | 6 | \`task(...)\` final integration |
+| Wave | Tasks | Specialist Research |
+|------|-------|---------------------|
+| 1 | 1, 4 | \`parallel_tasks({ tasks: [...] })\` if research is needed |
+| 2 | 2, 3, 5 | synchronous \`task(subagent_type="oracle", ...)\` only for blocking consultation |
+| 3 | 6 | direct implementation + verification |
 
-**WHY PARALLEL TASK GRAPH IS MANDATORY:**
-- Orchestrator (Sisyphus) executes tasks in parallel waves
-- Independent tasks run simultaneously via background agents
+**WHY DEPENDENCY GRAPH IS MANDATORY:**
+- Direct executor understands what can run independently
+- Independent research happens through \`parallel_tasks\`
 - Proper dependency tracking prevents race conditions
-- Category + skills ensure optimal model routing per task`
+- Skills capture domain guidance without outsourcing implementation`
 
 export function getPlannerUltraworkMessage(): string {
   return `<ultrawork-mode>

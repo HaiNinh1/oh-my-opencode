@@ -15,7 +15,6 @@ interface TaskInput {
   description: string
   prompt: string
   subagent_type?: string
-  category?: string
   load_skills?: string[]
 }
 
@@ -66,7 +65,6 @@ function buildPartInput(input: TaskInput): Record<string, unknown> {
     description: input.description,
     prompt: input.prompt,
     subagent_type: input.subagent_type,
-    category: input.category,
     run_in_background: false,
     load_skills: input.load_skills ?? [],
   }

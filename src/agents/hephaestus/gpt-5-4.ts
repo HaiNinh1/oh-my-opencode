@@ -29,7 +29,6 @@ import {
   buildOracleSection,
   buildHardBlocksSection,
   buildAntiPatternsSection,
-  buildAntiDuplicationSection,
 } from "../dynamic-agent-prompt-builder";
 
 function buildTodoDisciplineSection(useTaskSystem: boolean): string {
@@ -269,8 +268,6 @@ When using \`parallel_tasks\`, all results return together in one response. For 
 3. Incorporate the findings into your reasoning and final answer
 
 If research is incomplete or inconclusive, fire additional \`parallel_tasks\` with refined prompts.
-
-${buildAntiDuplicationSection()}
 
 ### Search Stop Conditions
 

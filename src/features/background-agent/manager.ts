@@ -1452,6 +1452,52 @@ export class BackgroundManager {
    * Safely complete a task with race condition protection.
    * Returns true if task was successfully completed, false if already completed by another path.
    */
+  private async tryInterruptTask(task: BackgroundTask, source: string, reason?: string): Promise<boolean> {
+    if (task.status !== "running") {
+      log("[background-agent] Task already finalized, skipping interrupt:", { taskId: task.id, status: task.status, source })
+      return false
+    }
+
+    task.status = "interrupt"
+    task.completedAt = new Date()
+    if (reason) {
+      task.error = reason
+    }
+    this.taskHistory.record(task.parentSessionID, { id: task.id, sessionID: task.sessionID, agent: task.agent, description: task.description, status: "interrupt", category: task.category, startedAt: task.startedAt, completedAt: task.completedAt })
+
+    removeTaskToastTracking(task.id)
+
+    if (task.concurrencyKey) {
+      this.concurrencyManager.release(task.concurrencyKey)
+      task.concurrencyKey = undefined
+    }
+
+    this.markForNotification(task)
+
+    const idleTimer = this.idleDeferralTimers.get(task.id)
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      this.idleDeferralTimers.delete(task.id)
+    }
+
+    if (task.sessionID) {
+      this.client.session.abort({
+        path: { id: task.sessionID },
+      }).catch(() => {})
+
+      SessionCategoryRegistry.remove(task.sessionID)
+    }
+
+    try {
+      await this.enqueueNotificationForParent(task.parentSessionID, () => this.notifyParentSession(task))
+      log(`[background-agent] Task interrupted via ${source}:`, task.id)
+    } catch (err) {
+      log("[background-agent] Error in notifyParentSession for interrupted task:", { taskId: task.id, error: err })
+    }
+
+    return true
+  }
+
   private async tryCompleteTask(task: BackgroundTask, source: string): Promise<boolean> {
     // Guard: Check if task is still running (could have been completed by another path)
     if (task.status !== "running") {
@@ -1801,7 +1847,10 @@ Use \`background_output(task_id="${task.id}")\` to retrieve this result when rea
         // skipping output validation (session will never produce more output).
         // Unknown statuses fall through to the idle/gone path with output validation.
         if (sessionStatus && isTerminalSessionStatus(sessionStatus.type)) {
-          await this.tryCompleteTask(task, `polling (terminal session status: ${sessionStatus.type})`)
+          const statusMessage = typeof (sessionStatus as { message?: string }).message === "string"
+            ? (sessionStatus as { message?: string }).message
+            : undefined
+          await this.tryInterruptTask(task, `polling (terminal session status: ${sessionStatus.type})`, statusMessage)
           continue
         }
 
