@@ -425,30 +425,30 @@ export function createSisyphusAgent(
     };
   }
 
-  if (isClaudeOpus47Model(model)) {
-    const prompt = buildClaudeOpus47SisyphusPrompt(
-      model,
-      agents,
-      tools,
-      skills,
-      categories,
-      useTaskSystem,
-    );
-    return {
-      description:
-        "Hands-on AI ultraworker executor. Researches thoroughly, consults Oracle when required, implements directly by default, and verifies before completion. Uses parallel_tasks for multi-agent research and synchronous task calls for blocking consultation. (Sisyphus - OhMyOpenCode)",
-      mode: MODE,
-      model,
-      maxTokens: 64000,
-      prompt,
-      color: "#00CED1",
-      permission: {
-        question: "allow",
-        call_omo_agent: "deny",
-      } as AgentConfig["permission"],
-      thinking: { type: "enabled", budgetTokens: 32000 },
-    };
-  }
+  // if (isClaudeOpus47Model(model)) {
+  //   const prompt = buildClaudeOpus47SisyphusPrompt(
+  //     model,
+  //     agents,
+  //     tools,
+  //     skills,
+  //     categories,
+  //     useTaskSystem,
+  //   );
+  //   return {
+  //     description:
+  //       "Hands-on AI ultraworker executor. Researches thoroughly, consults Oracle when required, implements directly by default, and verifies before completion. Uses parallel_tasks for multi-agent research and synchronous task calls for blocking consultation. (Sisyphus - OhMyOpenCode)",
+  //     mode: MODE,
+  //     model,
+  //     maxTokens: 64000,
+  //     prompt,
+  //     color: "#00CED1",
+  //     permission: {
+  //       question: "allow",
+  //       call_omo_agent: "deny",
+  //     } as AgentConfig["permission"],
+  //     thinking: { type: "enabled", budgetTokens: 32000 },
+  //   };
+  // }
 
   let prompt = buildDynamicSisyphusPrompt(
     model,

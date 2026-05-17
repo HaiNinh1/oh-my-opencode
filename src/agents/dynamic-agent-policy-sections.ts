@@ -23,9 +23,7 @@ export function buildAntiPatternsSection(): string {
     "- **Type Safety**: `as any`, `@ts-ignore`, `@ts-expect-error`",
     "- **Error Handling**: Empty catch blocks `catch(e) {}`",
     '- **Testing**: Deleting failing tests to "pass"',
-    "- **Search**: Firing agents for single-line typos or obvious syntax errors",
     "- **Debugging**: Shotgun debugging, random changes",
-    "- **Delegation Duplication**: Delegating exploration to explore/librarian and then manually doing the same search yourself",
     "- **Oracle**: Delivering answer without collecting Oracle results",
   ]
 
