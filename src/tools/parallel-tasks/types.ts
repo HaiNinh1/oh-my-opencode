@@ -4,8 +4,7 @@ export interface ParallelTaskItem {
   description: string
   prompt: string
   load_skills: string[]
-  category?: string
-  subagent_type?: string
+  subagent_type: string
 }
 
 export interface ParallelTasksArgs {

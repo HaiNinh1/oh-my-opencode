@@ -7,8 +7,6 @@ import {
   lsp_rename,
   lspManager,
 } from "./lsp"
-import { get_agent_prompts } from "./get-agent-prompts"
-
 export { lspManager }
 
 export { createAstGrepTools } from "./ast-grep"
@@ -35,8 +33,6 @@ import type { BackgroundManager } from "../features/background-agent"
 
 type OpencodeClient = PluginInput["client"]
 
-export { createResolveAtlasContextTool } from "./resolve-atlas-context"
-export { createResolveHeraclesContextTool } from "./resolve-heracles-context"
 export { createCallOmoAgent } from "./call-omo-agent"
 
 export { createLookAt } from "./look-at"
@@ -49,7 +45,6 @@ export {
 } from "./task"
 export { createHashlineEditTool } from "./hashline-edit"
 export { createParallelTasksTool } from "./parallel-tasks"
-export { get_agent_prompts } from "./get-agent-prompts"
 
 export function createBackgroundTools(manager: BackgroundManager, client: OpencodeClient): Record<string, ToolDefinition> {
   const outputManager: BackgroundOutputManager = manager
@@ -67,5 +62,4 @@ export const builtinTools: Record<string, ToolDefinition> = {
   lsp_diagnostics,
   lsp_prepare_rename,
   lsp_rename,
-  get_agent_prompts,
 }

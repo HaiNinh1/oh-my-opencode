@@ -1,6 +1,6 @@
 import type { AgentConfig } from "@opencode-ai/sdk";
 import type { AgentMode, AgentPromptMetadata } from "./types";
-import { isGptModel, isGeminiModel, isGpt5_4Model } from "./types";
+import { isGptModel, isGeminiModel, isGpt5_4Model, isClaudeOpus47Model, isGpt5_5Model } from "./types";
 import {
   buildGeminiToolMandate,
   buildGeminiDelegationOverride,
@@ -40,6 +40,9 @@ import {
   buildAntiDuplicationSection,
   categorizeTools,
 } from "./dynamic-agent-prompt-builder";
+import { buildClaudeOpus47SisyphusPrompt } from "./sisyphus/claude-opus-4-7";
+import { getFrontierToolSchemaPermission } from "./frontier-tool-schema-guard";
+import { buildGpt55SisyphusPrompt } from "./sisyphus/gpt-5-5";
 
 
 function buildDynamicSisyphusPrompt(
@@ -164,12 +167,6 @@ Failing this gate = wasting the user's time with sequential research.
 
 **Default Bias: DO IT YOURSELF. Use explore/librarian for research, then implement directly.**
 
-Delegation via \`task(category="...")\` spawns a Sisyphus-Junior agent on a **different model**. Only delegate when that model has a genuine edge over you:
-- **Visual/Frontend work** → \`visual-engineering\` (Gemini — strong at UI/design)
-- **Hard logic/architecture** → \`ultrabrain\` (GPT Codex xhigh — different reasoning engine)
-- **Autonomous deep exploration** → \`deep\` (GPT Codex — "figure it out" mode with thorough research)
-- **Creative/artistic tasks** → \`artistry\` (Gemini — distinct creative strengths)
-
 ### When to Challenge the User
 If you observe:
 - A design decision that will cause obvious problems
@@ -272,18 +269,6 @@ STOP searching when you have enough context, same info repeats, or 2 iterations 
 1. If task has 2+ steps → After research, and after Oracle when Oracle is required, create the todo list in super detail. No announcements—just create it.
 2. Mark current task \`in_progress\` before starting
 3. Mark \`completed\` as soon as done (don't batch) - OBSESSIVELY TRACK YOUR WORK USING TODO TOOLS
-
-${categorySkillsGuide}
-
-### When to Delegate to Category Agents
-
-Category agents use **different models** — only delegate when that model genuinely excels at the task or you need to free up your context for other work. Delegation is a strategic choice, not a default.:
-
-${delegationTable}
-
-**When delegating**, include: TASK, EXPECTED OUTCOME, MUST DO, MUST NOT DO, CONTEXT. Verify results after completion.
-
-Use \`session_id\` from task() output for all follow-ups — it preserves full context.
 
 ### Code Changes:
 - Match existing patterns if codebase is disciplined or transitional (ask if unsure)
@@ -393,6 +378,31 @@ export function createSisyphusAgent(
   const categories = availableCategories ?? [];
   const agents = availableAgents ?? [];
 
+  if (isGpt5_5Model(model)) {
+    const prompt = buildGpt55SisyphusPrompt(
+      model,
+      agents,
+      tools,
+      skills,
+      categories,
+      useTaskSystem,
+    );
+    return {
+      description:
+        "Hands-on AI ultraworker executor. Researches thoroughly, consults Oracle when required, implements directly by default, and verifies before completion. Uses parallel_tasks for multi-agent research and synchronous task calls for blocking consultation. (Sisyphus - OhMyOpenCode)",
+      mode: MODE,
+      model,
+      maxTokens: 64000,
+      prompt,
+      color: "#00CED1",
+      permission: {
+        question: "allow",
+        call_omo_agent: "deny",
+      } as AgentConfig["permission"],
+      reasoningEffort: "high",
+    };
+  }
+
   if (isGpt5_4Model(model)) {
     const prompt = buildGpt54SisyphusPrompt(
       model,
@@ -414,7 +424,32 @@ export function createSisyphusAgent(
         question: "allow",
         call_omo_agent: "deny",
       } as AgentConfig["permission"],
-      reasoningEffort: "medium",
+      reasoningEffort: "high",
+    };
+  }
+
+  if (isClaudeOpus47Model(model)) {
+    const prompt = buildClaudeOpus47SisyphusPrompt(
+      model,
+      agents,
+      tools,
+      skills,
+      categories,
+      useTaskSystem,
+    );
+    return {
+      description:
+        "Hands-on AI ultraworker executor. Researches thoroughly, consults Oracle when required, implements directly by default, and verifies before completion. Uses parallel_tasks for multi-agent research and synchronous task calls for blocking consultation. (Sisyphus - OhMyOpenCode)",
+      mode: MODE,
+      model,
+      maxTokens: 64000,
+      prompt,
+      color: "#00CED1",
+      permission: {
+        question: "allow",
+        call_omo_agent: "deny",
+      } as AgentConfig["permission"],
+      thinking: { type: "enabled", budgetTokens: 32000 },
     };
   }
 

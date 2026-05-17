@@ -245,6 +245,49 @@ bunDescribe("sendSyncPrompt", () => {
     bunExpect(promptArgs.body.tools.call_omo_agent).toBe(true)
   })
 
+  bunTest("forwards multiline prompt text unchanged for Hermes parents", async () => {
+    //#given
+    const { sendSyncPrompt } = require("./sync-prompt-sender")
+
+    let promptArgs: any
+    const promptAsync = bunMock(async (input: any) => {
+      promptArgs = input
+      return { data: {} }
+    })
+
+    const mockClient = {
+      session: {
+        promptAsync,
+      },
+    }
+
+    const input = {
+      sessionID: "test-session",
+      agentToUse: "sisyphus",
+      parentAgent: "Hermes ☤ (Task Router)",
+      args: {
+        description: "test task",
+        prompt: "line 1\nline 2\nline 3",
+        run_in_background: false,
+        load_skills: [],
+      },
+      systemContent: undefined,
+      categoryModel: undefined,
+      toastManager: null,
+      taskId: undefined,
+    }
+
+    //#when
+    await sendSyncPrompt(mockClient, input)
+
+    //#then
+    bunExpect(promptAsync).toHaveBeenCalled()
+    bunExpect(promptArgs.body.parts[0]).toEqual({
+      type: "text",
+      text: "line 1\nline 2\nline 3",
+    })
+  })
+
   bunTest("retries with promptSync for oracle when promptAsync fails with unexpected EOF", async () => {
     //#given
     const { sendSyncPrompt } = require("./sync-prompt-sender")

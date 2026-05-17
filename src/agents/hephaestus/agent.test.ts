@@ -6,6 +6,23 @@ import {
 } from "./index";
 
 describe("getHephaestusPromptSource", () => {
+  test("returns 'gpt-5-5' for gpt-5.5 models", () => {
+    // given
+    const model1 = "openai/gpt-5.5";
+    const model2 = "openai/gpt-5-5";
+    const model3 = "github-copilot/gpt-5.5";
+
+    // when
+    const source1 = getHephaestusPromptSource(model1);
+    const source2 = getHephaestusPromptSource(model2);
+    const source3 = getHephaestusPromptSource(model3);
+
+    // then
+    expect(source1).toBe("gpt-5-5");
+    expect(source2).toBe("gpt-5-5");
+    expect(source3).toBe("gpt-5-5");
+  });
+
   test("returns 'gpt-5-4' for gpt-5.4 models", () => {
     // given
     const model1 = "openai/gpt-5.4";
@@ -70,6 +87,21 @@ describe("getHephaestusPromptSource", () => {
 });
 
 describe("getHephaestusPrompt", () => {
+  test("GPT 5.5 model returns GPT-5.5 prompt with parallel research", () => {
+    // given
+    const model = "openai/gpt-5.5";
+
+    // when
+    const prompt = getHephaestusPrompt(model);
+
+    // then
+    expect(prompt).toContain("based on GPT-5.5");
+    expect(prompt).toContain("parallel_tasks");
+    expect(prompt).toContain("run_in_background=false");
+    expect(prompt).not.toContain("background_output");
+    expect(prompt).not.toContain("background_cancel");
+  });
+
   test("GPT 5.4 model returns GPT-5.4 optimized prompt", () => {
     // given
     const model = "openai/gpt-5.4";
@@ -192,6 +224,19 @@ describe("createHephaestusAgent", () => {
     expect(config.prompt).toContain("You build context by examining");
     expect(config.prompt).toContain("Never chain together bash commands");
     expect(config.prompt).toContain("<tool_usage_rules>");
+  });
+
+  test("GPT 5.5 model includes parallel task guidance with synchronous task hints", () => {
+    // given
+    const model = "openai/gpt-5.5";
+
+    // when
+    const config = createHephaestusAgent(model);
+
+    // then
+    expect(config.prompt).toContain("based on GPT-5.5");
+    expect(config.prompt).toContain("parallel_tasks");
+    expect(config.prompt).toContain("run_in_background=false");
   });
 
   test("GPT 5.3-codex model includes GPT-5.3 specific prompt content", () => {

@@ -230,7 +230,7 @@ describe("hermes-prompt-hardener", () => {
       expect(injectedText).not.toContain("subagent_type")
     })
 
-    test("includes continuation session_id in response format", async () => {
+    test("keeps pinned continuation directive without Session response text", async () => {
       // given
       HermesProxyState.setTarget("hermes_format", "atlas")
       HermesProxyState.pinChildSession("hermes_format", "ses_child_xyz")
@@ -245,7 +245,8 @@ describe("hermes-prompt-hardener", () => {
 
       // then
       const injectedText = output.parts[0].text!
-      expect(injectedText).toContain("Session: ses_child_xyz")
+      expect(injectedText).toContain('task(session_id="ses_child_xyz"')
+      expect(injectedText).not.toContain("Session: ses_child_xyz")
     })
   })
 
@@ -292,6 +293,41 @@ describe("hermes-prompt-hardener", () => {
       // then
       const injectedText = output.parts[0].text!
       expect(injectedText).toContain('fix the \\"broken\\" test')
+    })
+
+    test("preserves multiline prompt content as escaped newlines", async () => {
+      // given
+      HermesProxyState.setTarget("hermes_multiline", "sisyphus")
+      const input = { sessionID: "hermes_multiline", agent: "Hermes ☤ (Task Router)" }
+      const output = {
+        message: {},
+        parts: [{ type: "text", text: "line 1\nline 2\nline 3" }],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then
+      const injectedText = output.parts[0].text!
+      expect(injectedText).toContain('prompt="line 1\\nline 2\\nline 3"')
+      expect(injectedText).not.toContain("prompt=\"line 1\nline 2\nline 3\"")
+    })
+
+    test("preserves literal backslash-n distinctly from real newlines", async () => {
+      // given
+      HermesProxyState.setTarget("hermes_literal_backslash_n", "sisyphus")
+      const input = { sessionID: "hermes_literal_backslash_n", agent: "Hermes ☤ (Task Router)" }
+      const output = {
+        message: {},
+        parts: [{ type: "text", text: String.raw`line 1\nline 2` }],
+      }
+
+      // when
+      await hook["chat.message"](input, output)
+
+      // then
+      const injectedText = output.parts[0].text!
+      expect(injectedText).toContain('prompt="line 1\\\\nline 2"')
     })
   })
 

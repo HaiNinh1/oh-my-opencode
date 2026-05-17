@@ -24,7 +24,7 @@ function createChildContext(
   ctx: ToolContextWithMetadata,
   partCtx: PartContext | null,
   partId: string,
-  taskInput: { description: string; prompt: string; subagent_type?: string; category?: string; load_skills?: string[] },
+  taskInput: { description: string; prompt: string; subagent_type?: string; load_skills?: string[] },
   onSessionCreated: (sessionId: string, model?: { providerID: string; modelID: string }) => void,
 ): ToolContextWithMetadata {
   return {
@@ -94,7 +94,6 @@ export async function executeParallelTasks(
         description: task.item.description,
         prompt: task.item.prompt,
         subagent_type: task.item.subagent_type,
-        category: task.item.category,
         load_skills: task.item.load_skills,
       }
 

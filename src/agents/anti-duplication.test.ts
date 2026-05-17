@@ -41,17 +41,16 @@ describe("buildAntiDuplicationSection", () => {
     expect(result).toContain("work that doesn't depend on the delegated research")
   })
 
-  it("#given no arguments #when building #then includes wait-for-results instructions", () => {
+  it("#given no arguments #when building #then does not mention background task wait flow", () => {
     //#given: no special configuration
 
     //#when: building the section
     const result = buildAntiDuplicationSection()
 
-    //#then: should include instructions for waiting properly
-    expect(result).toContain("Wait for Results Properly")
-    expect(result).toContain("End your response")
-    expect(result).toContain("Wait for the completion notification")
-    expect(result).toContain("background_output")
+    //#then: should not reference background-task waiting semantics
+    expect(result).not.toContain("Wait for Results Properly")
+    expect(result).not.toContain("Wait for the completion notification")
+    expect(result).not.toContain("background_output")
   })
 
   it("#given no arguments #when building #then explains why this matters", () => {

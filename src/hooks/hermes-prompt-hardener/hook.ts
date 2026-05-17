@@ -24,27 +24,25 @@ function buildTaskDirective(
   childSessionID: string | undefined,
   userText: string,
 ): string {
-  const escapedPrompt = userText.replace(/"/g, '\\"')
+  const promptLiteral = JSON.stringify(userText)
 
   if (childSessionID) {
     return [
       `[HERMES ROUTING DIRECTIVE]`,
-      `Execute this EXACT tool call now. Do not modify it. Do not respond with text.`,
+      `Execute this EXACT tool call now with proper description. Do not modify the prompt. Do not respond with text.`,
       ``,
-      `task(session_id="${childSessionID}", prompt="${escapedPrompt}")`,
+      `task(session_id="${childSessionID}", prompt=${promptLiteral}, run_in_background=false, load_skills=[], description="<your description here>")`,
       ``,
-      `After the task completes, respond ONLY with: Session: ${childSessionID}`,
       `[END DIRECTIVE]`,
     ].join("\n")
   }
 
   return [
     `[HERMES ROUTING DIRECTIVE]`,
-    `Execute this EXACT tool call now. Do not modify it. Do not respond with text.`,
+    `Execute this EXACT tool call now with proper description. Do not modify the prompt. Do not respond with text.`,
     ``,
-    `task(subagent_type="${targetAgent}", prompt="${escapedPrompt}")`,
+    `task(subagent_type="${targetAgent}", prompt=${promptLiteral}, run_in_background=false, load_skills=[], description="<your description here>")`,
     ``,
-    `After the task completes, respond ONLY with: Session: <session_id from result>`,
     `[END DIRECTIVE]`,
   ].join("\n")
 }
@@ -167,7 +165,7 @@ function extractUserText(
     }
   }
 
-  return text.replace(/\s+/g, " ").trim()
+  return text.trim()
 }
 
 /**

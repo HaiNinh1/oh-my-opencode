@@ -3,7 +3,7 @@ import type { BuiltinSkill } from "../types"
 export const reviewWorkSkill: BuiltinSkill = {
 	name: "review-work",
 	description:
-		"Post-implementation review orchestrator. Launches 5 parallel background sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from GitHub/git/Slack/Notion). All must pass for review to pass. MUST USE after completing any significant implementation work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'.",
+		"Post-implementation review orchestrator. Launches 5 parallel sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from GitHub/git/Slack/Notion). All must pass for review to pass. MUST USE after completing any significant implementation work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'.",
 	template: `# Review Work - 5-Agent Parallel Review Orchestrator
 
 Launch 5 specialized sub-agents in parallel to review completed implementation work from every angle. All 5 must pass for the review to pass. If even ONE fails, the review fails.
@@ -60,7 +60,7 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 ## Phase 1: Launch 5 Agents
 
-Launch ALL 5 in a single turn. Every agent uses \`run_in_background=true\`. No sequential launches. No waiting between them.
+Launch ALL 5 in a single turn. Every agent uses \`run_in_background=false\`. No sequential launches. No waiting between them.
 
 **Oracle agents receive everything in the prompt** (they cannot read files or run commands). Include DIFF + FILE_CONTENTS + all context directly in the prompt text.
 
@@ -75,7 +75,7 @@ This agent answers: "Did we build exactly what was asked, within the rules we we
 \`\`\`
 task(
   subagent_type="oracle",
-  run_in_background=true,
+  run_in_background=false,
   load_skills=[],
   description="Verify implementation against original goal and constraints",
   prompt="""
@@ -154,7 +154,7 @@ The QA agent follows a structured process: brainstorm scenarios exhaustively fir
 \`\`\`
 task(
   category="unspecified-high",
-  run_in_background=true,
+  run_in_background=false,
   load_skills=["playwright", "dev-browser"],
   description="QA by actually running and using the application",
   prompt="""
@@ -264,7 +264,7 @@ This agent answers: "Is the code well-written, maintainable, and consistent with
 \`\`\`
 task(
   subagent_type="oracle",
-  run_in_background=true,
+  run_in_background=false,
   load_skills=[],
   description="Review overall code quality, patterns, and architecture",
   prompt="""
@@ -341,7 +341,7 @@ This is supplementary - it focuses exclusively on security. It does NOT comment 
 \`\`\`
 task(
   subagent_type="oracle",
-  run_in_background=true,
+  run_in_background=false,
   load_skills=[],
   description="Security-focused review of implementation changes",
   prompt="""
@@ -397,7 +397,7 @@ This agent answers: "Did we miss any context that should have informed this impl
 \`\`\`
 task(
   category="unspecified-high",
-  run_in_background=true,
+  run_in_background=false,
   load_skills=["git-master"],
   description="Mine all accessible contexts for missed requirements or background knowledge",
   prompt="""

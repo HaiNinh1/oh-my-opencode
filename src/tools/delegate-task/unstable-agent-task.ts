@@ -10,6 +10,7 @@ import { getTaskOutputContent } from "./task-output-pruner"
 import { getSessionTools } from "../../shared/session-tools-store"
 import { normalizeSDKResponse } from "../../shared"
 import { QUESTION_DENIED_SESSION_PERMISSION } from "../../shared/question-denied-session-permission"
+import { isActiveSessionStatus, isTerminalSessionStatus } from "../../features/background-agent/session-status-classifier"
 
 export async function executeUnstableAgentTask(
   args: DelegateTaskArgs,
@@ -110,6 +111,23 @@ export async function executeUnstableAgentTask(
       const statusResult = await client.session.status()
       const allStatuses = normalizeSDKResponse(statusResult, {} as Record<string, { type: string }>)
       const sessionStatus = allStatuses[sessionID]
+
+      if (sessionStatus && isActiveSessionStatus(sessionStatus.type)) {
+        stablePolls = 0
+        lastMsgCount = 0
+        continue
+      }
+
+      if (sessionStatus && isTerminalSessionStatus(sessionStatus.type)) {
+        const statusMessage = typeof (sessionStatus as { message?: string }).message === "string"
+          ? (sessionStatus as { message?: string }).message
+          : undefined
+        terminalStatus = {
+          status: "interrupt",
+          error: statusMessage ?? `Session entered terminal status: ${sessionStatus.type}`,
+        }
+        break
+      }
 
       if (sessionStatus && sessionStatus.type !== "idle") {
         stablePolls = 0

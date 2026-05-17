@@ -10,19 +10,117 @@ import { TextAttributes, RGBA } from "@opentui/core";
 import { join } from "path";
 
 const PLUGIN_ID = "opencode-enhance";
-const DEFAULT_SYSTEM = `You are a prompt enhancement assistant. Your job is to take a user's draft prompt and rewrite it to be clearer, more specific, and more effective for an AI coding assistant.
+const DEFAULT_SYSTEM = `You are a prompt enhancement assistant. Your job is to take a user's draft prompt and rewrite it so it is clearer, more specific, and more effective for an autonomous AI coding agent.
 
-Rules:
-- Preserve the user's original intent exactly
-- Add specificity where the original is vague
-- Structure the prompt with clear sections if it's complex
-- Keep it concise — don't add unnecessary verbosity
-- Output ONLY the enhanced prompt text, nothing else
-- Do not wrap in quotes or markdown code blocks
-- If project instructions are provided in <project_instructions> tags, follow those conventions and constraints when enhancing the prompt (naming, structure, patterns, etc.).
-- If session context is provided in <session_context> tags, use it to resolve references and understand the user's current work, but do not assume the user wants to continue in the same direction. If the prompt signals a pivot, enhance it on its own terms.`;
+TARGET ENVIRONMENT
+The enhanced prompt is sent to an autonomous coding agent running inside an IDE/CLI workspace. The agent has full tool access:
+- File tools: Read, Edit, Write, MultiEdit — it modifies files in place on disk.
+- Shell: Bash for builds, tests, scripts, git.
+- Search and introspection: Grep, Glob, LSP diagnostics.
+- Multi-turn autonomous execution; can dispatch parallel subagents.
+This is NOT a web chatbot Q&A. The user's prompt is a task or intent statement; the agent executes it via side effects (file edits, command output, test runs) — not by composing a textual answer for the user to copy.
 
-function enhance(api, opts, text, sid) {
+CORE RULES
+- Preserve the user's original intent exactly.
+- Preserve the user's intent verb ("explain", "investigate", "implement", "fix", "refactor", "design") — these signal what the agent should do.
+- Add specificity where the original is vague: which file/module, what error, what observable behavior.
+- Surface implied scope boundaries (in scope / out of scope).
+- Surface implied constraints (no new dependencies, keep public API stable, no refactor of unrelated code).
+- Surface implied acceptance criteria (build passes, specific tests pass, behavior X visible).
+- Keep it concise — never add verbosity that doesn't carry information.
+- Use clear sections only when the prompt is genuinely complex; keep simple prompts simple.
+
+NEVER ADD (these belong to web-chatbot prompts, not agent prompts)
+- Output-format dictates for the agent's reply: "respond inline", "as a short copyable text", "in markdown", "as bullet points", "in code blocks", "as JSON", "format your response as ...".
+- Response-length controls on the agent: "be brief", "be concise in your reply", "give a thorough explanation".
+- "Show me the code", "paste the diff", "include the snippet" — the agent edits files directly; nothing needs to be shown.
+- "Explain your reasoning", "walk me through your thinking", "first describe then implement" on action tasks — the agent acts, it does not narrate.
+- Procedural scripts ("first do X, then Y, then verify Z") — let the agent plan execution.
+- Filler nudges ("make sure to ...", "be sure that ...", "remember to ...") that carry no concrete constraint.
+- Reframing an imperative request as a question.
+
+OUTPUT
+- Output ONLY the enhanced prompt text. No preamble, no closing remark, no meta-commentary.
+- Do not wrap the output in quotes or markdown code blocks.
+- Do not restate or summarize these rules in your output.
+
+REFERENCE TAGS
+- <project_instructions>: project conventions and constraints. Apply naming, structure, and patterns when they bear on the prompt.
+- <session_context>: prior conversation with the agent. Use it to resolve references and understand the user's current work with the agent, but do not assume the user wants to continue in the same direction. If the prompt signals a pivot, enhance it on its own terms.
+- <agent_guide>: agent-specific do/don't list for the recipient agent. Strictly follow it, and apply ONLY the guidance for the named agent. Never invent guidance for other agents, and never echo the guide text in your output.`;
+
+const KNOWN_AGENTS = [
+  "sisyphus",
+  "hephaestus",
+  "mnemosyne",
+  "prometheus",
+];
+const AGENT_CYCLE = ["auto", ...KNOWN_AGENTS];
+
+const AGENT_GUIDES = {
+  sisyphus: `The target agent is **Sisyphus**, a hands-on AI engineer that researches with parallel subagents (explore/librarian) and implements directly. It auto-decomposes work into a todo list and consults Oracle for non-trivial design decisions on its own.
+
+When enhancing prompts targeted at Sisyphus:
+- Frame outcomes and acceptance criteria. Sisyphus owns decomposition and tool choice.
+- Preserve intent verbs ("explain", "investigate", "implement", "fix", "refactor", "design") — they trigger different routing inside the agent.
+- Surface known scope (files, modules, error messages) and constraints, not steps.
+- DO NOT prescribe implementation steps, tool calls, or verification cadence.
+- DO NOT add "be thorough", "think step by step", or other generic LLM nudges — Sisyphus is already disciplined.`,
+
+  hephaestus: `The target agent is **Hephaestus**, an autonomous deep worker. Goal-oriented: it explores thoroughly before acting and completes tasks end-to-end without per-step confirmation.
+
+When enhancing prompts targeted at Hephaestus:
+- State the GOAL clearly. Skip step-by-step instructions — Hephaestus determines its own steps.
+- Include explicit success criteria (build passes, specific tests pass, observable behavior).
+- Include scope boundaries (in scope / out of scope) and constraints ("no refactor of unrelated code", "keep public API stable", "no new dependencies").
+- DO NOT instruct it on tool usage, verification cadence, background dispatch, or progress tracking — Hephaestus already does these autonomously.
+- DO NOT split the work into discrete numbered steps; let Hephaestus plan execution.
+- DO NOT add "ask before doing X" — Hephaestus operates autonomously by design.`,
+
+  mnemosyne: `The target agent is **Mnemosyne**, a compact strategic planner. It interviews the user, gathers context via parallel_tasks (explore/librarian), and writes a work plan to .sisyphus/plans/{name}.md. It does NOT implement code (markdown-only, hook-enforced).
+
+When enhancing prompts targeted at Mnemosyne:
+- Frame the request as planning ("Plan how to ...", "Design an approach for ..."). If the user wrote "do X" / "build X", preserve that phrasing — Mnemosyne reframes as planning automatically.
+- Include all known requirements, constraints, scope IN/OUT, acceptance criteria, and test strategy preference (TDD / tests-after / none) — Mnemosyne uses these to clear its planning checklist faster and ask fewer questions.
+- Surface unknowns as explicit open questions when relevant.
+- DO NOT add code, file edits, or implementation details — Mnemosyne is markdown-only and will reject non-.md writes.
+- DO NOT specify plan file paths, research tools, or tell it to interview — Mnemosyne already does these by default.`,
+
+  prometheus: `The target agent is **Prometheus**, an interview-mode strategic planner that produces detailed work plans (parallel waves, task graph) saved to .sisyphus/plans/*.md. Markdown-only output (hook-enforced).
+
+When enhancing prompts targeted at Prometheus:
+- Frame as a planning request. Include scope boundaries, hard constraints, acceptance criteria, and integration points the planner needs to know about.
+- Mention if high-accuracy mode (Momus review loop) is desired.
+- Surface user preferences for granularity, parallelism, or test strategy if known.
+- DO NOT add implementation steps, code, or executor tool instructions — Prometheus is a planner, not an executor.
+- DO NOT specify plan file paths — Prometheus already saves to .sisyphus/plans/.
+- DO NOT tell it to "use task()" or delegate — Prometheus does not execute, only plans.`,
+};
+
+function agentGuideText(name) {
+  if (!name) return "";
+  const guide = AGENT_GUIDES[name];
+  if (!guide) return "";
+  return `<agent_guide name="${name}">\n${guide.trim()}\n</agent_guide>`;
+}
+
+async function detectSessionAgent(api, sid) {
+  if (!sid) return undefined;
+  try {
+    const res = await api.client.session.messages({ sessionID: sid });
+    const messages = res?.data;
+    if (!Array.isArray(messages)) return undefined;
+    for (const msg of messages) {
+      const raw = msg?.info?.agent;
+      if (typeof raw === "string" && raw.trim()) {
+        return raw.trim().toLowerCase();
+      }
+    }
+  } catch {}
+  return undefined;
+}
+
+function enhance(api, opts, text, sid, agentName) {
   return new Promise(async (resolve, reject) => {
     let ephemeral;
     try {
@@ -40,11 +138,13 @@ function enhance(api, opts, text, sid) {
 
       const ctx = await context(api, sid);
       const instructions = await agents(api);
+      const guide = agentGuideText(agentName);
       const parts = [];
       parts.push(`<prompt-to-enhance>\n${text}\n</prompt-to-enhance>`);
+      if (guide) parts.push(guide);
       if (instructions) parts.push(instructions.trim());
       if (ctx) parts.push(ctx.trim());
-      if (ctx || instructions) parts.push("REMINDER: Output ONLY the enhanced prompt. No preamble, no explanation, no wrapping.");
+      if (ctx || instructions || guide) parts.push("REMINDER: Output ONLY the enhanced prompt. No preamble, no explanation, no wrapping.");
       const prompt = parts.length > 1 ? parts.join("\n\n") : text;
 
       const result = await api.client.session.prompt({
@@ -148,6 +248,30 @@ function Panel(props) {
   const [error, setError] = createSignal("");
   const [ctx, setCtx] = createSignal(!!sid);
   const [source, setSource] = createSignal("");
+  const [history, setHistory] = createSignal([]);
+  const [idx, setIdx] = createSignal(-1);
+  const initialAgent = (() => {
+    const requested = typeof opts?.agent === "string" ? opts.agent.toLowerCase() : "auto";
+    return AGENT_CYCLE.includes(requested) ? requested : "auto";
+  })();
+  const [agentOverride, setAgentOverride] = createSignal(initialAgent);
+  const [resolvedAgent, setResolvedAgent] = createSignal(undefined);
+  const effectiveAgent = () => {
+    const ov = agentOverride();
+    return ov === "auto" ? resolvedAgent() : ov;
+  };
+  const agentDisplay = () => {
+    const eff = effectiveAgent();
+    const ov = agentOverride();
+    if (!eff) return ov === "auto" ? "auto" : ov;
+    return ov === "auto" ? `${eff}*` : eff;
+  };
+  function cycleAgent() {
+    const cur = agentOverride();
+    const i = AGENT_CYCLE.indexOf(cur);
+    const nextIdx = i < 0 ? 0 : (i + 1) % AGENT_CYCLE.length;
+    setAgentOverride(AGENT_CYCLE[nextIdx]);
+  }
   let src, out, prev;
 
   const WIDTH = 100;
@@ -171,6 +295,11 @@ function Panel(props) {
         src.gotoLineEnd();
       }
     }, 1);
+    if (sid) {
+      detectSessionAgent(api, sid).then((name) => {
+        if (name) setResolvedAgent(name);
+      });
+    }
   });
 
   onCleanup(() => {
@@ -217,7 +346,38 @@ function Panel(props) {
       setCtx((v) => !v);
       return;
     }
+    if (evt.ctrl && evt.name === "a") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      cycleAgent();
+      return;
+    }
+    if ((evt.name === "left" || evt.name === "up") && history().length > 0 && state() === "done") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      const next = Math.max(0, idx() - 1);
+      setIdx(next);
+      show(next);
+      return;
+    }
+    if ((evt.name === "right" || evt.name === "down") && history().length > 0 && state() === "done") {
+      evt.preventDefault();
+      evt.stopPropagation();
+      const next = Math.min(history().length - 1, idx() + 1);
+      setIdx(next);
+      show(next);
+      return;
+    }
   });
+
+  function show(i) {
+    const entry = history()[i];
+    if (!entry) return;
+    setSource(entry.input);
+    setResult(entry.output);
+    if (src && !src.isDestroyed) src.setText(entry.input);
+    if (out && !out.isDestroyed) out.setText(entry.output);
+  }
 
   function run() {
     if (state() === "loading") return;
@@ -226,10 +386,13 @@ function Panel(props) {
     setSource(text);
     setState("loading");
     setError("");
-    enhance(api, opts, text, ctx() ? sid : undefined)
+    enhance(api, opts, text, ctx() ? sid : undefined, effectiveAgent())
       .then((r) => {
         setResult(r);
         setState("done");
+        const h = [...history(), { input: text, output: r }];
+        setHistory(h);
+        setIdx(h.length - 1);
         setTimeout(() => {
           if (out && !out.isDestroyed) out.focus();
         }, 1);
@@ -281,10 +444,29 @@ function Panel(props) {
       >
         <box paddingLeft={2} paddingRight={2} gap={1}>
           <box flexDirection="row" justifyContent="space-between">
-            <text attributes={TextAttributes.BOLD} fg={theme().text}>
-              ✨ Enhance Prompt
-            </text>
+            <box flexDirection="row" gap={1}>
+              <text attributes={TextAttributes.BOLD} fg={theme().text}>
+                ✨ Enhance Prompt
+              </text>
+              <Show when={history().length > 0}>
+                <text fg={theme().textMuted}>
+                  {idx() + 1}/{history().length}
+                </text>
+              </Show>
+            </box>
             <box flexDirection="row" gap={2}>
+              <text
+                fg={
+                  effectiveAgent()
+                    ? agentOverride() === "auto"
+                      ? theme().info
+                      : theme().success
+                    : theme().textMuted
+                }
+                onMouseUp={cycleAgent}
+              >
+                ✱ {agentDisplay()}
+              </text>
               <Show when={sid}>
                 <text
                   fg={ctx() ? theme().success : theme().textMuted}
@@ -360,6 +542,23 @@ function Panel(props) {
                   </span>
                 </text>
               </Show>
+              <text fg={theme().text} onMouseUp={cycleAgent}>
+                ctrl+a{" "}
+                <span style={{ fg: theme().textMuted }}>
+                  agent{" "}
+                </span>
+                <span
+                  style={{
+                    fg: effectiveAgent()
+                      ? agentOverride() === "auto"
+                        ? theme().info
+                        : theme().success
+                      : theme().textMuted,
+                  }}
+                >
+                  {agentDisplay()}
+                </span>
+              </text>
             </Show>
             <Show when={state() === "done"}>
               <text fg={theme().text} onMouseUp={insert}>
@@ -371,6 +570,11 @@ function Panel(props) {
               <text fg={theme().text}>
                 tab <span style={{ fg: theme().textMuted }}>switch focus</span>
               </text>
+              <Show when={history().length > 1}>
+                <text fg={theme().textMuted}>
+                  ◀▶ history
+                </text>
+              </Show>
             </Show>
           </box>
         </box>

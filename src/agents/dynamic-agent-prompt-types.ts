@@ -11,6 +11,11 @@ export interface AvailableTool {
   category: "lsp" | "ast" | "search" | "session" | "command" | "other"
 }
 
+export interface AvailableToolInfo {
+  name: string
+  description: string
+}
+
 export interface AvailableSkill {
   name: string
   description: string

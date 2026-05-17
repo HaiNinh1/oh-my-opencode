@@ -6,7 +6,11 @@ import { log } from "../../shared/logger"
 const MAX_PARALLEL_TASKS = 10
 
 export function createParallelTasksTool(options: ParallelTasksToolOptions): ToolDefinition {
-  const description = `Run multiple subagent tasks in parallel with guaranteed concurrent execution. Returns all results together.
+  const description = `Run multiple RESEARCH agents (explore / librarian) in parallel with guaranteed concurrent execution. Returns all results together.
+
+This is the ONLY tool for invoking explore (internal codebase analysis) and librarian (external docs / OSS / web research). Use it for every research dispatch — even when you only have a single research angle — because it enforces the parallel-research workflow and keeps research separate from consultation.
+
+For high-reasoning CONSULTATION (oracle / metis / momus) or category-routed sub-execution (sisyphus-junior), use the \`task\` tool instead.
 
 Unlike individual task() calls which may execute sequentially across turns, this tool guarantees all tasks run concurrently in a single operation.
 
@@ -14,7 +18,7 @@ Each task in the array needs:
 - description: Short task description (3-5 words)
 - prompt: Full detailed prompt for the agent
 - load_skills: Skill names to inject (pass [] if none)
-- category OR subagent_type: One of these is REQUIRED per task
+- subagent_type: Research agent — "explore" (internal codebase) or "librarian" (external docs / OSS / web). REQUIRED.
 
 Maximum ${MAX_PARALLEL_TASKS} tasks per call.
 
@@ -35,8 +39,7 @@ parallel_tasks({
           description: tool.schema.string().describe("Short task description (3-5 words)"),
           prompt: tool.schema.string().describe("Full detailed prompt for the agent"),
           load_skills: tool.schema.array(tool.schema.string()).describe("Skill names to inject. Pass [] if no skills needed."),
-          category: tool.schema.string().optional().describe("Task category (e.g., quick, ultrabrain). Use this OR subagent_type."),
-          subagent_type: tool.schema.string().optional().describe("Agent type (e.g., explore, librarian, oracle). Use this OR category."),
+          subagent_type: tool.schema.string().describe("Research agent: 'explore' (internal codebase) or 'librarian' (external docs / OSS / web). REQUIRED."),
         }),
       ).describe("Array of task definitions to execute in parallel"),
     },
@@ -56,8 +59,8 @@ parallel_tasks({
         if (!task.description || !task.prompt) {
           return `Task ${i + 1}: 'description' and 'prompt' are required.`
         }
-        if (!task.category && !task.subagent_type) {
-          return `Task ${i + 1} ("${task.description}"): Must provide either 'category' or 'subagent_type'.`
+        if (!task.subagent_type) {
+          return `Task ${i + 1} ("${task.description}"): 'subagent_type' is required (e.g., 'explore' or 'librarian').`
         }
         if (task.load_skills === undefined || task.load_skills === null) {
           task.load_skills = []
@@ -70,7 +73,6 @@ parallel_tasks({
         taskCount: args.tasks.length,
         tasks: args.tasks.map((t) => ({
           description: t.description,
-          category: t.category,
           subagent_type: t.subagent_type,
         })),
       })

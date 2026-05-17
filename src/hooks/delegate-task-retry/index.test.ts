@@ -26,7 +26,7 @@ describe("sisyphus-task-retry", () => {
     // when detecting error
     // then should return matching error info
     it("should detect run_in_background missing error", () => {
-      const output = "[ERROR] Invalid arguments: 'run_in_background' parameter is REQUIRED. Use run_in_background=false for task delegation."
+      const output = "[ERROR] Invalid arguments: 'run_in_background' parameter is REQUIRED. Use run_in_background=false for blocking specialist consultation."
       
       const result = detectDelegateTaskError(output)
       

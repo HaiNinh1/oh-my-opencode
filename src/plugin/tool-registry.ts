@@ -26,8 +26,6 @@ import {
   createTaskList,
   createTaskUpdateTool,
   createHashlineEditTool,
-  createResolveAtlasContextTool,
-  createResolveHeraclesContextTool,
   createParallelTasksTool,
 } from "../tools"
 import { getMainSessionID } from "../features/claude-code-session-state"
@@ -112,9 +110,6 @@ export function createToolRegistry(args: {
 
   const getSessionIDForMcp = (): string => getMainSessionID() || ""
 
-  const resolveAtlasContextTool = createResolveAtlasContextTool(ctx.directory, getSessionIDForMcp())
-  const resolveHeraclesContextTool = createResolveHeraclesContextTool(ctx.directory, getSessionIDForMcp())
-
   const skillMcpTool = createSkillMcpTool({
     manager: managers.skillMcpManager,
     getLoadedSkills: () => skillContext.mergedSkills,
@@ -160,8 +155,6 @@ export function createToolRegistry(args: {
     task: delegateTask,
     parallel_tasks: parallelTasks,
     skill_mcp: skillMcpTool,
-    resolve_atlas_context: resolveAtlasContextTool,
-    resolve_heracles_context: resolveHeraclesContextTool,
     skill: skillTool,
     interactive_bash,
     ...taskToolsRecord,

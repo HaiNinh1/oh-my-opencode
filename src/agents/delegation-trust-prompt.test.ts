@@ -29,7 +29,7 @@ describe("delegation trust prompt rules", () => {
     // when / then
     expect(section).toContain("DO NOT perform the same search yourself")
     expect(section).toContain("non-overlapping work")
-    expect(section).toContain("End your response")
+    expect(section).toContain("FORBIDDEN")
   })
 
   test("buildExploreSection includes delegation trust rule", () => {
@@ -113,6 +113,54 @@ describe("delegation trust prompt rules", () => {
     // then
     expect(prompt).toContain("do only non-overlapping work simultaneously")
     expect(prompt).toContain("Delegation Trust Rule")
+  })
+
+  test("Sisyphus GPT-5.5 prompt defaults to direct synchronous execution", () => {
+    // given
+    const agent = createSisyphusAgent("openai/gpt-5.5", [exploreAgent])
+
+    // when
+    const prompt = agent.prompt
+
+    // then
+    expect(agent.description).toContain("Hands-on AI ultraworker executor")
+    expect(prompt).toContain("The default is hands-on execution")
+    expect(prompt).toContain("implement directly yourself")
+    expect(prompt).toContain("parallel_tasks({ tasks: [...] })")
+    expect(prompt).toContain("run_in_background=false")
+    expect(prompt).not.toContain("implementation handoff")
+    expect(prompt).not.toContain("task(category=")
+    expect(prompt).not.toContain("Delegation Prompt Structure")
+    expect(prompt).not.toContain("visual-engineering")
+    expect(prompt).not.toContain("background_output")
+    expect(prompt).not.toContain("completion notification")
+    expect(prompt).not.toContain("You are an orchestrator")
+    expect(prompt).not.toContain("The default bias is to delegate")
+  })
+
+  test("Sisyphus Claude Opus 4.7 prompt defaults to direct synchronous execution", () => {
+    // given
+    const agent = createSisyphusAgent("anthropic/claude-opus-4-7", [exploreAgent])
+
+    // when
+    const prompt = agent.prompt
+
+    // then
+    expect(agent.description).toContain("Hands-on AI ultraworker executor")
+    expect(prompt).toContain("implement directly")
+    expect(prompt).toContain("DELEGATE RESEARCH, IMPLEMENT EXECUTION YOURSELF")
+    expect(prompt).toContain("parallel_tasks({ tasks: [...] })")
+    expect(prompt).toContain("run_in_background=false")
+    expect(prompt).toContain("session_id")
+    expect(prompt).not.toContain("implementation handoff")
+    expect(prompt).not.toContain("task(category=")
+    expect(prompt).not.toContain("Delegation Prompt Structure")
+    expect(prompt).not.toContain("explicit/plan-assigned")
+    expect(prompt).not.toContain("background_output")
+    expect(prompt).not.toContain("background_cancel")
+    expect(prompt).not.toContain("completion notification")
+    expect(prompt).not.toContain("task_id")
+    expect(prompt).not.toContain("You DO NOT work alone when specialists exist")
   })
 
   test("Sisyphus-Junior GPT-5.4 prompt forbids duplicate delegated exploration", () => {

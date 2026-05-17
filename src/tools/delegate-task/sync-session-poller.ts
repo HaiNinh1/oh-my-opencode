@@ -3,6 +3,7 @@ import type { SessionMessage } from "./executor-types"
 import { getDefaultSyncPollTimeoutMs, getTimingConfig } from "./timing"
 import { log } from "../../shared/logger"
 import { normalizeSDKResponse } from "../../shared"
+import { isActiveSessionStatus, isTerminalSessionStatus } from "../../features/background-agent/session-status-classifier"
 import { getMessagesAfterAnchor, type SyncMessageAnchor } from "./sync-message-anchor"
 
 const NON_TERMINAL_FINISH_REASONS = new Set(["tool-calls", "unknown"])
@@ -119,6 +120,22 @@ export async function pollSyncSession(
         elapsed: Math.floor((Date.now() - pollStart) / 1000) + "s",
         sessionStatus: sessionStatus?.type ?? "not_in_status",
       })
+    }
+
+    if (sessionStatus && isActiveSessionStatus(sessionStatus.type)) {
+      continue
+    }
+
+    if (sessionStatus && isTerminalSessionStatus(sessionStatus.type)) {
+      const statusMessage = typeof (sessionStatus as { message?: string }).message === "string"
+        ? (sessionStatus as { message?: string }).message
+        : undefined
+      log("[task] Poll detected terminal non-idle session status", {
+        sessionID: input.sessionID,
+        sessionStatus: sessionStatus.type,
+        statusMessage,
+      })
+      return `Task interrupted.\n\nSession ID: ${input.sessionID}\nStatus: ${sessionStatus.type}${statusMessage ? `\nError: ${statusMessage}` : ""}`
     }
 
     if (sessionStatus && sessionStatus.type !== "idle") {

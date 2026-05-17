@@ -348,5 +348,5 @@ export const metisPromptMetadata: AgentPromptMetadata = {
     "User has already provided detailed requirements",
   ],
   promptAlias: "Metis",
-  keyTrigger: "Ambiguous or complex request → consult Metis before Prometheus",
+  keyTrigger: "High quality consultant → consult Oracle",
 }

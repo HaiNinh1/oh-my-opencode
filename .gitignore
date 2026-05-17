@@ -10,6 +10,7 @@ dist/
 packages/*/bin/oh-my-opencode
 packages/*/bin/oh-my-opencode.exe
 packages/*/bin/*.map
+packages/
 
 # IDE
 .idea/
