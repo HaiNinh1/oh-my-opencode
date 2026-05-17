@@ -12,7 +12,6 @@ import type {
 import {
   buildAgentIdentitySection,
   buildKeyTriggersSection,
-  buildNonClaudePlannerSection,
 } from "../dynamic-agent-prompt-builder"
 
 function buildTaskSystemGuide(useTaskSystem: boolean): string {

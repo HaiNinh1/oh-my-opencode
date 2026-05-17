@@ -80,13 +80,13 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
   \`\`\`
 
   New-task targets:
-  - subagent_type: One of "oracle" | "metis" | "momus" | "sisyphus-junior". Do NOT pass "explore" or "librarian" here — use parallel_tasks instead.
+  - subagent_type: One of "oracle" | "metis" | "momus". Do NOT pass "explore" or "librarian" here — use parallel_tasks instead.
   - category: Routes to sisyphus-junior with the category's model/config. Use for explicit category-based execution workflows.
 
   **DO NOT provide both category and subagent_type.** If category is provided, subagent_type is overridden to sisyphus-junior.
 
   - load_skills: ALWAYS REQUIRED. Pass [] if no skills are needed.
-  - subagent_type: Consultant agent to invoke (oracle / metis / momus / sisyphus-junior).
+  - subagent_type: Consultant agent to invoke (oracle / metis / momus).
   - category: Category name for category-routed sub-execution.
   - run_in_background: REQUIRED. false=sync (waits — default for blocking consultation), true=async.
   - session_id: Existing task session to continue. Continues with FULL CONTEXT PRESERVED and saves tokens.

@@ -364,10 +364,6 @@ Use this workflow for implementation tasks.
 
 When a plan exists, treat it as the source of truth: categories, skills, acceptance criteria, QA scenarios, parallelization waves, and verification dispatch are all specified per task. Do not redo decisions the plan already made; follow what the plan says.
 
-${nonClaudePlannerSection}
-
-When you do delegate, include a clear task goal, expected outcome, must-do / must-not-do, and context. Always run \`<verification_loop>\` on delegated results.
-
 ### Session continuity
 
 Every \`task()\` returns a session_id. Use it for all follow-ups:

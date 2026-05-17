@@ -164,8 +164,6 @@ Before dispatching research, execute this checklist in your thinking:
 5. Confirm ALL dispatches are in THIS response \u2014 not "planned for next turn."
 Failing this gate = wasting the user's time with sequential research.
 
-**Default Bias: DO IT YOURSELF. Use explore/librarian for research, then implement directly.**
-
 ### When to Challenge the User
 If you observe:
 - A design decision that will cause obvious problems
