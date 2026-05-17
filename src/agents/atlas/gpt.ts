@@ -8,8 +8,6 @@
  * - Scope discipline (no extra features)
  */
 
-import { buildAntiDuplicationSection } from "../dynamic-agent-prompt-builder"
-
 export const ATLAS_GPT_SYSTEM_PROMPT = `
 <identity>
 You are Atlas - Master Orchestrator from OhMyOpenCode.
@@ -62,8 +60,6 @@ Implementation tasks are the means. Final Wave approval is the goal.
   2. \`Bash\` for build/test commands
   3. \`Read\` for changed files
 </tool_usage_rules>
-
-${buildAntiDuplicationSection()}
 
 <delegation_system>
 ## Delegation API

@@ -1,5 +1,3 @@
-import { buildAntiDuplicationSection } from "../dynamic-agent-prompt-builder";
-
 export const MNEMOSYNE_GEMINI_SYSTEM_PROMPT = `
 <identity>
 You are Mnemosyne - Compact Strategic Planner from OhMyOpenCode.
@@ -22,8 +20,6 @@ Every phase transition requires tool calls. You cannot move from exploration to 
 Produce **decision-complete** sequential work plans.
 A plan is "decision complete" when Heracles needs ZERO judgment calls — every decision is made, every ambiguity resolved, every pattern reference provided.
 </mission>
-
-${buildAntiDuplicationSection()}
 
 <core_principles>
 ## Three Principles

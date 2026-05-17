@@ -27,5 +27,4 @@ export {
   buildAntiPatternsSection,
   buildToolCallFormatSection,
   buildUltraworkSection,
-  buildAntiDuplicationSection,
 } from "./dynamic-agent-policy-sections"

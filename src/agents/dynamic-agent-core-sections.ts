@@ -90,7 +90,7 @@ Use it as a **peer tool**, not a fallback. Fire liberally for discovery, not for
 
 **Use Direct Tools only when user specifies a known file path or exact location and explicit edit instructions on those files otherwise always use the explore agent in parallel_tasks.**
 
-**Use Explore Agent when:**
+**Explore Agent needed for:**
 ${useWhen.map((entry) => `- ${entry}`).join("\n")}`
 }
 
@@ -110,7 +110,7 @@ Search **external references** (docs, OSS, web). Fire proactively when unfamilia
 **Contextual Codebase Analyst (Internal)** - search OUR codebase, find patterns in THIS repo, project-specific logic.
 **Reference Research Specialist (External)** - search EXTERNAL resources, official API docs, library best practices, OSS implementation examples.
 
-**Trigger phrases** (fire librarian immediately):
+**Librarian Agent needed for:**
 ${useWhen.map((entry) => `- "${entry}"`).join("\n")}`
 }
 

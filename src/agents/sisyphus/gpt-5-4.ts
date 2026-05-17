@@ -264,7 +264,6 @@ ${librarianSection}
 <tool_method>
 - Use multiple explore/librarian agents when the question has multiple independent angles.
 - Read the relevant cluster of files, not a single isolated file.
-- When delegating AND doing direct work: do only non-overlapping work simultaneously.
 </tool_method>
 
 Each agent prompt should include:

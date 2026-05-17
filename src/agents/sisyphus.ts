@@ -37,7 +37,6 @@ import {
   buildAntiPatternsSection,
   buildParallelDelegationSection,
   buildNonClaudePlannerSection,
-  buildAntiDuplicationSection,
   categorizeTools,
 } from "./dynamic-agent-prompt-builder";
 import { buildClaudeOpus47SisyphusPrompt } from "./sisyphus/claude-opus-4-7";

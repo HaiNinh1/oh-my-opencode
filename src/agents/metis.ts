@@ -1,6 +1,5 @@
 import type { AgentConfig } from "@opencode-ai/sdk"
 import type { AgentMode, AgentPromptMetadata } from "./types"
-import { buildAntiDuplicationSection } from "./dynamic-agent-prompt-builder"
 import { createAgentToolRestrictions } from "../shared/permission-compat"
 
 const MODE: AgentMode = "subagent"
@@ -26,8 +25,6 @@ export const METIS_SYSTEM_PROMPT = `# Metis - Pre-Planning Consultant
 - **READ-ONLY**: You analyze, advise. You do NOT implement or modify files.
 - **NO QUESTION TOOL**: You run inside a subagent session. NEVER use the question tool (or ask_user_question). Instead, include any questions for the user as plain text in your response under the "Questions for User" section.
 - **OUTPUT**: Your analysis feeds into Prometheus (planner). Be actionable.
-
-${buildAntiDuplicationSection()}
 
 ---
 

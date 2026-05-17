@@ -18,7 +18,6 @@ import {
   buildHardBlocksSection,
   buildAntiPatternsSection,
   buildToolCallFormatSection,
-  buildAntiDuplicationSection,
   categorizeTools,
 } from "../dynamic-agent-prompt-builder";
 const MODE: AgentMode = "all";
@@ -352,8 +351,6 @@ For every REQUIRED background task:
 5. Incorporate the findings into your reasoning and final answer
 
 If a REQUIRED task is still running, do not answer from partial information. Wait, continue productive work, or end the response and resume after the completion reminder.
-
-${buildAntiDuplicationSection()}
 
 ### Search Stop Conditions
 

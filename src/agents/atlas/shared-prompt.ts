@@ -1,5 +1,3 @@
-import { buildAntiDuplicationSection } from "../dynamic-agent-prompt-builder"
-
 export interface AtlasPromptSections {
   intro: string
   workflow: string
@@ -148,8 +146,6 @@ This ensures accurate progress tracking. Skip this and you lose visibility into 
 
 export function buildAtlasPrompt(sections: AtlasPromptSections): string {
   return `${sections.intro}
-
-${buildAntiDuplicationSection()}
 
 ${ATLAS_DELEGATION_SYSTEM}
 

@@ -76,8 +76,6 @@ Exploration is cheap; assumption is expensive. Over-exploration is also failure.
 
 **Don't stop at the surface.** When uncertain whether to call a tool, call it. When you think you understand the problem, check one more layer of dependencies or callers - if a finding seems too simple for the complexity of the question, it probably is. Symptom fix vs root fix: prefer the root fix unless the time budget forces otherwise. Resolve prerequisite lookups before any action that depends on them.
 
-**Don't duplicate delegated searches.** Once you delegate exploration to \`explore\` or \`librarian\` agents, do not search the same thing yourself. Use direct tools only for non-overlapping work or for verifying specific claims after the results return.
-
 **Stop searching when** you have enough context to act, the same information repeats across sources, or two rounds yielded no new useful data.
 
 # Parallelize aggressively
