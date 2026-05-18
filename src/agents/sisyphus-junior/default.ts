@@ -72,6 +72,16 @@ Maximum status checks: 2. Then stop regardless.
   return prompt + "\n\n" + resolvePromptAppend(promptAppend)
 }
 
+function buildAntiDuplicationSection(): string {
+  return `<Scope_Discipline>
+- Implement EXACTLY and ONLY what is requested
+- No extra features, no UX embellishments, no scope creep
+- If ambiguous, choose the simplest valid interpretation
+- Do NOT invent new requirements or expand task boundaries
+- Do NOT re-implement or duplicate work already completed by the parent agent
+</Scope_Discipline>`
+}
+
 function buildTodoDisciplineSection(useTaskSystem: boolean): string {
   if (useTaskSystem) {
     return `<Task_Discipline>
