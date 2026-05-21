@@ -13,6 +13,8 @@ describe("createBuiltinSkills", () => {
 		expect(browserSkill).toBeDefined()
 		expect(browserSkill!.description).toContain("browser")
 		expect(browserSkill!.mcpConfig).toHaveProperty("playwright")
+		expect(browserSkill!.description).toContain("Do not load for routine post-work verification")
+		expect(browserSkill!.description).not.toContain("MUST USE for any browser-related tasks")
 	})
 
 	test("returns playwright skill when browserProvider is 'playwright'", () => {
@@ -41,6 +43,8 @@ describe("createBuiltinSkills", () => {
 		const playwrightSkill = skills.find((s) => s.name === "playwright")
 		expect(agentBrowserSkill).toBeDefined()
 		expect(agentBrowserSkill!.description).toContain("browser")
+		expect(agentBrowserSkill!.description).toContain("Avoid on Windows by default")
+		expect(agentBrowserSkill!.description).not.toContain("MUST USE for any browser-related tasks")
 		expect(agentBrowserSkill!.allowedTools).toContain("Bash(agent-browser:*)")
 		expect(agentBrowserSkill!.template).toContain("agent-browser")
 		expect(playwrightSkill).toBeUndefined()
@@ -154,6 +158,7 @@ describe("createBuiltinSkills", () => {
 		const agentBrowserSkill = skills.find((s) => s.name === "agent-browser")
 		expect(playwrightSkill).toBeDefined()
 		expect(playwrightSkill!.description).toContain("browser")
+		expect(playwrightSkill!.description).toContain("Do not load for routine post-work verification")
 		expect(playwrightSkill!.allowedTools).toContain("Bash(playwright-cli:*)")
 		expect(playwrightSkill!.mcpConfig).toBeUndefined()
 		expect(agentBrowserSkill).toBeUndefined()

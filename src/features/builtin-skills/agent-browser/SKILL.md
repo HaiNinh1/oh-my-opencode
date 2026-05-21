@@ -1,9 +1,11 @@
 ---
 name: agent-browser
-description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, test web applications, or extract information from web pages.
+description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use only when the user explicitly requests agent-browser or browser automation is unavoidable. Avoid on Windows by default; do not use for routine post-work verification when non-browser checks can prove behavior.
 ---
 
 # Browser Automation with agent-browser
+
+Use this skill only when browser automation is explicitly requested or unavoidable. Do not run `agent-browser` as routine post-work verification, especially on Windows where it can be unstable; prefer non-browser checks when they prove behavior.
 
 ## Quick start
 

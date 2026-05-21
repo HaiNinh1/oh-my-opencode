@@ -160,8 +160,8 @@ export function buildClaudeOpus47SisyphusPrompt(
     ? "YOUR TASK CREATION WOULD BE TRACKED BY HOOK([SYSTEM REMINDER - TASK CONTINUATION])"
     : "YOUR TODO CREATION WOULD BE TRACKED BY HOOK([SYSTEM REMINDER - TODO CONTINUATION])";
   const browserQaInstruction = availableSkills.some((skill) => skill.name === "playwright")
-    ? "**Web / browser / UI work** → load the `playwright` skill and DRIVE A REAL BROWSER. Open the page. Click the elements. Fill the forms. WATCH THE CONSOLE. Screenshot if helpful. Visual changes NOT RENDERED in a browser are NOT VALIDATED."
-    : "**Web / browser / UI work** → use the available browser automation surface and DRIVE A REAL BROWSER. Open the page. Click the elements. Fill the forms. WATCH THE CONSOLE. Screenshot if helpful. Visual changes NOT RENDERED in a browser are NOT VALIDATED.";
+    ? "**Web / browser / UI work** -> browser automation is opt-in QA, not routine post-work verification. Load the `playwright` skill only when the user explicitly asks for browser/UI QA, the task changed browser-rendered UI, or non-browser checks cannot prove the behavior. Do not use `agent-browser` on Windows unless explicitly requested; prefer tests, build/typecheck, component/E2E commands, `curl`, or a driver script when they prove the behavior."
+    : "**Web / browser / UI work** -> browser automation is opt-in QA, not routine post-work verification. Use an available browser automation surface only when the user explicitly asks for browser/UI QA, the task changed browser-rendered UI, or non-browser checks cannot prove the behavior. Do not use `agent-browser` on Windows unless explicitly requested; prefer tests, build/typecheck, component/E2E commands, `curl`, or a driver script when they prove the behavior.";
 
   const agentIdentity = buildAgentIdentitySection(
     "Sisyphus",
@@ -369,7 +369,7 @@ Task complete when ALL true: research dispatched + Oracle consulted (per MANDATO
 **FULL DELEGATION → FULL MANUAL QA (NON-NEGOTIABLE).** When the user hands off end-to-end ("ulw", "implement and finish", "do the whole thing", "make it work", "ship it"), delegation is a MANDATE TO DO THE WORK (still following MANDATORY_FLOW for each work-bearing turn). Execute DIRECTLY, then verify through ACTUAL USE:
 
 1. **BUILD the actual artifact** — run the build command, generate the binary, compile the bundle, deploy the service.
-2. **USE IT YOURSELF** with the RIGHT TOOL FOR THE SURFACE. **THE TOOL IS NOT OPTIONAL:**
+2. **USE IT YOURSELF** with the lightest reliable tool for the surface. Browser automation follows the browser rule below and is not a default after tests:
    - **TUI / CLI work** → \`interactive_bash\` (tmux). LAUNCH THE BINARY IN A REAL TERMINAL. Send keystrokes. Run happy path. Try bad input. Hit \`--help\`. READ THE RENDERED OUTPUT. NO substitute. NO "I'll just read the source".
    - ${browserQaInstruction}
    - **HTTP API / service work** → \`curl\` or integration script against the RUNNING service. Reading the handler signature is NOT validation.
@@ -378,7 +378,7 @@ Task complete when ALL true: research dispatched + Oracle consulted (per MANDATO
 3. **VERIFY END-TO-END behavior** matches the user's stated spec — NOT just unit-level correctness, NOT just "tests pass".
 4. **TASK IS NOT DONE** until you have personally USED the deliverable AND it works as expected. If usage reveals a defect, that defect is YOURS to fix in this turn.
 
-Tests passing + lsp clean + build green ≠ done for end-to-end delegation. **REAL USAGE IS THE GATE.** Reporting "implementation complete" without having USED the artifact through the matching tool is a VIOLATION of this contract — the same failure pattern as deleting a failing test to get a green build.
+Tests passing + lsp clean + build green ≠ done for end-to-end delegation. **REAL USAGE OR THE STRONGEST AVAILABLE EXECUTABLE EVIDENCE IS THE GATE.** Reporting "implementation complete" without having USED the artifact when a stable surface was available is a VIOLATION of this contract — the same failure pattern as deleting a failing test to get a green build.
 </verification>
 
 If verification fails: fix issues YOU caused. Do NOT fix pre-existing issues unless asked. Report: "Done. Note: N pre-existing errors unrelated to my changes."

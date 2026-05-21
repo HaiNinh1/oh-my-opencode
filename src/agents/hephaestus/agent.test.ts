@@ -102,6 +102,19 @@ describe("getHephaestusPrompt", () => {
     expect(prompt).not.toContain("background_cancel");
   });
 
+  test("GPT 5.5 prompt avoids default browser automation on Windows", () => {
+    // given
+    const model = "openai/gpt-5.5";
+
+    // when
+    const prompt = getHephaestusPrompt(model);
+
+    // then
+    expect(prompt).toContain("browser automation is opt-in verification");
+    expect(prompt).toContain("do not use `agent-browser` unless explicitly requested");
+    expect(prompt).not.toContain("load the `playwright` skill and drive a real browser");
+  });
+
   test("GPT 5.4 model returns GPT-5.4 optimized prompt", () => {
     // given
     const model = "openai/gpt-5.4";

@@ -326,6 +326,7 @@ Use this workflow for implementation tasks.
    - Run related tests.
    - Run the build or typecheck when applicable.
    - For user-visible behavior, perform a manual or executable check with available tools.
+   - Browser automation is opt-in verification, not routine post-work verification. Use it only for explicit browser/UI QA, browser-rendered UI changes, or when non-browser checks cannot prove behavior; do not use \`agent-browser\` on Windows unless explicitly requested.
    - For delegated work, read the touched files yourself.
    </verification_loop>
 

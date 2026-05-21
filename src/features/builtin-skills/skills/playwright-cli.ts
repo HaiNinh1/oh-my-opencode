@@ -10,8 +10,10 @@ import type { BuiltinSkill } from "../types"
  */
 export const playwrightCliSkill: BuiltinSkill = {
   name: "playwright",
-  description: "MUST USE for any browser-related tasks. Browser automation via playwright-cli - verification, browsing, information gathering, web scraping, testing, screenshots, and all browser interactions.",
+  description: "Use for explicit browser automation or browser-rendered UI QA via playwright-cli. Do not load for routine post-work verification when tests, builds, curl, or driver scripts can prove the behavior.",
   template: `# Browser Automation with playwright-cli
+
+Use this skill only when the user explicitly requests browser automation or the task changes browser-rendered UI that cannot be proven by non-browser checks. Do not load it as routine post-work verification when tests, builds, curl, or driver scripts are sufficient.
 
 ## Quick start
 

@@ -17,3 +17,5 @@ export {
   buildGeminiToolCallExamples,
 } from "./gemini";
 export { buildGpt54SisyphusPrompt } from "./gpt-5-4";
+export { buildGpt55SisyphusPrompt } from "./gpt-5-5";
+export { buildClaudeOpus47SisyphusPrompt } from "./claude-opus-4-7";

@@ -284,6 +284,8 @@ Run \`lsp_diagnostics\` on changed files at:
 
 If project has build/test commands, run them at task completion.
 
+For user-visible behavior, use the lightest reliable executable check that proves the change. Browser automation is opt-in verification, not routine post-work verification: use it only when the user explicitly asks for browser/UI QA, the task changed browser-rendered UI, or non-browser checks cannot prove behavior. On Windows, do not use \`agent-browser\` unless the user explicitly requested it.
+
 ### Evidence Requirements (task NOT complete without these):
 
 - **File edit** → \`lsp_diagnostics\` clean on changed files

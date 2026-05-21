@@ -2,10 +2,12 @@ import type { BuiltinSkill } from "../types"
 
 export const playwrightSkill: BuiltinSkill = {
   name: "playwright",
-  description: "MUST USE for any browser-related tasks. Browser automation via Playwright MCP - verification, browsing, information gathering, web scraping, testing, screenshots, and all browser interactions.",
+  description: "Use for explicit browser automation or browser-rendered UI QA: verification, browsing, information gathering, web scraping, testing, and screenshots. Do not load for routine post-work verification when tests, builds, curl, or driver scripts can prove the behavior.",
   template: `# Playwright Browser Automation
 
-This skill provides browser automation capabilities via the Playwright MCP server.`,
+This skill provides browser automation capabilities via the Playwright MCP server.
+
+Use it only when the user explicitly requests browser automation or the task changes browser-rendered UI that cannot be proven by non-browser checks. Do not load it as routine post-work verification when tests, builds, curl, or driver scripts are sufficient.`,
   mcpConfig: {
     playwright: {
       command: "npx",
@@ -16,8 +18,10 @@ This skill provides browser automation capabilities via the Playwright MCP serve
 
 export const agentBrowserSkill: BuiltinSkill = {
   name: "agent-browser",
-  description: "MUST USE for any browser-related tasks. Browser automation via agent-browser CLI - verification, browsing, information gathering, web scraping, testing, screenshots, and all browser interactions.",
+  description: "Use agent-browser only when the user explicitly asks for it or browser automation is unavoidable. Avoid on Windows by default; prefer project tests, Playwright/dev-browser, curl, or driver scripts for routine verification.",
   template: `# Browser Automation with agent-browser
+
+Use this skill only when browser automation is explicitly requested or unavoidable. Do not run \`agent-browser\` as routine post-work verification, especially on Windows where it can be unstable; prefer non-browser checks when they prove behavior.
 
 ## Quick start
 

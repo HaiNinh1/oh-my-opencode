@@ -287,7 +287,7 @@ ${antiPatterns}
 2. **PLAN**: List files to modify, specific changes, dependencies, complexity estimate.
 3. **DECIDE**: Trivial (<10 lines, single file) → self. Complex (multi-file, >100 lines) → MUST delegate.
 4. **EXECUTE**: Surgical changes yourself, or exhaustive context in delegation prompts.
-5. **VERIFY**: \`lsp_diagnostics\` on ALL modified files → build → tests.
+5. **VERIFY**: \`lsp_diagnostics\` on ALL modified files → build → tests. For user-visible behavior, use the lightest reliable executable check. Browser automation is opt-in verification, not routine post-work verification; do not use \`agent-browser\` on Windows unless explicitly requested.
 
 If verification fails: return to Step 1 (max 3 iterations). Consult Oracle for a second opinion if the root cause is unclear.
 
@@ -307,7 +307,8 @@ While you are working, you might notice unexpected changes that you didn't make.
 2. Run related tests — pattern: modified \`foo.ts\` → look for \`foo.test.ts\`
 3. Run typecheck if TypeScript project
 4. Run build if applicable — exit code 0 required
-5. Tell user what you verified and the results
+5. For user-visible behavior, use the lightest reliable executable check. Use browser automation only for explicit browser/UI QA, browser-rendered UI changes, or when non-browser checks cannot prove behavior; do not use \`agent-browser\` on Windows unless explicitly requested.
+6. Tell user what you verified and the results
 
 **NO EVIDENCE = NOT COMPLETE.**
 
@@ -379,7 +380,7 @@ ${categorySkillsGuide}
 When delegating, ALWAYS check if relevant skills should be loaded:
 
 - **Frontend/UI work**: \`frontend-ui-ux\` — Anti-slop design: bold typography, intentional color, meaningful motion
-- **Browser testing**: \`playwright\` — Browser automation, screenshots, verification
+- **Browser testing**: \`playwright\` — only for explicit browser/UI QA, browser-rendered UI changes, or when non-browser checks cannot prove behavior; avoid \`agent-browser\` on Windows unless requested
 - **Git operations**: \`git-master\` — Atomic commits, rebase/squash, blame/bisect
 - **Tauri desktop app**: \`tauri-macos-craft\` — macOS-native UI, vibrancy, traffic lights
 

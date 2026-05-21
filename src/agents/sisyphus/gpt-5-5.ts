@@ -233,7 +233,7 @@ The verification loop on every change you ship:
 2. **Diagnostics** - \`lsp_diagnostics\` on every changed file, in parallel. Actually clean, not "probably clean."
 3. **Tests** - run tests adjacent to changed files. Actually pass, not "should pass."
 4. **Build** - if applicable, exit 0.
-5. **Manual QA Gate** - when there is runnable or user-visible behavior, run it through its surface yourself: \`interactive_bash\` for TUI/CLI, \`playwright\` for browser, \`curl\` for HTTP, driver script for library/SDK. \`lsp_diagnostics\` catches type errors, not logic bugs; tests cover only what their authors anticipated. "Should work" is not verification.
+5. **Manual QA Gate** - when there is runnable or user-visible behavior, run the lightest reliable check through its matching surface yourself: \`interactive_bash\` for TUI/CLI, \`curl\` for HTTP, driver script for library/SDK. Browser automation is opt-in verification, not routine post-work verification: use it only when the user explicitly asks for browser/UI QA, the change affects browser-rendered UI, or non-browser checks cannot prove the behavior. Do not use \`agent-browser\` on Windows unless the user explicitly requested it; prefer project tests, build/typecheck, component/E2E commands, \`curl\`, or a driver script and report when browser QA was intentionally skipped. \`lsp_diagnostics\` catches type errors, not logic bugs; tests cover only what their authors anticipated. "Should work" is not verification.
 
 Fix only issues caused by your changes. Pre-existing lint errors, failing tests, or warnings unrelated to your work go into the final message as observations, not silently into the diff.
 

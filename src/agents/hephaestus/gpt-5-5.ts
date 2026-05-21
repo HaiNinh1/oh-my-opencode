@@ -41,7 +41,7 @@ If you notice unexpected changes in the worktree you did not make, continue with
 
 # Goal
 
-Resolve the user's task end-to-end in this turn. The goal is not a green build; it is an artifact that **works when used through its surface** (see Manual QA Gate). \`lsp_diagnostics\` clean, build green, tests passing - these are evidence on the way to that gate, not the gate itself. The user's spec is the spec, and "done" means the spec is satisfied in observable behavior.
+Resolve the user's task end-to-end in this turn. The goal is not a green build; it is an artifact that **works when used through its surface** (see Manual QA Gate), with browser automation limited by the browser policy below. \`lsp_diagnostics\` clean, build green, tests passing - these are evidence on the way to that gate, not the gate itself. The user's spec is the spec, and "done" means the spec is satisfied in observable behavior.
 
 # Intent
 
@@ -119,7 +119,7 @@ For a single blocking sub-agent, call \`task(subagent_type="explore" | "libraria
 \`lsp_diagnostics\` catches type errors, not logic bugs; tests cover only what their authors anticipated. **"Done" requires you have personally used the deliverable through its matching surface and observed it working** within this turn. The surface determines the tool:
 
 - **TUI / CLI / shell binary** - launch inside \`interactive_bash\` (tmux). Send keystrokes, run the happy path, try one bad input, hit \`--help\`, read the rendered output.
-- **Web / browser-rendered UI** - load the \`playwright\` skill and drive a real browser. Open the page, click the elements, fill the forms, watch the console, screenshot when it helps.
+- **Web / browser-rendered UI** - browser automation is opt-in verification, not routine post-work verification. Use it only when the user explicitly asked for browser/UI QA, the change affects browser-rendered UI, or non-browser checks cannot prove behavior. On Windows, do not use \`agent-browser\` unless explicitly requested; prefer project tests, build/typecheck, component/E2E commands, \`curl\`, or a driver script and report if browser QA was intentionally skipped.
 - **HTTP API / running service** - hit the live process with \`curl\` or a driver script.
 - **Library / SDK / module** - write a minimal driver script that imports and executes the new code end-to-end.
 - **No matching surface** - ask: how would a real user discover this works? Do exactly that.
@@ -207,7 +207,7 @@ Done when ALL of:
 - Every behavior the user asked for is implemented; no partial delivery, no "v0 / extend later".
 - \`lsp_diagnostics\` clean on every file you changed.
 - Build (if applicable) exits 0; tests pass, or pre-existing failures are explicitly named with the reason.
-- The artifact has been driven through its matching surface in this turn (Manual QA Gate).
+- The artifact has been driven through its matching surface in this turn, or the strongest reliable executable evidence was used when browser automation was intentionally not appropriate on Windows (Manual QA Gate).
 - The final message reports what you did, what you verified, what you could not verify (with the reason), and any pre-existing issues you noticed but did not touch.
 
 When you think you are done: re-read the original request and your intent line. Did every committed action complete? Run verification once more on changed files in parallel. Then report.
