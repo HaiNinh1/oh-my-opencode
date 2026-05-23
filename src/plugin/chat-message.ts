@@ -17,6 +17,11 @@ import { getAgentConfigKey } from "../shared/agent-display-names"
 import { HermesProxyState } from "../shared/hermes-proxy-state"
 import { log } from "../shared/logger"
 import { createHermesPromptHardenerHook } from "../hooks/hermes-prompt-hardener"
+import {
+  getPlanCommandPromptText,
+  isExecutePlanCommandPrompt,
+  isStartWorkCommandPrompt,
+} from "../hooks/plan-command-routing"
 
 import type { CreatedHooks } from "../create-hooks"
 
@@ -32,9 +37,9 @@ export type ChatMessageInput = {
   agent?: string
   model?: { providerID: string; modelID: string }
 }
-type StartWorkHookOutput = { parts: Array<{ type: string; text?: string }> }
+type PlanCommandHookOutput = { parts: Array<{ type: string; text?: string }> }
 
-function isStartWorkHookOutput(value: unknown): value is StartWorkHookOutput {
+function isPlanCommandHookOutput(value: unknown): value is PlanCommandHookOutput {
   if (typeof value !== "object" || value === null) return false
   const record = value as Record<string, unknown>
   const partsValue = record["parts"]
@@ -183,8 +188,13 @@ export function createChatMessageHandler(args: {
     await hooks.autoSlashCommand?.["chat.message"]?.(input, output)
     await hooks.noSisyphusGpt?.["chat.message"]?.(input, output)
     await hooks.noHephaestusNonGpt?.["chat.message"]?.(input, output)
-    if (hooks.startWork && isStartWorkHookOutput(output)) {
-      await hooks.startWork["chat.message"]?.(input, output)
+    if (isPlanCommandHookOutput(output)) {
+      const planCommandPromptText = getPlanCommandPromptText(output.parts)
+      if (hooks.executePlan && isExecutePlanCommandPrompt(planCommandPromptText)) {
+        await hooks.executePlan["chat.message"]?.(input, output)
+      } else if (hooks.startWork && isStartWorkCommandPrompt(planCommandPromptText)) {
+        await hooks.startWork["chat.message"]?.(input, output)
+      }
     }
 
     if (!hasConnectedProvidersCache()) {

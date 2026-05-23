@@ -12,6 +12,7 @@ import {
 } from "../../features/boulder-state"
 import { log } from "../../shared/logger"
 import { updateSessionAgent } from "../../features/claude-code-session-state"
+import { isStartWorkCommandPrompt } from "../plan-command-routing"
 import { detectWorktreePath } from "./worktree-detector"
 import { parseUserRequest } from "./parse-user-request"
 
@@ -75,7 +76,7 @@ export function createStartWorkHook(ctx: PluginInput) {
           .join("\n")
           .trim() || ""
 
-      if (!promptText.includes("<session-context>")) return
+      if (!promptText.includes("<session-context>") || !isStartWorkCommandPrompt(promptText)) return
 
       log(`[${HOOK_NAME}] Processing start-work command`, { sessionID: input.sessionID })
       updateSessionAgent(input.sessionID, "atlas")

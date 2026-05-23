@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test"
-import { MOMUS_SYSTEM_PROMPT } from "./momus"
+import { MOMUS_SYSTEM_PROMPT, momusPromptMetadata } from "./momus"
 
 function escapeRegExp(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -54,5 +54,33 @@ describe("MOMUS_SYSTEM_PROMPT policy requirements", () => {
     expect(prompt.toLowerCase()).toMatch(/multiple|ambiguous|2\+|two/)
     // Should mention rejection if no path found
     expect(prompt.toLowerCase()).toMatch(/no.*path.*found|reject.*no.*path/)
+  })
+})
+
+describe("momusPromptMetadata routing", () => {
+  test("should not trigger Momus for saved plans during execution", () => {
+    // given
+    const metadataText = JSON.stringify(momusPromptMetadata)
+
+    // when / #then
+    expect(metadataText).not.toContain("Before executing a complex todo list")
+    expect(momusPromptMetadata.keyTrigger).not.toContain(
+      "Work plan saved to `.sisyphus/plans/*.md`",
+    )
+    expect(momusPromptMetadata.keyTrigger).toContain("Do NOT invoke Momus")
+    expect(momusPromptMetadata.keyTrigger).toContain("/execute-plan")
+    expect(momusPromptMetadata.keyTrigger).toContain("/start-work")
+  })
+
+  test("should explicitly avoid Momus for active plan execution", () => {
+    // given
+    const avoidWhen = momusPromptMetadata.avoidWhen.join("\n")
+
+    // when / #then
+    expect(avoidWhen).toContain("/start-work")
+    expect(avoidWhen).toContain("/execute-plan")
+    expect(avoidWhen).toContain("Atlas")
+    expect(avoidWhen).toContain("Heracles")
+    expect(avoidWhen).toContain("boulder.json")
   })
 })

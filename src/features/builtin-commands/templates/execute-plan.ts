@@ -45,8 +45,9 @@ export const EXECUTE_PLAN_TEMPLATE = `You are starting a Heracles direct executi
 
 ## KEY DIFFERENCE FROM /start-work
 
-You are Heracles — you execute ALL tasks yourself. Do NOT use \`task()\` to delegate implementation work.
+You are Heracles - you execute ALL tasks yourself. Do NOT use \`task()\` to delegate implementation work.
 You may use \`task()\` ONLY for quick research (explore/librarian), never for code changes.
+This is not a Momus review phase. Do NOT call Momus just because the selected plan lives under \`.sisyphus/plans/\`.
 
 ## OUTPUT FORMAT
 
@@ -93,4 +94,5 @@ Reading plan and beginning direct execution...
 - Always update boulder.json BEFORE starting work
 - Always set worktree_path in boulder.json before executing any tasks
 - Read the FULL plan file before starting any tasks
-- Execute tasks sequentially yourself — do NOT delegate to subagents`
+- Do NOT call Momus during execution. Plan review happens only during creation/high-accuracy review or when explicitly requested.
+- Execute tasks sequentially yourself - do NOT delegate to subagents`

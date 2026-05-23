@@ -88,6 +88,7 @@ Reading plan and beginning execution...
 - Always update boulder.json BEFORE starting work
 - If worktree_path is set in boulder.json, all work happens inside that worktree directory
 - Read the FULL plan file before delegating any tasks
+- Do NOT call Momus during execution. Plan review happens only during creation/high-accuracy review or when explicitly requested.
 - Follow atlas delegation protocols (7-section format)
 
 ## TASK BREAKDOWN (MANDATORY)

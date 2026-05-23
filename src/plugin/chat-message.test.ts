@@ -24,6 +24,7 @@ function createMockHandlerArgs(overrides?: {
       claudeCodeHooks: null,
       autoSlashCommand: null,
       startWork: null,
+      executePlan: null,
       ralphLoop: null,
     } as any,
     _appliedSessions: appliedSessions,
@@ -141,5 +142,103 @@ describe("createChatMessageHandler - TUI variant passthrough", () => {
     //#then
     expect(output.parts).toHaveLength(1)
     expect(output.parts[0].text).toContain("[BACKGROUND TASK COMPLETED]")
+  })
+
+  test("routes execute-plan command output to executePlan hook only", async () => {
+    //#given
+    const args = createMockHandlerArgs()
+    let startWorkCalls = 0
+    let executePlanCalls = 0
+    args.hooks.startWork = {
+      "chat.message": async (): Promise<void> => {
+        startWorkCalls += 1
+      },
+    }
+    args.hooks.executePlan = {
+      "chat.message": async (): Promise<void> => {
+        executePlanCalls += 1
+      },
+    }
+    const handler = createChatMessageHandler(args)
+    const input = createMockInput("heracles", { providerID: "openai", modelID: "gpt-5.4" })
+    const output = createMockOutput()
+    output.parts.push({
+      type: "text",
+      text: `<command-instruction>
+You are starting a Heracles direct execution session.
+- \`/execute-plan [plan-name] [--worktree <path>]\`
+</command-instruction>
+<session-context></session-context>`,
+    })
+
+    //#when
+    await handler(input, output)
+
+    //#then
+    expect(executePlanCalls).toBe(1)
+    expect(startWorkCalls).toBe(0)
+  })
+
+  test("routes start-work command output to startWork hook only", async () => {
+    //#given
+    const args = createMockHandlerArgs()
+    let startWorkCalls = 0
+    let executePlanCalls = 0
+    args.hooks.startWork = {
+      "chat.message": async (): Promise<void> => {
+        startWorkCalls += 1
+      },
+    }
+    args.hooks.executePlan = {
+      "chat.message": async (): Promise<void> => {
+        executePlanCalls += 1
+      },
+    }
+    const handler = createChatMessageHandler(args)
+    const input = createMockInput("atlas", { providerID: "anthropic", modelID: "claude-sonnet-4-6" })
+    const output = createMockOutput()
+    output.parts.push({
+      type: "text",
+      text: `<command-instruction>
+You are starting a Sisyphus work session.
+- \`/start-work [plan-name] [--worktree <path>]\`
+</command-instruction>
+<session-context></session-context>`,
+    })
+
+    //#when
+    await handler(input, output)
+
+    //#then
+    expect(startWorkCalls).toBe(1)
+    expect(executePlanCalls).toBe(0)
+  })
+
+  test("does not route generic session context to plan execution hooks", async () => {
+    //#given
+    const args = createMockHandlerArgs()
+    let startWorkCalls = 0
+    let executePlanCalls = 0
+    args.hooks.startWork = {
+      "chat.message": async (): Promise<void> => {
+        startWorkCalls += 1
+      },
+    }
+    args.hooks.executePlan = {
+      "chat.message": async (): Promise<void> => {
+        executePlanCalls += 1
+      },
+    }
+    const handler = createChatMessageHandler(args)
+    const input = createMockInput("sisyphus", { providerID: "anthropic", modelID: "claude-opus-4-6" })
+    const output = createMockOutput()
+    output.parts.push({ type: "text", text: "<session-context></session-context>" })
+
+    //#when
+    await handler(input, output)
+
+    //#then
+    expect(startWorkCalls).toBe(0)
+    expect(executePlanCalls).toBe(0)
   })
 })

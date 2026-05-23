@@ -332,16 +332,19 @@ export const momusPromptMetadata: AgentPromptMetadata = {
     },
   ],
   useWhen: [
-    "After Prometheus creates a work plan",
-    "Before executing a complex todo list",
-    "To validate plan quality before delegating to executors",
+    "During Prometheus or Mnemosyne high-accuracy review after a saved plan is created",
+    "When the user explicitly asks Momus to review a saved `.sisyphus/plans/*.md` file",
+    "To validate plan quality before the plan is approved for execution",
     "When plan needs rigorous review for ADHD-driven omissions",
   ],
   avoidWhen: [
     "Simple, single-task requests",
     "When user explicitly wants to skip review",
     "For trivial plans that don't need formal review",
+    "During `/start-work` or `/execute-plan` execution of an existing plan",
+    "When Atlas or Heracles is already executing from `.sisyphus/boulder.json`",
+    "When a saved plan was already reviewed or approved and the user wants execution",
   ],
   keyTrigger:
-    "Work plan saved to `.sisyphus/plans/*.md` → invoke Momus with the file path as the sole prompt (e.g. `prompt=\".sisyphus/plans/my-plan.md\"`). Do NOT invoke Momus for inline plans or todo lists.",
+    "High-accuracy plan review requested for a newly created saved plan -> invoke Momus with the `.sisyphus/plans/*.md` file path as the sole prompt (e.g. `prompt=\".sisyphus/plans/my-plan.md\"`). Do NOT invoke Momus for inline plans, todo lists, `/start-work`, `/execute-plan`, or active plan execution.",
 };

@@ -12,6 +12,7 @@ import {
 } from "../../features/boulder-state"
 import { log } from "../../shared/logger"
 import { updateSessionAgent } from "../../features/claude-code-session-state"
+import { isExecutePlanCommandPrompt } from "../plan-command-routing"
 import { detectWorktreePath } from "../start-work/worktree-detector"
 import { parseUserRequest } from "../start-work/parse-user-request"
 
@@ -73,7 +74,7 @@ export function createExecutePlanHook(ctx: PluginInput) {
           .join("\n")
           .trim() || ""
 
-      if (!promptText.includes("<session-context>")) return
+      if (!promptText.includes("<session-context>") || !isExecutePlanCommandPrompt(promptText)) return
 
       log(`[${HOOK_NAME}] Processing execute-plan command`, { sessionID: input.sessionID })
       updateSessionAgent(input.sessionID, "heracles")

@@ -25,6 +25,14 @@ describe("start-work hook", () => {
     } as Parameters<typeof createStartWorkHook>[0]
   }
 
+  function createStartWorkPrompt(sessionContext = "<session-context></session-context>") {
+    return `<command-instruction>
+You are starting a Sisyphus work session.
+- \`/start-work [plan-name] [--worktree <path>]\`
+</command-instruction>
+${sessionContext}`
+  }
+
   beforeEach(() => {
     testDir = join(tmpdir(), `start-work-test-${randomUUID()}`)
     sisyphusDir = join(testDir, ".sisyphus")
@@ -62,14 +70,36 @@ describe("start-work hook", () => {
       expect(output.parts[0].text).toBe("Just a regular message")
     })
 
-    test("should detect start-work command via session-context tag", async () => {
-      // given - hook and start-work message
+    test("should ignore generic session-context without start-work command markers", async () => {
+      // given - hook and generic session-context message
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
         parts: [
           {
             type: "text",
             text: "<session-context>Some context here</session-context>",
+          },
+        ],
+      }
+
+      // when
+      await hook["chat.message"](
+        { sessionID: "session-123" },
+        output
+      )
+
+      // then - output should be unchanged
+      expect(output.parts[0].text).toBe("<session-context>Some context here</session-context>")
+    })
+
+    test("should detect start-work command via command markers and session-context tag", async () => {
+      // given - hook and start-work message
+      const hook = createStartWorkHook(createMockPluginInput())
+      const output = {
+        parts: [
+          {
+            type: "text",
+            text: createStartWorkPrompt("<session-context>Some context here</session-context>"),
           },
         ],
       }
@@ -99,7 +129,7 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
@@ -120,7 +150,7 @@ describe("start-work hook", () => {
         parts: [
           {
             type: "text",
-            text: "<session-context>Session: $SESSION_ID</session-context>",
+            text: createStartWorkPrompt("<session-context>Session: $SESSION_ID</session-context>"),
           },
         ],
       }
@@ -143,7 +173,7 @@ describe("start-work hook", () => {
         parts: [
           {
             type: "text",
-            text: "<session-context>Time: $TIMESTAMP</session-context>",
+            text: createStartWorkPrompt("<session-context>Time: $TIMESTAMP</session-context>"),
           },
         ],
       }
@@ -174,7 +204,7 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
@@ -202,7 +232,7 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
@@ -230,7 +260,7 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
@@ -271,9 +301,9 @@ describe("start-work hook", () => {
         parts: [
           {
             type: "text",
-            text: `<session-context>
+            text: createStartWorkPrompt(`<session-context>
 <user-request>new-plan</user-request>
-</session-context>`,
+</session-context>`),
           },
         ],
       }
@@ -303,9 +333,9 @@ describe("start-work hook", () => {
         parts: [
           {
             type: "text",
-            text: `<session-context>
+            text: createStartWorkPrompt(`<session-context>
 <user-request>my-feature-plan ultrawork</user-request>
-</session-context>`,
+</session-context>`),
           },
         ],
       }
@@ -334,9 +364,9 @@ describe("start-work hook", () => {
         parts: [
           {
             type: "text",
-            text: `<session-context>
+            text: createStartWorkPrompt(`<session-context>
 <user-request>api-refactor ulw</user-request>
-</session-context>`,
+</session-context>`),
           },
         ],
       }
@@ -365,9 +395,9 @@ describe("start-work hook", () => {
         parts: [
           {
             type: "text",
-            text: `<session-context>
+            text: createStartWorkPrompt(`<session-context>
 <user-request>feature-implementation</user-request>
-</session-context>`,
+</session-context>`),
           },
         ],
       }
@@ -391,7 +421,7 @@ describe("start-work hook", () => {
       
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
@@ -425,7 +455,7 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
@@ -446,7 +476,14 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context>\n<user-request>--worktree /validated/worktree</user-request>\n</session-context>" }],
+        parts: [
+          {
+            type: "text",
+            text: createStartWorkPrompt(
+              "<session-context>\n<user-request>--worktree /validated/worktree</user-request>\n</session-context>",
+            ),
+          },
+        ],
       }
 
       // when
@@ -468,7 +505,14 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context>\n<user-request>--worktree /valid/wt</user-request>\n</session-context>" }],
+        parts: [
+          {
+            type: "text",
+            text: createStartWorkPrompt(
+              "<session-context>\n<user-request>--worktree /valid/wt</user-request>\n</session-context>",
+            ),
+          },
+        ],
       }
 
       // when
@@ -488,7 +532,14 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context>\n<user-request>--worktree /nonexistent/wt</user-request>\n</session-context>" }],
+        parts: [
+          {
+            type: "text",
+            text: createStartWorkPrompt(
+              "<session-context>\n<user-request>--worktree /nonexistent/wt</user-request>\n</session-context>",
+            ),
+          },
+        ],
       }
 
       // when
@@ -517,7 +568,14 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context>\n<user-request>--worktree /new/wt</user-request>\n</session-context>" }],
+        parts: [
+          {
+            type: "text",
+            text: createStartWorkPrompt(
+              "<session-context>\n<user-request>--worktree /new/wt</user-request>\n</session-context>",
+            ),
+          },
+        ],
       }
 
       // when
@@ -544,7 +602,7 @@ describe("start-work hook", () => {
 
       const hook = createStartWorkHook(createMockPluginInput())
       const output = {
-        parts: [{ type: "text", text: "<session-context></session-context>" }],
+        parts: [{ type: "text", text: createStartWorkPrompt() }],
       }
 
       // when
