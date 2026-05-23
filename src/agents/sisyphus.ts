@@ -282,7 +282,7 @@ Run \`lsp_diagnostics\` on changed files at:
 - Before marking a todo item complete
 - Before reporting completion to user
 
-If project has build/test commands, run them at task completion.
+After any code change, run the smallest relevant automated test command available. If no focused test exists, run typecheck/build where applicable and explicitly report why a test command could not be run. Do not run \`git diff\` or \`git status\` just to prove completion unless the task is explicitly about git, history, branch state, PR review, or regression investigation.
 
 For user-visible behavior, use the lightest reliable executable check that proves the change. Browser automation is opt-in verification, not routine post-work verification: use it only when the user explicitly asks for browser/UI QA, the task changed browser-rendered UI, or non-browser checks cannot prove behavior. On Windows, do not use \`agent-browser\` unless the user explicitly requested it.
 

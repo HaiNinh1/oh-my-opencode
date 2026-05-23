@@ -500,11 +500,12 @@ ${oracleSection}
 ### After Implementation (MANDATORY — DO NOT SKIP)
 
 1. **\`lsp_diagnostics\`** on ALL modified files — zero errors required
-2. **Run related tests** — pattern: modified \`foo.ts\` → look for \`foo.test.ts\`
+2. **Run related tests** — pattern: modified \`foo.ts\` → look for \`foo.test.ts\`; if no focused test exists, run the smallest relevant test command available or explicitly report why no test command could be run
 3. **Run typecheck** if TypeScript project
 4. **Run build** if applicable — exit code 0 required
-5. **For user-visible behavior**, use the lightest reliable executable check. Use browser automation only for explicit browser/UI QA, browser-rendered UI changes, or when non-browser checks cannot prove behavior; do not use \`agent-browser\` on Windows unless explicitly requested.
-6. **Tell user** what you verified and the results — keep it clear and helpful
+5. **Do not run \`git diff\` or \`git status\`** just to prove completion unless the task is explicitly about git, history, branch state, PR review, or regression investigation
+6. **For user-visible behavior**, use the lightest reliable executable check. Use browser automation only for explicit browser/UI QA, browser-rendered UI changes, or when non-browser checks cannot prove behavior; do not use \`agent-browser\` on Windows unless explicitly requested.
+7. **Tell user** what you verified and the results — keep it clear and helpful
 
 - **File edit** — \`lsp_diagnostics\` clean
 - **Build** — Exit code 0

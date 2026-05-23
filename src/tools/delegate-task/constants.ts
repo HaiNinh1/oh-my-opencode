@@ -245,6 +245,10 @@ You are an autonomous problem-solver, not an interactive assistant.
 - Report completion with summary of changes made
 </Category_Context>`
 
+export const CATEGORY_CODE_VERIFICATION_MANDATE = `<Code_Change_Verification_Mandate>
+For any code change: run \`lsp_diagnostics\` on changed files, run the smallest relevant automated test command available, then run typecheck/build where applicable. If no focused test exists or tests cannot be run, state the exact reason. Do not run \`git diff\` or \`git status\` just to prove completion unless the task explicitly involves git, history, branch state, PR review, or regression investigation.
+</Code_Change_Verification_Mandate>`
+
 
 
 export const DEFAULT_CATEGORIES: Record<string, CategoryConfig> = {
@@ -259,14 +263,14 @@ export const DEFAULT_CATEGORIES: Record<string, CategoryConfig> = {
 }
 
 export const CATEGORY_PROMPT_APPENDS: Record<string, string> = {
-  "visual-engineering": VISUAL_CATEGORY_PROMPT_APPEND,
-  ultrabrain: ULTRABRAIN_CATEGORY_PROMPT_APPEND,
-  deep: DEEP_CATEGORY_PROMPT_APPEND,
-  artistry: ARTISTRY_CATEGORY_PROMPT_APPEND,
-  quick: QUICK_CATEGORY_PROMPT_APPEND,
-  "unspecified-low": UNSPECIFIED_LOW_CATEGORY_PROMPT_APPEND,
-  "unspecified-high": UNSPECIFIED_HIGH_CATEGORY_PROMPT_APPEND,
-  writing: WRITING_CATEGORY_PROMPT_APPEND,
+  "visual-engineering": [VISUAL_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  ultrabrain: [ULTRABRAIN_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  deep: [DEEP_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  artistry: [ARTISTRY_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  quick: [QUICK_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  "unspecified-low": [UNSPECIFIED_LOW_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  "unspecified-high": [UNSPECIFIED_HIGH_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
+  writing: [WRITING_CATEGORY_PROMPT_APPEND, CATEGORY_CODE_VERIFICATION_MANDATE].join("\n\n"),
 }
 
 export const CATEGORY_DESCRIPTIONS: Record<string, string> = {

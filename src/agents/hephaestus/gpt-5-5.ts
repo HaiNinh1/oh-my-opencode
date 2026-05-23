@@ -206,7 +206,9 @@ Done when ALL of:
 
 - Every behavior the user asked for is implemented; no partial delivery, no "v0 / extend later".
 - \`lsp_diagnostics\` clean on every file you changed.
-- Build (if applicable) exits 0; tests pass, or pre-existing failures are explicitly named with the reason.
+- The smallest relevant automated test command for the code change has passed, or the exact reason no test command could be run is named.
+- Build (if applicable) exits 0, or pre-existing failures are explicitly named with the reason.
+- \`git diff\` and \`git status\` are not used just to prove completion unless the task is explicitly about git, history, branch state, PR review, or regression investigation.
 - The artifact has been driven through its matching surface in this turn, or the strongest reliable executable evidence was used when browser automation was intentionally not appropriate on Windows (Manual QA Gate).
 - The final message reports what you did, what you verified, what you could not verify (with the reason), and any pre-existing issues you noticed but did not touch.
 

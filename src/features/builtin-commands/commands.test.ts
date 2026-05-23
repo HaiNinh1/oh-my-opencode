@@ -81,8 +81,8 @@ describe("HANDOFF_TEMPLATE", () => {
 
     //#when / #then
     expect(HANDOFF_TEMPLATE).toContain("todoread")
-    expect(HANDOFF_TEMPLATE).toContain("git diff")
-    expect(HANDOFF_TEMPLATE).toContain("git status")
+    expect(HANDOFF_TEMPLATE).toContain("session history and tool output")
+    expect(HANDOFF_TEMPLATE).toContain("session history, todoread, and tool outputs")
   })
 
   test("should include context extraction format", () => {

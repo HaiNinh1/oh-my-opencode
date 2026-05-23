@@ -3,7 +3,7 @@ import type { BuiltinSkill } from "../types"
 export const reviewWorkSkill: BuiltinSkill = {
 	name: "review-work",
 	description:
-		"Post-implementation review orchestrator. Launches 5 parallel sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from GitHub/git/Slack/Notion). All must pass for review to pass. MUST USE after completing any significant implementation work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'.",
+		"Post-implementation review orchestrator. Launches 5 parallel sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from session history, docs, and relevant external context). All must pass for review to pass. MUST USE after completing any significant implementation work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'.",
 	template: `# Review Work - 5-Agent Parallel Review Orchestrator
 
 Launch 5 specialized sub-agents in parallel to review completed implementation work from every angle. All 5 must pass for the review to pass. If even ONE fails, the review fails.
@@ -29,9 +29,10 @@ Before launching agents, collect these inputs. Extract from conversation history
 - **GOAL**: The original objective. What was the user trying to achieve? Pull from the initial request in this conversation.
 - **CONSTRAINTS**: Rules, requirements, or limitations. Tech stack restrictions, performance targets, API contracts, design patterns to follow, backward compatibility needs.
 - **BACKGROUND**: Why this work was needed. Business context, user stories, related systems, prior decisions that informed the approach.
-- **CHANGED_FILES**: Auto-collect via \`git diff --name-only HEAD~1\` or against the appropriate base (branch point, specific commit).
-- **DIFF**: Auto-collect via \`git diff HEAD~1\` or against the appropriate base.
+- **CHANGED_FILES**: Collect from conversation history, todos, tool outputs, and explicit user-provided file lists. Do not run git just to discover changed files unless the user asked for a git-aware review or the review depends on branch/commit history.
+- **DIFF**: Include a diff only when it is already available from the conversation/tool output or when the user explicitly asks for diff-based review.
 - **FILE_CONTENTS**: Read the full content of each changed file (not just the diff). Oracle agents cannot read files - they need full context in the prompt.
+- **VALIDATION_EVIDENCE**: Diagnostics, tests, typecheck/build, and manual QA already run for the code change. Use existing conversation/tool output first. Do not run git status/diff just to collect this.
 - **RUN_COMMAND**: How to start/run the application. Check \`package.json\` scripts, \`Makefile\`, \`docker-compose.yml\`, or ask the user.
 
 </required_inputs>
@@ -39,16 +40,16 @@ Before launching agents, collect these inputs. Extract from conversation history
 
 **NEVER CHECKOUT A PR BRANCH IN THE MAIN WORKTREE. ALWAYS CREATE A NEW GIT WORKTREE (\`git worktree add\`) AND WORK THERE. THIS PREVENTS CONTAMINATING THE USER'S WORKING DIRECTORY WITH UNRELATED BRANCH STATE.**
 
-**Auto-collection sequence:**
+**Context collection sequence:**
 
 \`\`\`bash
-# 1. Get changed files
-git diff --name-only HEAD~1  # or: git diff --name-only main...HEAD
+# 1. Identify changed files from conversation history, todos, and tool outputs
 
-# 2. Get diff
-git diff HEAD~1  # or: git diff main...HEAD
+# 2. Read full contents for each changed file
 
-# 3. Detect run command
+# 3. Include an existing diff only if already provided or explicitly requested
+
+# 4. Detect run command
 # Check package.json -> "scripts.dev" or "scripts.start"
 # Check Makefile -> default target
 # Check docker-compose.yml -> services
@@ -398,8 +399,8 @@ This agent answers: "Did we miss any context that should have informed this impl
 task(
   category="unspecified-high",
   run_in_background=false,
-  load_skills=["git-master"],
-  description="Mine all accessible contexts for missed requirements or background knowledge",
+  load_skills=[],
+  description="Mine accessible contexts for missed requirements or background knowledge",
   prompt="""
 <review_type>CONTEXT MINING - MISSED REQUIREMENTS & BACKGROUND</review_type>
 
@@ -421,26 +422,30 @@ task(
 
 You are an investigator. Your mission: search every accessible information source to find context that should have informed this implementation but might have been missed. The question: "Is there something we should have known but didn't?"
 
-SOURCES TO SEARCH (use every available tool):
+SOURCES TO SEARCH (use relevant available tools):
 
-1. **Git History** (ALWAYS search):
-   - \`git log --oneline -20 -- {each changed file}\` - recent changes and their reasons
-   - \`git blame {critical sections}\` - who wrote what and when
-   - \`git log --all --grep="{keywords from goal}"\` - related commits
-   - Look for reverted commits, TODO/FIXME/HACK comments in history
+1. **Session and Local Context** (ALWAYS search):
+   - Conversation history for user requirements, constraints, decisions, and prior warnings
+   - Todo state and recent tool outputs for files touched and validation already run
+   - Codebase references, tests, docs, and config connected to the changed files
 
-2. **GitHub** (if \`gh\` CLI available):
+2. **Git History** (only when relevant to the user's request or suspected regression):
+   - Recent commits touching critical files when historical rationale matters
+   - Blame/log for sections whose ownership or prior intent affects the review
+   - Related reverted commits or commit messages when the task mentions regressions
+
+3. **GitHub** (if \`gh\` CLI available and the task relates to issues/PRs):
    - \`gh issue list --search "{keywords}"\` - related open/closed issues
    - \`gh pr list --search "{keywords}" --state all\` - related PRs and their review comments
    - Check if any issue is specifically linked to this work
    - Look at review comments on past PRs touching these files
 
-3. **Communication Channels** (if MCP tools available):
+4. **Communication Channels** (if MCP tools available and relevant):
    - Slack: search for messages mentioning the feature, file names, or related keywords
    - Notion: search for design docs, RFCs, ADRs related to this feature
    - Discord: relevant discussions
 
-4. **Codebase Cross-References** (ALWAYS search):
+5. **Codebase Cross-References** (ALWAYS search):
    - Files that import or reference the changed modules
    - Tests that might need updating due to behavior changes
    - Documentation (README, docs/, comments) that references changed behavior

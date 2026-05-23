@@ -27,16 +27,12 @@ Execute these tools to gather concrete data:
 
 1. session_read({ session_id: "$SESSION_ID" }) — full session history
 2. todoread() — current task progress
-3. Bash({ command: "git diff --stat HEAD~10..HEAD" }) — recent file changes
-4. Bash({ command: "git status --porcelain" }) — uncommitted changes
 
 Suggested execution order:
 
 \`\`\`
 session_read({ session_id: "$SESSION_ID" })
 todoread()
-Bash({ command: "git diff --stat HEAD~10..HEAD" })
-Bash({ command: "git status --porcelain" })
 \`\`\`
 
 Analyze the gathered outputs to understand:
@@ -44,7 +40,7 @@ Analyze the gathered outputs to understand:
 - What work was completed
 - What tasks remain incomplete (include todo state)
 - What decisions were made
-- What files were modified or discussed (include git diff/stat + status)
+- What files were modified or discussed, based on session history and tool output
 - What patterns, constraints, or preferences were established
 
 ---
@@ -111,7 +107,7 @@ KEY FILES
 - [path/to/file1] - [brief role description]
 - [path/to/file2] - [brief role description]
 (Maximum 10 files, prioritized by importance)
-- (Include files from git diff/stat and git status)
+- (Include files from session history, todoread, and tool outputs)
 
 IMPORTANT DECISIONS
 -------------------

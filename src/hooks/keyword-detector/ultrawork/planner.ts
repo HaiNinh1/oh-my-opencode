@@ -110,7 +110,7 @@ Each TODO item MUST include:
   - **Consultants**: [\`explore\`, \`librarian\`, \`oracle\`, or none]
   - **Skills**: [\`skill-1\`, \`skill-2\`]
   
-  **Acceptance Criteria**: [Verifiable conditions]
+  **Acceptance Criteria**: [Verifiable conditions, including exact diagnostics, test, typecheck/build, and manual QA commands required after code changes]
 \`\`\`
 
 ### 4. Agent Dispatch Summary (REQUIRED)

@@ -323,8 +323,9 @@ Use this workflow for implementation tasks.
    - Ground claims in current-turn tool output.
    - Use the lightest validation that can prove the change, then broaden when correctness, risk, or user impact warrants it.
    - Run \`lsp_diagnostics\` on changed files.
-   - Run related tests.
+   - Run related tests. If no focused test exists, run the smallest relevant test command available or explicitly report why no test command could be run.
    - Run the build or typecheck when applicable.
+   - Do not run \`git diff\` or \`git status\` just to prove completion unless the task is explicitly about git, history, branch state, PR review, or regression investigation.
    - For user-visible behavior, perform a manual or executable check with available tools.
    - Browser automation is opt-in verification, not routine post-work verification. Use it only for explicit browser/UI QA, browser-rendered UI changes, or when non-browser checks cannot prove behavior; do not use \`agent-browser\` on Windows unless explicitly requested.
    - For delegated work, read the touched files yourself.
