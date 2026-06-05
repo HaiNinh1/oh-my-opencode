@@ -13,7 +13,7 @@ import { buildGpt54SisyphusPrompt } from "./gpt-5-4";
 import { buildTaskManagementSection } from "./default";
 
 const MODE: AgentMode = "all";
-const HERACLES_COLOR = "#F97316";
+const HERACLES_COLOR = "#fc1414";
 export const SISYPHUS_PROMPT_METADATA: AgentPromptMetadata = {
   category: "utility",
   cost: "EXPENSIVE",

@@ -16,7 +16,7 @@ describe("createHeraclesAgent", () => {
     expect(config.mode).toBe("all")
     expect(config.model).toBe("gpt-5.4")
     expect(config.maxTokens).toBe(64000)
-    expect(config.color).toBe("#F97316")
+    expect(config.color).toBe("#3B82F6")
     expect(config.reasoningEffort).toBe("high")
     expect(config.prompt).toContain("You are Sisyphus")
   })
