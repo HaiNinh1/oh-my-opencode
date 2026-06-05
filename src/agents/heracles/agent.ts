@@ -13,6 +13,7 @@ import { buildGpt54SisyphusPrompt } from "./gpt-5-4";
 import { buildTaskManagementSection } from "./default";
 
 const MODE: AgentMode = "all";
+const HERACLES_COLOR = "#e4242c";
 export const SISYPHUS_PROMPT_METADATA: AgentPromptMetadata = {
   category: "utility",
   cost: "EXPENSIVE",
@@ -393,7 +394,7 @@ export function createHeraclesAgent(
       model,
       maxTokens: 64000,
       prompt,
-      color: "#00CED1",
+      color: HERACLES_COLOR,
       permission: {
         question: "allow",
         call_omo_agent: "deny",
@@ -418,7 +419,7 @@ export function createHeraclesAgent(
       model,
       maxTokens: 64000,
       prompt,
-      color: "#00CED1",
+      color: HERACLES_COLOR,
       permission: {
         question: "allow",
         call_omo_agent: "deny",
@@ -443,7 +444,7 @@ export function createHeraclesAgent(
   //     model,
   //     maxTokens: 64000,
   //     prompt,
-  //     color: "#00CED1",
+  //     color: HERACLES_COLOR,
   //     permission: {
   //       question: "allow",
   //       call_omo_agent: "deny",
@@ -494,7 +495,7 @@ export function createHeraclesAgent(
     model,
     maxTokens: 64000,
     prompt,
-    color: "#00CED1",
+    color: HERACLES_COLOR,
     permission,
   };
 
