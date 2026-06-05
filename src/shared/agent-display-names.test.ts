@@ -173,6 +173,14 @@ describe("getAgentConfigKey", () => {
     expect(getAgentConfigKey("Metis (Plan Consultant)")).toBe("metis")
     expect(getAgentConfigKey("Momus (Plan Critic)")).toBe("momus")
     expect(getAgentConfigKey("Sisyphus-Junior")).toBe("sisyphus-junior")
+    expect(getAgentConfigKey("Heracles (Forgeborn)")).toBe("heracles")
+  })
+
+  it("resolves previous Heracles display name as a compatibility alias", () => {
+    // given old display name "Heracles (Direct Executor)"
+    // when getAgentConfigKey called
+    // then returns "heracles"
+    expect(getAgentConfigKey("Heracles (Direct Executor)")).toBe("heracles")
   })
 })
 
@@ -193,7 +201,8 @@ describe("AGENT_DISPLAY_NAMES", () => {
       explore: "explore",
       "multimodal-looker": "multimodal-looker",
       mnemosyne: "Mnemosyne (Compact Planner)",
-      heracles: "Heracles (Direct Executor)",
+      heracles: "Heracles (Forgeborn)",
+      enhancer: "enhancer",
     }
 
     // when checking the constant

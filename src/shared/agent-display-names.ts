@@ -17,8 +17,12 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   explore: "explore",
   "multimodal-looker": "multimodal-looker",
   mnemosyne: "Mnemosyne (Compact Planner)",
-  heracles: "Heracles (Direct Executor)",
+  heracles: "Heracles (Forgeborn)",
   enhancer: "enhancer",
+}
+
+const AGENT_DISPLAY_NAME_ALIASES: Record<string, string> = {
+  "Heracles (Direct Executor)": "heracles",
 }
 
 /**
@@ -42,7 +46,10 @@ export function getAgentDisplayName(configKey: string): string {
 }
 
 const REVERSE_DISPLAY_NAMES: Record<string, string> = Object.fromEntries(
-  Object.entries(AGENT_DISPLAY_NAMES).map(([key, displayName]) => [displayName.toLowerCase(), key]),
+  [
+    ...Object.entries(AGENT_DISPLAY_NAMES).map(([key, displayName]) => [displayName.toLowerCase(), key]),
+    ...Object.entries(AGENT_DISPLAY_NAME_ALIASES).map(([displayName, key]) => [displayName.toLowerCase(), key]),
+  ],
 )
 
 /**
