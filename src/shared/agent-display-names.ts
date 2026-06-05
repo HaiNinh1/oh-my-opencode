@@ -17,11 +17,12 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   explore: "explore",
   "multimodal-looker": "multimodal-looker",
   mnemosyne: "Mnemosyne (Compact Planner)",
-  heracles: "Heracles(Executor)",
+  heracles: "Heracles (Executor)",
   enhancer: "enhancer",
 }
 
 const AGENT_DISPLAY_NAME_ALIASES: Record<string, string> = {
+  "Heracles(Executor)": "heracles",
   "Heracles (Forgeborn)": "heracles",
   "Heracles (Direct Executor)": "heracles",
 }

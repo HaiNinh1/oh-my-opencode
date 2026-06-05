@@ -32,6 +32,7 @@ export const AGENT_NAME_MAP: Record<string, string> = {
   mnemosyne: "mnemosyne",
 
   // Heracles variants → "heracles"
+  "Heracles (Executor)": "heracles",
   "Heracles(Executor)": "heracles",
   "Heracles (Forgeborn)": "heracles",
   "Heracles (Direct Executor)": "heracles",
@@ -59,7 +60,7 @@ export const BUILTIN_AGENT_NAMES = new Set([
   "metis", // was "Metis (Plan Consultant)"
   "momus", // was "Momus (Plan Reviewer)"
   "mnemosyne", // was "Mnemosyne (Compact Planner)"
-  "heracles", // was "Heracles (Direct Executor)", now "Heracles(Executor)"
+  "heracles", // was "Heracles (Direct Executor)", now "Heracles (Executor)"
   "enhancer",
   "prometheus", // was "Prometheus (Planner)"
   "atlas", // was "Atlas"

@@ -312,7 +312,19 @@ describe("hermes-routing-guard", () => {
         ).resolves.toBeUndefined()
       })
 
-      test("#then should allow 'Heracles(Executor)' by resolving to heracles", async () => {
+      test("#then should allow 'Heracles (Executor)' by resolving to heracles", async () => {
+        setupMessageStorage(TEST_SESSION_ID, "hermes")
+        const hook = createHermesRoutingGuardHook(createMockPluginInput())
+
+        await expect(
+          hook["tool.execute.before"](
+            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
+            { args: { subagent_type: "Heracles (Executor)", prompt: "Execute" } },
+          )
+        ).resolves.toBeUndefined()
+      })
+
+      test("#then should allow previous Heracles no-space display name as compatibility alias", async () => {
         setupMessageStorage(TEST_SESSION_ID, "hermes")
         const hook = createHermesRoutingGuardHook(createMockPluginInput())
 
