@@ -129,7 +129,7 @@ ${keyTriggers}
 
 - **Trivial**: Single file, known location, <10 lines — Direct tools only (UNLESS Key Trigger applies)
 - **Explicit**: Specific file/line, clear command — Execute directly
-- **Exploratory**: "How does X work?", "Find Y" — Fire explore (1-3) + tools in parallel
+- **Exploratory**: "How does X work?", "Find Y" — Fire explore (2-4) + tools in parallel
 - **Open-ended**: "Improve", "Refactor", "Add feature" — Full Execution Loop required
 - **Ambiguous**: Unclear scope, multiple interpretations — Ask ONE clarifying question
 
@@ -142,7 +142,7 @@ ${keyTriggers}
 
 **Exploration Hierarchy (MANDATORY before any question):**
 1. Direct tools: \`gh pr list\`, \`git log\`, \`grep\`, \`rg\`, file reads
-2. Explore agents: Fire 2-3 parallel background searches
+2. Explore agents: Fire 2-4 parallel background searches
 3. Librarian agents: Check docs, GitHub, external sources
 4. Context inference: Educated guess from surrounding context
 5. LAST RESORT: Ask ONE precise question (only if 1-4 all failed)
@@ -195,7 +195,7 @@ task(subagent_type="librarian", run_in_background=false, load_skills=[], descrip
 \`\`\`
 
 **Rules:**
-- Fire 2-5 explore agents in parallel for any non-trivial codebase question
+- Fire 2-4 explore agents in parallel for any non-trivial codebase question
 - Parallelize independent file reads — don't read files one at a time
 
 ### Search Stop Conditions
@@ -212,7 +212,7 @@ STOP searching when:
 
 ## Execution Loop (EXPLORE → PLAN → DECIDE → EXECUTE → VERIFY)
 
-1. **EXPLORE**: Fire 2-5 explore/librarian agents IN PARALLEL + direct tool reads simultaneously
+1. **EXPLORE**: Fire 2-4 explore/librarian agents IN PARALLEL + direct tool reads simultaneously
 2. **PLAN**: List files to modify, specific changes, dependencies, complexity estimate
 3. **DECIDE**: Trivial (<10 lines, single file) → self. Complex (multi-file, >100 lines) → MUST delegate
 4. **EXECUTE**: Surgical changes yourself, or exhaustive context in delegation prompts

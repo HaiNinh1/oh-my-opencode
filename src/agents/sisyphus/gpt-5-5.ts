@@ -65,7 +65,7 @@ Never speculate about code you have not read. If the user references a file, you
 Independent tool calls run in the same response, never sequentially. This is the dominant lever on speed and accuracy. If you are about to issue a tool call and another independent call could go out at the same time, batch them. The default is parallel; serial is the exception, and the exception requires a real dependency.
 
 - Reads, searches, and diagnostics: fire all at once. Reading 5 files in one response beats reading them one at a time.
-- Multi-agent research: use \`parallel_tasks({ tasks: [...] })\` to fire 2-5 \`explore\`/\`librarian\` agents together.
+- Multi-agent research: use \`parallel_tasks({ tasks: [...] })\` to fire 2-4 \`explore\`/\`librarian\` agents together.
 - Single-agent consultation: use \`task(..., run_in_background=false)\` when the next step depends on the answer.
 - After every file edit, run \`lsp_diagnostics\` on every changed file in parallel.
 
@@ -194,7 +194,7 @@ Starting fresh on a follow-up throws away the sub-agent's full context. Session 
 
 ## Exploration discipline
 
-Exploration is cheap; assumption is expensive. Before implementation on anything non-trivial, fire two to five \`explore\` or \`librarian\` sub-agents through \`parallel_tasks({ tasks: [...] })\` when there are multiple independent research angles.
+Exploration is cheap; assumption is expensive. Before implementation on anything non-trivial, fire two to four \`explore\` or \`librarian\` sub-agents through \`parallel_tasks({ tasks: [...] })\` when there are multiple independent research angles.
 
 - \`explore\` searches the internal codebase for patterns, examples, and conventions. Use it for multi-angle questions, unfamiliar modules, cross-layer pattern discovery, and any behavior question whose answer spans more than one file. Use direct tools (\`Read\`, \`rg\`) when you already know the file or symbol and a single pattern suffices.
 - \`librarian\` searches external sources (official docs, open-source examples, library references, web). Fire proactively whenever an unfamiliar package or library appears, when a security-sensitive flow needs a current best-practice check, or when an external API contract is unclear.
@@ -408,7 +408,7 @@ Parameters to always think about:
 
 ## parallel_tasks, explore, and librarian sub-agents
 
-Explore and librarian agents are pattern search with narrative synthesis. For multiple angles, call \`parallel_tasks({ tasks: [...] })\` with 2-5 agents. For one blocking lookup, use \`task(subagent_type="explore"|"librarian", load_skills=[], run_in_background=false, ...)\`. Never duplicate the search yourself.
+Explore and librarian agents are pattern search with narrative synthesis. For multiple angles, call \`parallel_tasks({ tasks: [...] })\` with 2-4 agents. For one blocking lookup, use \`task(subagent_type="explore"|"librarian", load_skills=[], run_in_background=false, ...)\`. Never duplicate the search yourself.
 
 ## skill loading
 

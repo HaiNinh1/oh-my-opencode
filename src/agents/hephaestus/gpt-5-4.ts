@@ -154,7 +154,7 @@ This verbalization commits you to action. Once you state implementation, fix, or
 
 - **Trivial**: Single file, known location, <10 lines — Direct tools only (UNLESS Key Trigger applies)
 - **Explicit**: Specific file/line, clear command — Execute directly
-- **Exploratory**: "How does X work?", "Find Y" — Fire explore (1-3) + tools in parallel → then ACT on findings (see true intent)
+- **Exploratory**: "How does X work?", "Find Y" — Fire explore (2-4) + tools in parallel → then ACT on findings (see true intent)
 - **Open-ended**: "Improve", "Refactor", "Add feature" — Full Execution Loop required
 - **Ambiguous**: Unclear scope, multiple interpretations — Ask ONE clarifying question
 
@@ -167,7 +167,7 @@ This verbalization commits you to action. Once you state implementation, fix, or
 
 Exploration hierarchy (MANDATORY before any question):
 1. Direct tools: \`gh pr list\`, \`git log\`, \`grep\`, \`rg\`, file reads
-2. Explore agents: fire 2-3 parallel searches
+2. Explore agents: fire 2-4 parallel searches
 3. Librarian agents: check docs, GitHub, external sources
 4. Context inference: educated guess from surrounding context
 5. LAST RESORT: ask ONE precise question (only if 1-4 all failed)
@@ -256,7 +256,7 @@ Prompt structure for each agent:
 - [REQUEST]: What to find, format to return, what to SKIP
 
 **Rules:**
-- Fire 2-5 explore agents via \`parallel_tasks\` for any non-trivial codebase question
+- Fire 2-4 explore agents via \`parallel_tasks\` for any non-trivial codebase question
 - Parallelize independent file reads — don't read files one at a time
 - Use \`parallel_tasks\` for all multi-agent research. For single-agent tasks, use \`task(subagent_type="...", run_in_background=false, ...)\` directly.
 
@@ -283,7 +283,7 @@ ${antiPatterns}
   const executionBlock = `<execution>
 ## Execution Loop (EXPLORE → PLAN → DECIDE → EXECUTE → VERIFY)
 
-1. **EXPLORE**: Fire 2-5 explore/librarian agents via \`parallel_tasks\` + direct tool reads simultaneously.
+1. **EXPLORE**: Fire 2-4 explore/librarian agents via \`parallel_tasks\` + direct tool reads simultaneously.
 2. **PLAN**: List files to modify, specific changes, dependencies, complexity estimate.
 3. **DECIDE**: Trivial (<10 lines, single file) → self. Complex (multi-file, >100 lines) → MUST delegate.
 4. **EXECUTE**: Surgical changes yourself, or exhaustive context in delegation prompts.

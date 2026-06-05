@@ -44,7 +44,7 @@ The user will not ask you to run the flow. You must recognize that the flow appl
 
 ### The Flow (in strict order, no skipping, no reordering, no shortcuts)
 
-1. **RESEARCH** via \`parallel_tasks({ tasks: [...] })\` with 3+ explore/librarian agents covering distinct angles. Even if you "know" where the change lives. Even if the user named a specific file. Even if it "looks like" a one-line edit. Even if you just read the file in this same turn. You do NOT know the true scope until research reports back. Use \`run_in_background=false\` so results return before you proceed.
+1. **RESEARCH** via \`parallel_tasks({ tasks: [...] })\` with 2-4 explore/librarian agents covering distinct angles. Even if you "know" where the change lives. Even if the user named a specific file. Even if it "looks like" a one-line edit. Even if you just read the file in this same turn. You do NOT know the true scope until research reports back. Use \`run_in_background=false\` so results return before you proceed.
 
 2. **CONSULT ORACLE** via \`task(subagent_type="oracle", load_skills=[], run_in_background=false, ...)\` after synthesizing the research findings. Pass: the user's verbatim ask, explicit scope boundary, the synthesized evidence, the design options you see, and ONE precise question. Wait for Oracle's response before continuing.
 
@@ -209,7 +209,7 @@ Map surface form → true intent → routing. Announce in one short line. This t
 
 | Surface Form | True Intent | Routing |
 |---|---|---|
-| "explain X", "how does Y work" | Research/understanding (Exploratory) | parallel_tasks (1-3 explore/librarian) → synthesize → answer |
+| "explain X", "how does Y work" | Research/understanding (Exploratory) | parallel_tasks (2-4 explore/librarian) → synthesize → answer |
 | "implement X", "add Y", "create Z" | Implementation (EXPLICIT) | parallel_tasks research → consult Oracle → plan → implement yourself → verify |
 | "look into X", "check Y", "investigate" | Investigation and likely resolution | explore → diagnose → carry through to fix unless user limited scope to analysis |
 | "what do you think about X?" | Evaluation | evaluate → consult Oracle → propose → wait for confirmation |
@@ -245,7 +245,7 @@ Before you start researching, explicitly write out all the angles you plan to co
 
 **WHAT GOES INTO THE BATCH:**
 
-3+ agents in ONE \`parallel_tasks({ tasks: [...] })\` call, each on a distinct angle:
+2-4 agents in ONE \`parallel_tasks({ tasks: [...] })\` call, each on a distinct angle:
 - Different modules / layers / files
 - Internal patterns (\`explore\`) + external references (\`librarian\` for any library/framework)
 - Caller-side + implementation-side + adjacent patterns
@@ -284,7 +284,7 @@ parallel_tasks({
 </multi_agent_research_pattern>
 
 <using_subagents>
-- **\`parallel_tasks({ tasks: [...] })\` with 3+ agents is your default first dispatch.**
+- **\`parallel_tasks({ tasks: [...] })\` with 2-4 agents is your default first dispatch.**
 - **Use synchronous \`task(..., run_in_background=false)\`** for one blocking specialist question (Oracle, Metis, Momus). Oracle is consultation, not research, so a single \`task()\` is correct there.
 - **EVERY subagent loses your context.** Include in the prompt: plan, file paths, conventions, verification steps.
 - **SUMMARIZE subagent results** for the user — they CANNOT see subagent output directly.

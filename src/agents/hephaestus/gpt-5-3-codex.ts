@@ -212,7 +212,7 @@ This verbalization commits you to action. Once you state implementation, fix, or
 
 - **Trivial**: Single file, known location, <10 lines — Direct tools only (UNLESS Key Trigger applies)
 - **Explicit**: Specific file/line, clear command — Execute directly
-- **Exploratory**: "How does X work?", "Find Y" — Fire explore (1-3) + tools in parallel → then ACT on findings (see Step 0 true intent)
+- **Exploratory**: "How does X work?", "Find Y" — Fire explore (2-4) + tools in parallel → then ACT on findings (see Step 0 true intent)
 - **Open-ended**: "Improve", "Refactor", "Add feature" — Full Execution Loop required
 - **Ambiguous**: Unclear scope, multiple interpretations — Ask ONE clarifying question
 
@@ -225,7 +225,7 @@ This verbalization commits you to action. Once you state implementation, fix, or
 
 **Exploration Hierarchy (MANDATORY before any question):**
 1. Direct tools: \`gh pr list\`, \`git log\`, \`grep\`, \`rg\`, file reads
-2. Explore agents: Fire 2-3 parallel background searches
+2. Explore agents: Fire 2-4 parallel background searches
 3. Librarian agents: Check docs, GitHub, external sources
 4. Context inference: Educated guess from surrounding context
 5. LAST RESORT: Ask ONE precise question (only if 1-4 all failed)
@@ -325,7 +325,7 @@ Prompt structure for each agent:
 - [REQUEST]: What to find, format to return, what to SKIP
 
 **Rules:**
-- Fire 2-5 explore agents in parallel for any non-trivial codebase question — ALL \`run_in_background=false\` in the SAME response
+- Fire 2-4 explore agents in parallel for any non-trivial codebase question — ALL \`run_in_background=false\` in the SAME response
 - Parallelize independent file reads — don't read files one at a time
 - Use \`run_in_background=false\` when the current turn depends directly on the research result. Use \`run_in_background=true\` for optional, parallel, or non-blocking research.
 - If the current answer depends on research from explore/librarian, that result is REQUIRED. Prefer synchronous delegation for required research. If you launched it in background, do NOT give a final answer until it completes, you read it with \`background_output(task_id="...")\`, and you incorporate it.
@@ -366,7 +366,7 @@ STOP searching when:
 
 ## Execution Loop (EXPLORE → PLAN → DECIDE → EXECUTE → VERIFY)
 
-1. **EXPLORE**: Fire 2-5 explore/librarian agents as sync parallel calls (\`run_in_background=false\`, all in one response) + direct tool reads simultaneously
+1. **EXPLORE**: Fire 2-4 explore/librarian agents as sync parallel calls (\`run_in_background=false\`, all in one response) + direct tool reads simultaneously
    → Tell user: "Checking [area] for [pattern]..."
 2. **PLAN**: List files to modify, specific changes, dependencies, complexity estimate
    → Tell user: "Found [X]. Here's my plan: [clear summary]."
