@@ -5,7 +5,7 @@ import type { LoadedSkill } from "../features/opencode-skill-loader/types"
 import type { BrowserAutomationProvider } from "../config/schema"
 import { createSisyphusAgent } from "./sisyphus"
 import { createOracleAgent, ORACLE_PROMPT_METADATA } from "./oracle"
-import { createHermesAgent, HERMES_PROMPT_METADATA } from "./hermes"
+// import { createHermesAgent, HERMES_PROMPT_METADATA } from "./hermes"
 import { createLibrarianAgent, LIBRARIAN_PROMPT_METADATA } from "./librarian"
 import { createExploreAgent, EXPLORE_PROMPT_METADATA } from "./explore"
 import { createMultimodalLookerAgent, MULTIMODAL_LOOKER_PROMPT_METADATA } from "./multimodal-looker"
@@ -14,7 +14,7 @@ import { createAtlasAgent, atlasPromptMetadata } from "./atlas"
 import { createMomusAgent, momusPromptMetadata } from "./momus"
 import { createHephaestusAgent } from "./hephaestus"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
-import { createMnemosyneAgent } from "./mnemosyne"
+// import { createMnemosyneAgent } from "./mnemosyne"
 import { createHeraclesAgent } from "./heracles"
 import { createEnhancerAgent } from "./enhancer"
 import {
@@ -35,8 +35,8 @@ import { buildCustomAgentMetadata, parseRegisteredAgentSummaries } from "./custo
 
 type AgentSource = AgentFactory | AgentConfig
 
-const agentSources: Record<BuiltinAgentName, AgentSource> = {
-  hermes: createHermesAgent,
+const agentSources: Partial<Record<BuiltinAgentName, AgentSource>> = {
+  // hermes: createHermesAgent,
   sisyphus: createSisyphusAgent,
   hephaestus: createHephaestusAgent,
   oracle: createOracleAgent,
@@ -49,7 +49,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   // because it needs OrchestratorContext, not just a model string
   atlas: createAtlasAgent as AgentFactory,
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as unknown as AgentFactory,
-  mnemosyne: createMnemosyneAgent,
+  // mnemosyne: createMnemosyneAgent,
   heracles: createHeraclesAgent,
   enhancer: createEnhancerAgent,
 }
@@ -65,7 +65,7 @@ const agentMetadata: Partial<Record<BuiltinAgentName, AgentPromptMetadata>> = {
   "multimodal-looker": MULTIMODAL_LOOKER_PROMPT_METADATA,
   metis: metisPromptMetadata,
   momus: momusPromptMetadata,
-  hermes: HERMES_PROMPT_METADATA,
+  // hermes: HERMES_PROMPT_METADATA,
   atlas: atlasPromptMetadata,
 }
 
@@ -209,10 +209,17 @@ export async function createBuiltinAgents(
   const heraclesConfig = maybeCreateHeraclesConfig({
     disabledAgents,
     agentOverrides,
+    uiSelectedModel,
     availableModels,
     systemDefaultModel,
+    isFirstRunNoCache,
+    availableAgents,
+    availableSkills,
+    availableCategories,
     mergedCategories,
     directory,
+    useTaskSystem,
+    disableOmoEnv,
   })
   if (heraclesConfig) {
     result["heracles"] = heraclesConfig

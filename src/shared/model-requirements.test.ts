@@ -64,6 +64,38 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     expect(last.model).toBe("big-pickle")
   })
 
+  test("heracles has frozen Sisyphus-derived model requirements", () => {
+    // #given - Heracles requirements copied from the current Sisyphus baseline
+    const heracles = AGENT_MODEL_REQUIREMENTS["heracles"]
+
+    // #when - accessing Heracles requirement
+    // #then - fallbackChain preserves the copied baseline without live Sisyphus equality
+    expect(heracles).toBeDefined()
+    expect(heracles.fallbackChain).toBeArray()
+    expect(heracles.fallbackChain).toHaveLength(7)
+    expect(heracles.requiresAnyModel).toBe(true)
+
+    expect(heracles.fallbackChain).toEqual([
+      { providers: ["anthropic", "github-copilot", "opencode"], model: "claude-opus-4-6", variant: "max" },
+      { providers: ["opencode-go"], model: "kimi-k2.5" },
+      { providers: ["kimi-for-coding"], model: "k2p5" },
+      {
+        providers: [
+          "opencode",
+          "moonshotai",
+          "moonshotai-cn",
+          "firmware",
+          "ollama-cloud",
+          "aihubmix",
+        ],
+        model: "kimi-k2.5",
+      },
+      { providers: ["openai", "github-copilot", "opencode"], model: "gpt-5.4", variant: "medium" },
+      { providers: ["zai-coding-plan", "opencode"], model: "glm-5" },
+      { providers: ["opencode"], model: "big-pickle" },
+    ])
+  })
+
   test("librarian has valid fallbackChain with opencode-go/minimax-m2.5 as primary", () => {
     // given - librarian agent requirement
     const librarian = AGENT_MODEL_REQUIREMENTS["librarian"]
