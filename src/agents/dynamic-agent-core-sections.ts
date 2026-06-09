@@ -142,11 +142,11 @@ export function buildOracleSection(agents: AvailableAgent[]): string {
   return `<oracle_usage>
 ## Oracle
 
-Oracle is a read-only high-reasoning consultant. It is your **second opinion for high-quality design and architecture decisions**
+Oracle is a read-only high-reasoning consultant. It is your **second opinion for complex design, architecture, debugging, security, and non-obvious tradeoff decisions**.
 
-**ALWAYS consult Oracle (AFTER your research AND BEFORE your implementation) when the user asks for:**
+**Consult Oracle only after research, and only when the work is complicated or high-stakes, such as:**
 
-- New feature implementation or introduces a new abstraction
+- New feature work that introduces a new abstraction or cross-module behavior
 - System / API / data-model / schema design
 - Architecture decisions (module boundaries, dependency direction, layering)
 - Security-sensitive flows (auth, secrets, permissions, crypto, input validation at trust boundaries)
@@ -160,9 +160,11 @@ Oracle is a read-only high-reasoning consultant. It is your **second opinion for
 - Single-file edits or one-line fixes
 - Typos, formatting, renames, lint cleanups
 - Adding a parameter, flag, or config field with clear semantics
+- Routine implementation or bug fixes where existing patterns make the approach obvious after research
 </trivial-task-definition>
 
 If the change shapes **how future code will be written** in this codebase, Oracle is required.
+If the change is routine and the correct path is clear from code you have read, proceed without Oracle.
 
 **How to invoke:**
 
