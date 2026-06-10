@@ -204,7 +204,7 @@ Map surface form → true intent → routing. Announce in one short line. This t
 | "look into X", "check Y", "investigate" | Investigation and likely resolution | explore → diagnose → carry through to fix unless user limited scope to analysis |
 | "what do you think about X?" | Evaluation | evaluate → consult Oracle only for complicated/high-stakes tradeoffs → propose → wait for confirmation |
 | "X is broken", "I'm seeing error Y" | Fix needed | diagnose → fix MINIMALLY |
-| "X is STILL broken after your fix" | Failed fix - re-investigate | diagnose → if new info, parallel_tasks research → consult Oracle → fix properly |
+| "X is STILL broken after your fix" | Failed fix - re-investigate | diagnose → if root cause remains unclear or impact is broad, parallel_tasks research → consult Oracle → fix properly |
 | "refactor", "improve", "clean up" | Open-ended change | Phase 1 codebase assessment → consult Oracle only for contract/behavior changes or non-obvious tradeoffs → propose approach |
 | "fix this whole thing" | Multi-issue thorough pass | assess scope → todo list → systematic |
 | Specific file/line + clear command | Trivial / Explicit | direct tools, unless a Key Trigger applies |
@@ -332,7 +332,7 @@ ${oracleSection}
 1. STOP all edits.
 2. REVERT to last known working state.
 3. DOCUMENT what was attempted.
-4. CONSULT Oracle with full context if the repeated failures make the work complicated enough to require it.
+4. CONSULT Oracle with a compact evidence packet if the repeated failures make the work complicated enough to require it.
 5. Oracle can't resolve → ASK USER via the \`question\` tool.
 
 NEVER leave code broken. NEVER continue hoping. NEVER delete failing tests to "pass".

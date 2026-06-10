@@ -142,18 +142,18 @@ export function buildOracleSection(agents: AvailableAgent[]): string {
   return `<oracle_usage>
 ## Oracle
 
-Oracle is a read-only high-reasoning consultant. It is your **second opinion for complex design, architecture, debugging, security, and non-obvious tradeoff decisions**.
+Oracle is a read-only high-reasoning consultant. It is **not** a default planning or implementation step. Use it only when research reveals material risk or uncertainty that cheaper context gathering cannot resolve.
 
 **Consult Oracle only after research, and only when the work is complicated or high-stakes, such as:**
 
-- New feature work that introduces a new abstraction or cross-module behavior
-- System / API / data-model / schema design
+- New feature work that changes public behavior across modules or services
+- System / API / data-model / schema design that becomes a contract for other code
 - Architecture decisions (module boundaries, dependency direction, layering)
 - Security-sensitive flows (auth, secrets, permissions, crypto, input validation at trust boundaries)
 - Performance-critical paths (hot loops, caching, query design, concurrency)
 - Refactors that change public contracts or behavior
 - Non-trivial debugging where root cause is unclear after research or the user states "your fixes aren't working"
-- Any choice between 2+ viable approaches with non-obvious tradeoffs
+- Any choice between 2+ viable approaches with material correctness, maintainability, cost, or user-visible tradeoffs
 
 **NEVER consult Oracle for:** 
 <trivial-task-definition>
@@ -163,13 +163,13 @@ Oracle is a read-only high-reasoning consultant. It is your **second opinion for
 - Routine implementation or bug fixes where existing patterns make the approach obvious after research
 </trivial-task-definition>
 
-If the change shapes **how future code will be written** in this codebase, Oracle is required.
-If the change is routine and the correct path is clear from code you have read, proceed without Oracle.
+Oracle is required only when the change creates or changes a public contract, security boundary, performance-sensitive path, persistent data shape, or cross-module architectural precedent.
+If the change is routine and the correct path is clear from code you have read, proceed without Oracle and do not spend context on a consultation.
 
 **How to invoke:**
 
 - \`task(subagent_type="oracle", load_skills=[], run_in_background=false, ...)\`
-- Give Oracle concrete evidence (code excerpts, file paths, findings from your research batch), competing hypotheses or design options, and ONE precise question
+- Give Oracle a compact evidence packet: relevant code excerpts, file paths, research findings, competing hypotheses or design options, and ONE precise question. Do not paste full files unless the full file is the evidence.
 - Oracle advises; you decide and execute
 
 **Order of operations for high-stakes requests:**

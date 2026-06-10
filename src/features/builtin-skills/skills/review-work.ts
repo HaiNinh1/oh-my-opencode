@@ -3,19 +3,19 @@ import type { BuiltinSkill } from "../types"
 export const reviewWorkSkill: BuiltinSkill = {
 	name: "review-work",
 	description:
-		"Post-implementation review orchestrator. Launches 5 parallel sub-agents: Oracle (goal/constraint verification), Oracle (code quality), Oracle (security), unspecified-high (hands-on QA execution), unspecified-high (context mining from session history, docs, and relevant external context). All must pass for review to pass. MUST USE after completing any significant implementation work. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'.",
-	template: `# Review Work - 5-Agent Parallel Review Orchestrator
+		"Post-implementation review orchestrator. Launches 3 core reviewers plus conditional Oracle reviewers for risky code-quality or security-sensitive changes. Use after significant implementation work when second-opinion review is warranted. Triggers: 'review work', 'review my work', 'review changes', 'QA my work', 'verify implementation', 'check my work', 'validate changes', 'post-implementation review'.",
+	template: `# Review Work - Conditional Parallel Review Orchestrator
 
-Launch 5 specialized sub-agents in parallel to review completed implementation work from every angle. All 5 must pass for the review to pass. If even ONE fails, the review fails.
+Launch 3 core sub-agents in parallel for every review. Add the optional Oracle code-quality and security reviewers only when the gates below trigger. All launched required agents must pass for the review to pass. Skipped optional agents are recorded as N/A.
 
-The 5 agents cover complementary concerns - together they form a comprehensive review that no single reviewer could match:
+The agents cover complementary concerns without spending Oracle context on routine work:
 
 | # | Agent | Type | Role | Focus Level |
 |---|-------|------|------|-------------|
 | 1 | Goal Verifier | Oracle | Did we build what was asked? | MAIN |
 | 2 | QA Executor | unspecified-high | Does it actually work? | MAIN |
-| 3 | Code Reviewer | Oracle | Is the code well-written? | MAIN |
-| 4 | Security Auditor | Oracle | Is it secure? | SUB |
+| 3 | Code Reviewer | Oracle | Is the code well-written? | CONDITIONAL |
+| 4 | Security Auditor | Oracle | Is it secure? | CONDITIONAL |
 | 5 | Context Miner | unspecified-high | Did we miss any context? | MAIN |
 
 ---
@@ -31,9 +31,11 @@ Before launching agents, collect these inputs. Extract from conversation history
 - **BACKGROUND**: Why this work was needed. Business context, user stories, related systems, prior decisions that informed the approach.
 - **CHANGED_FILES**: Collect from conversation history, todos, tool outputs, and explicit user-provided file lists. Do not run git just to discover changed files unless the user asked for a git-aware review or the review depends on branch/commit history.
 - **DIFF**: Include a diff only when it is already available from the conversation/tool output or when the user explicitly asks for diff-based review.
-- **FILE_CONTENTS**: Read the full content of each changed file (not just the diff). Oracle agents cannot read files - they need full context in the prompt.
+- **ORACLE_PACKET**: Compact evidence for Oracle agents. Include changed file list, relevant hunks/excerpts, validation evidence, known constraints, and the exact review question. Do not paste full files unless the whole file is the evidence.
 - **VALIDATION_EVIDENCE**: Diagnostics, tests, typecheck/build, and manual QA already run for the code change. Use existing conversation/tool output first. Do not run git status/diff just to collect this.
 - **RUN_COMMAND**: How to start/run the application. Check \`package.json\` scripts, \`Makefile\`, \`docker-compose.yml\`, or ask the user.
+- **QUALITY_RISK**: TRUE only when the change is multi-file, cross-module, API/architecture/error-handling heavy, or confidence is low.
+- **SECURITY_RISK**: TRUE only when the change touches auth/authz, secrets, crypto, networking, shell execution, file/path operations, env vars, serialization, dependencies/lockfiles, permissions, public APIs, or untrusted input.
 
 </required_inputs>
 
@@ -45,11 +47,13 @@ Before launching agents, collect these inputs. Extract from conversation history
 \`\`\`bash
 # 1. Identify changed files from conversation history, todos, and tool outputs
 
-# 2. Read full contents for each changed file
+# 2. Build ORACLE_PACKET from relevant excerpts and validation output
 
 # 3. Include an existing diff only if already provided or explicitly requested
 
-# 4. Detect run command
+# 4. Evaluate QUALITY_RISK and SECURITY_RISK gates
+
+# 5. Detect run command
 # Check package.json -> "scripts.dev" or "scripts.start"
 # Check Makefile -> default target
 # Check docker-compose.yml -> services
@@ -59,13 +63,19 @@ For GOAL, CONSTRAINTS, BACKGROUND - review the full conversation history. The us
 
 ---
 
-## Phase 1: Launch 5 Agents
+## Phase 1: Launch Core Agents + Conditional Oracles
 
-Launch ALL 5 in a single turn. Every agent uses \`run_in_background=false\`. No sequential launches. No waiting between them.
+Launch all required agents in a single turn. Every launched agent uses \`run_in_background=false\`. No sequential launches. No waiting between them.
 
-**Oracle agents receive everything in the prompt** (they cannot read files or run commands). Include DIFF + FILE_CONTENTS + all context directly in the prompt text.
+**Oracle agents receive a compact evidence packet** (they cannot read files or run commands). Include ORACLE_PACKET, not full file dumps. Paste full files only when the full file is the evidence.
 
 **unspecified-high agents are autonomous** - they can read files, run commands, and use tools. Give them goals and pointers, not raw content dumps.
+
+**Always launch:** Agent 1 Goal Verifier, Agent 2 QA Executor, Agent 5 Context Miner.
+
+**Launch Agent 3 Code Reviewer only when QUALITY_RISK is TRUE.** If skipped, record: N/A - routine or local change with clear existing pattern.
+
+**Launch Agent 4 Security Auditor only when SECURITY_RISK is TRUE.** If skipped, record: N/A - no security-sensitive surfaces touched.
 
 ---
 
@@ -98,9 +108,9 @@ task(
 {CHANGED_FILES - list of modified file paths}
 </changed_files>
 
-<file_contents>
-{FILE_CONTENTS - full content of every changed file, clearly delimited per file}
-</file_contents>
+<oracle_packet>
+{ORACLE_PACKET - compact excerpts, relevant hunks, validation evidence, and constraints. No full file dumps unless essential.}
+</oracle_packet>
 
 <diff>
 {DIFF - the actual git diff}
@@ -258,9 +268,11 @@ OUTPUT FORMAT:
 
 ---
 
-### Agent 3: Code Quality Review (Oracle) - MAIN
+### Agent 3: Code Quality Review (Oracle) - CONDITIONAL
 
 This agent answers: "Is the code well-written, maintainable, and consistent with the codebase?"
+
+Launch only when QUALITY_RISK is TRUE: multi-file or cross-module changes, new/changed public API, architecture/layering impact, complex error handling, broad refactor, unfamiliar pattern, or low confidence after local review. Otherwise skip and mark N/A.
 
 \`\`\`
 task(
@@ -275,9 +287,9 @@ task(
 {CHANGED_FILES}
 </changed_files>
 
-<file_contents>
-{FILE_CONTENTS - full content of changed files AND neighboring files that show existing patterns}
-</file_contents>
+<oracle_packet>
+{ORACLE_PACKET - compact excerpts from changed files plus neighboring patterns that matter. No full file dumps unless essential.}
+</oracle_packet>
 
 <diff>
 {DIFF}
@@ -333,11 +345,13 @@ OUTPUT FORMAT:
 
 ---
 
-### Agent 4: Security Review (Oracle) - SUB
+### Agent 4: Security Review (Oracle) - CONDITIONAL
 
 This agent answers: "Are there security vulnerabilities in these changes?"
 
 This is supplementary - it focuses exclusively on security. It does NOT comment on code style, architecture, or functionality unless those directly create a security risk.
+
+Launch only when SECURITY_RISK is TRUE: auth/authz, secrets, crypto, networking, shell execution, file/path operations, env vars, serialization, dependency/lockfile changes, permissions, public APIs, or untrusted input. Otherwise skip and mark N/A.
 
 \`\`\`
 task(
@@ -352,9 +366,9 @@ task(
 {CHANGED_FILES}
 </changed_files>
 
-<file_contents>
-{FILE_CONTENTS - full content of changed files}
-</file_contents>
+<oracle_packet>
+{ORACLE_PACKET - compact security-relevant excerpts, changed surfaces, trust boundaries, validation evidence. No full file dumps unless essential.}
+</oracle_packet>
 
 <diff>
 {DIFF}
@@ -484,7 +498,7 @@ OUTPUT FORMAT:
 
 ## Phase 2: Wait & Collect
 
-After launching all 5 agents in one turn, **end your response**. Wait for system notifications as each agent completes.
+After launching all required agents in one turn, **end your response**. Wait for system notifications as each agent completes.
 
 As each completes, collect via \`background_output(task_id="...")\`. Store each verdict:
 
@@ -492,11 +506,11 @@ As each completes, collect via \`background_output(task_id="...")\`. Store each 
 |-------|---------|-------|
 | 1. Goal Verification | pending | - |
 | 2. QA Execution | pending | - |
-| 3. Code Quality | pending | - |
-| 4. Security | pending | - |
+| 3. Code Quality | pending or N/A | Launch only if QUALITY_RISK is TRUE |
+| 4. Security | pending or N/A | Launch only if SECURITY_RISK is TRUE |
 | 5. Context Mining | pending | - |
 
-Do NOT deliver the final report until ALL 5 have completed.
+Do NOT deliver the final report until every launched agent has completed. Skipped optional agents stay N/A and do not block completion.
 
 ---
 
@@ -504,8 +518,8 @@ Do NOT deliver the final report until ALL 5 have completed.
 
 <verdict_logic>
 
-ALL 5 agents returned PASS → **REVIEW PASSED**
-ANY agent returned FAIL → **REVIEW FAILED - criteria not met**
+ALL launched required agents returned PASS and optional skipped agents are N/A → **REVIEW PASSED**
+ANY launched agent returned FAIL → **REVIEW FAILED - criteria not met**
 
 </verdict_logic>
 
@@ -520,8 +534,8 @@ Compile the final report in this format:
 |---|------------|------------|---------|------------|
 | 1 | Goal & Constraint Verification | Oracle | PASS/FAIL | HIGH/MED/LOW |
 | 2 | QA Execution | unspecified-high | PASS/FAIL | HIGH/MED/LOW |
-| 3 | Code Quality | Oracle | PASS/FAIL | HIGH/MED/LOW |
-| 4 | Security (supplementary) | Oracle | PASS/FAIL | Severity |
+| 3 | Code Quality | Oracle | PASS/FAIL/N/A | HIGH/MED/LOW or skipped reason |
+| 4 | Security (supplementary) | Oracle | PASS/FAIL/N/A | Severity or skipped reason |
 | 5 | Context Mining | unspecified-high | PASS/FAIL | HIGH/MED/LOW |
 
 ## Blocking Issues

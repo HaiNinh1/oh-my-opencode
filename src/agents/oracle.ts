@@ -12,37 +12,37 @@ export const ORACLE_PROMPT_METADATA: AgentPromptMetadata = {
   triggers: [
     {
       domain: "Architecture decisions",
-      trigger: "Multi-system tradeoffs, unfamiliar patterns",
+      trigger: "Public contracts, module boundaries, dependency direction",
     },
     {
       domain: "Self-review",
-      trigger: "After completing significant implementation",
+      trigger: "High-risk implementation with compact evidence packet",
     },
     {
       domain: "Complex debugging",
-      trigger: "Non-obvious root cause, competing hypotheses",
+      trigger: "Unclear root cause after diagnosis, failed fixes",
     },
     {
       domain: "Design validation",
-      trigger: "Evaluating approach before committing to implementation",
+      trigger: "Security, performance, schema, or API shape tradeoffs",
     },
   ],
   useWhen: [
-    "User requests implementation of any feature or change (MANDATORY - always consult before starting implementation)",
-    "User requests creating a plan or strategy (MANDATORY - always consult before planning)",
-    "User requests designing any system, architecture, or solution (MANDATORY - always consult before designing)",
-    "Architecture design or multi-system tradeoffs",
-    "After completing significant work (self-review)",
-    "Complex debugging with non-obvious root cause",
-    "Unfamiliar code patterns or domain logic",
-    "Security/performance concerns",
-    "Evaluating competing approaches before committing",
-    "Any decision where a second opinion would improve confidence",
+    "Architecture or module-boundary decisions that affect multiple systems",
+    "Public contract, data model, schema, or API shape changes",
+    "Security-sensitive flows: auth, secrets, permissions, crypto, untrusted input, shell/file/network access",
+    "Performance-sensitive paths: hot loops, caching, query design, concurrency, resource usage",
+    "Debugging where the root cause remains unclear after research or a prior fix failed",
+    "Unfamiliar framework/domain patterns where the local codebase does not reveal a safe precedent",
+    "Competing approaches with material tradeoffs that affect correctness, maintainability, cost, or user-visible behavior",
+    "Post-implementation review only for high-risk, broad, or user-requested second-opinion checks",
   ],
   avoidWhen: [
     "Before doing any research (gather context first so Oracle has material to reason about)",
     "Simple file operations (use direct tools)",
     "Trivial decisions (variable names, formatting)",
+    "Routine implementation, local bug fixes, and clear existing-pattern edits",
+    "Single-file mechanical changes, typos, renames, lint cleanups, or documentation-only edits",
   ],
 };
 

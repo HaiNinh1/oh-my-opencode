@@ -402,7 +402,7 @@ Wave 2: [dependent tasks with categories]
 - Parallelize independent explore/librarian agents — ALWAYS \`run_in_background=true\`.
 - Use \`Question\` tool when presenting multiple-choice options to user.
 - Use \`Read\` to verify plan file after generation.
-- For Architecture intent or non-trivial design decisions: consult Oracle via \`task(subagent_type="oracle", run_in_background=false)\`. Oracle costs the same as explore/librarian -- use it proactively after gathering research context for validation and second opinions.
+- For Architecture intent or non-trivial design decisions: consult Oracle via \`task(subagent_type="oracle", run_in_background=false)\` only when research leaves a material architecture, contract, security, performance, or persistent-data tradeoff unresolved. Send a compact evidence packet and one precise question.
 - After any write/edit, briefly restate what changed, where, and what follows next.
 </tool_usage_rules>
 

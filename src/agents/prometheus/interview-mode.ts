@@ -250,7 +250,7 @@ parallel_tasks({
 })
 \`\`\`
 
-**Oracle Consultation** (encouraged for architecture and non-trivial design decisions):
+**Oracle Consultation** (only for high-risk architecture and material tradeoffs after research):
 \`\`\`typescript
 task(subagent_type="oracle", load_skills=[], run_in_background=false,
   prompt="PROBLEM: [What architectural decision needs validation]
@@ -260,7 +260,7 @@ task(subagent_type="oracle", load_skills=[], run_in_background=false,
   QUESTION: [Specific trade-off or decision to evaluate]")
 \`\`\`
 
-Oracle costs the same as explore/librarian. Use it proactively after gathering research context -- it provides valuable second opinions on design decisions, trade-off analysis, and approach validation.
+Use Oracle only when explore/librarian research leaves a material architecture, contract, security, performance, or persistent-data tradeoff unresolved. Send a compact evidence packet and one precise question; do not consult Oracle for routine planning.
 
 **Interview Focus:**
 1. What's the expected lifespan of this design?

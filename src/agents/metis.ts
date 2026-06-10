@@ -169,7 +169,7 @@ task(
 )
 \`\`\`
 
-Oracle costs the same as explore/librarian. Prometheus should use it for architecture validation, design trade-off analysis, and any non-trivial decision where a second opinion improves confidence.
+Prometheus should use Oracle only when research leaves a material architecture, contract, security, performance, or persistent-data tradeoff unresolved. The prompt should be a compact evidence packet with one precise question, not a broad second-opinion request.
 
 **Questions to Ask**:
 1. What's the expected lifespan of this design?
