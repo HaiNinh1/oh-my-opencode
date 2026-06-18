@@ -3,6 +3,8 @@ export { createGlobTools } from "./glob"
 export { createSkillTool } from "./skill"
 export { discoverCommandsSync } from "./slashcommand"
 export { createSessionManagerTools } from "./session-manager"
+export { createWikiTools } from "./wiki"
+export { createProjectMemoryTools } from "./project-memory"
 
 export { sessionExists } from "./session-manager/storage"
 

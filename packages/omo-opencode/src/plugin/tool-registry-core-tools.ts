@@ -130,6 +130,8 @@ export function createCoreTools(args: {
     ...factories.createGrepTools(ctx),
     ...factories.createGlobTools(ctx),
     ...factories.createSessionManagerTools(ctx),
+    ...factories.createWikiTools(ctx),
+    ...factories.createProjectMemoryTools(ctx),
     ...backgroundTools,
     call_omo_agent: callOmoAgent,
   }

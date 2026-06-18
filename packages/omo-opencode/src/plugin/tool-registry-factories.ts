@@ -23,6 +23,7 @@ import {
   createLookAt,
   createMonitorTools,
   createParallelTasksTool,
+  createProjectMemoryTools,
   createSessionManagerTools,
   createSkillMcpTool,
   createSkillTool,
@@ -30,6 +31,7 @@ import {
   createTaskGetTool,
   createTaskList,
   createTaskUpdateTool,
+  createWikiTools,
   discoverCommandsSync,
   interactive_bash,
 } from "../tools"
@@ -44,6 +46,8 @@ export type ToolRegistryFactories = {
   createGrepTools: typeof createGrepTools
   createGlobTools: typeof createGlobTools
   createSessionManagerTools: typeof createSessionManagerTools
+  createWikiTools: typeof createWikiTools
+  createProjectMemoryTools: typeof createProjectMemoryTools
   createDelegateTask: typeof createDelegateTask
   createParallelTasksTool: typeof createParallelTasksTool
   discoverCommandsSync: typeof discoverCommandsSync
@@ -77,6 +81,8 @@ export const defaultToolRegistryFactories: ToolRegistryFactories = {
   createGrepTools,
   createGlobTools,
   createSessionManagerTools,
+  createWikiTools,
+  createProjectMemoryTools,
   createDelegateTask,
   createParallelTasksTool,
   discoverCommandsSync,
