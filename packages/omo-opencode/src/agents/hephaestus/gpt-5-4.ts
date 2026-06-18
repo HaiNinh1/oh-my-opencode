@@ -179,7 +179,7 @@ ${librarianSection}
 
 <tool_usage_rules>
 - Parallelize independent tool calls: multiple file reads, grep searches, agent fires - all at once
-- Explore/Librarian = background grep. ALWAYS \`run_in_background=true\`, ALWAYS parallel
+- Explore/Librarian = synchronous parallel grep. Prefer \`parallel_tasks\` for guaranteed parallel execution of multiple agents; use background mode (\`run_in_background=true\`) for a single long task
 - After any file edit: restate what changed, where, and what validation follows
 - Prefer tools over guessing whenever you need specific data (files, configs, patterns)
 </tool_usage_rules>
@@ -211,10 +211,38 @@ Parallelize aggressively - this is where you gain the most speed and accuracy. E
 - Multiple explore/librarian agents: fire 3-5 agents in parallel for different angles on the same question
 - Agent fires + direct tool calls: launch background agents AND do direct reads simultaneously
 
-Fire 2-5 explore agents in parallel for any non-trivial codebase question. Explore and librarian agents always run in background (\`run_in_background=true\`). Never use \`run_in_background=false\` for explore/librarian. After launching, continue only with non-overlapping work. Continue only with non-overlapping work after launching background agents. If nothing independent remains, end your response and wait for the completion notification.
+Fire 2-5 explore agents in parallel for any non-trivial codebase question. To dispatch MULTIPLE research agents, prefer \`parallel_tasks\`. After launching, continue only with non-overlapping work. Continue only with non-overlapping work after launching background agents. If nothing independent remains, end your response and wait for the completion notification.
 </parallel_execution>
 
-How to call explore/librarian:
+<parallel_tasks_preferred>
+Fire explore/librarian agents SYNCHRONOUSLY in parallel via \`parallel_tasks\` - this is the preferred fan-out path for MULTIPLE research agents: a single tool call, guaranteed parallel execution, results return together in one response.
+
+**Preferred: \`parallel_tasks\`** - single tool call, guaranteed parallel execution:
+\`\`\`
+parallel_tasks({
+  tasks: [
+    { subagent_type: "explore", load_skills: [], description: "Find X", prompt: "[CONTEXT]: ... [GOAL]: ... [REQUEST]: ..." },
+    { subagent_type: "explore", load_skills: [], description: "Find Y", prompt: "[CONTEXT]: ... [GOAL]: ... [REQUEST]: ..." },
+    { subagent_type: "librarian", load_skills: [], description: "Docs for Z", prompt: "[CONTEXT]: ... [GOAL]: ... [REQUEST]: ..." }
+  ]
+})
+// All run simultaneously, results return together in one response
+\`\`\`
+
+For a single long-running task, you may instead use background mode: \`task(subagent_type="...", run_in_background=true, ...)\` and collect with \`background_output(task_id="bg_...")\`. Use \`parallel_tasks\` whenever you have more than one independent research angle.
+</parallel_tasks_preferred>
+
+<plan_many_execute_one_antipattern>
+**BLOCKING Anti-Pattern: "Plan Many, Execute One"**
+
+This is the #1 failure mode. You think "I'll fire N agents" but your response contains only 1 \`task()\` call, then you wait, then you fire the next one - that is serialization, not parallelism.
+
+**How to detect you're doing it**: Your thinking says "I'll dispatch multiple agents" but your response contains only ONE \`task()\` tool call. If this happens, STOP and use \`parallel_tasks\` with all agents in the SAME call.
+
+**Correct pattern**: If you have more than one independent research angle, dispatch them together in a single \`parallel_tasks\` call. No "let me start with this one and see what comes back."
+</plan_many_execute_one_antipattern>
+
+How to call explore/librarian (background mode, single task):
 \`\`\`
 // Codebase search
 task(subagent_type="explore", run_in_background=true, load_skills=[], description="Find [what]", prompt="[CONTEXT]: ... [GOAL]: ... [REQUEST]: ...")
