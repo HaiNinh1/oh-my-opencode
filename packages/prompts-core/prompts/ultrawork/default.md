@@ -178,7 +178,10 @@ task(category="quick", load_skills=["git-master"], run_in_background=true)
   - GOOD pair (test-first, ordered): `module.test: Write FAILING case invalid-email→ValidationError for S2 - verify by RED with assertion msg` → `src/module: Implement validateEmail() for S2 - verify by module.test GREEN + curl 400 body`
   - BAD: "Implement feature" / "Fix bug" / "Add tests later" / production code before its failing test → rewrite.
 - **PARALLEL**: Fire independent agent calls simultaneously via task(run_in_background=true) — NEVER wait sequentially. But NEVER parallelise RED and GREEN of the same scenario.
-- **BACKGROUND FIRST**: Use task for exploration/research agents (10+ concurrent if needed).
+- **PARALLEL WAVES (`parallel_tasks`)**: When the plan's wave has N INDEPENDENT implementation subtasks that touch DISJOINT files, dispatch all N TOGETHER in a SINGLE `parallel_tasks` call — each item routed by `category="..."` (domain executor) or an executor `subagent_type` — so they run concurrently and their results return together. This is PREFERRED over firing the same subtasks as separate sequential or background `task()` calls. Each item provides EITHER `category` OR `subagent_type`; research items still route via `explore`/`librarian`.
+  - **HARD SAFETY RULE**: NEVER parallelise edits to the SAME file or region — disjoint-file work only. Dependent tasks (B needs A's output) stay SEQUENTIAL across waves.
+  - **"Plan Many, Execute One" is a FAILURE**: if the wave has N independent tasks, fire all N in one `parallel_tasks` call — do NOT emit one and wait for it before the next.
+- **BACKGROUND FIRST**: Use task(run_in_background=true) for long-running SINGLE tasks and for exploration/research agents (10+ concurrent if needed).
 - **VERIFY**: Re-read request after completion. Check every scenario PASS with both artifacts captured.
 - **DELEGATE**: Don't do everything yourself — orchestrate specialized agents for their strengths.
 

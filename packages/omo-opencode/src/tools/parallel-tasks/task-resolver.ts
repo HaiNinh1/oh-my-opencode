@@ -8,6 +8,7 @@ import type {
 import {
   resolveSkillContent,
   resolveSubagentExecution,
+  resolveCategoryExecution,
 } from "../delegate-task/executor"
 import { buildSystemContent } from "../delegate-task/prompt-builder"
 import { mergeCategories } from "../../shared/merge-categories"
@@ -46,12 +47,27 @@ export async function resolveAllTasks(
   const availableCategories: AvailableCategory[] = options.availableCategories ?? []
   const availableSkills: AvailableSkill[] = options.availableSkills ?? []
 
+  // Mirror delegate-task/tools.ts: resolve inherited + system-default models once
+  // so category resolution can route model tiers like the `task` tool does.
+  let systemDefaultModel: string | undefined
+  try {
+    const openCodeConfig = await options.client.config.get()
+    systemDefaultModel = (openCodeConfig as { data?: { model?: string } })?.data?.model
+  } catch (error) {
+    if (!(error instanceof Error)) throw error
+    systemDefaultModel = undefined
+  }
+
+  const inheritedModel = parentContext.model
+    ? `${parentContext.model.providerID}/${parentContext.model.modelID}`
+    : undefined
+
   return Promise.all(
     items.map(async (item, index) => {
       try {
         return await resolveSingleTask(
           item, index, options, parentContext, categoryExamples,
-          availableCategories, availableSkills,
+          availableCategories, availableSkills, inheritedModel, systemDefaultModel,
         )
       } catch (error) {
         return { index, error: error instanceof Error ? error.message : String(error) }
@@ -68,9 +84,15 @@ async function resolveSingleTask(
   categoryExamples: string,
   availableCategories: AvailableCategory[],
   availableSkills: AvailableSkill[],
+  inheritedModel: string | undefined,
+  systemDefaultModel: string | undefined,
 ): Promise<TaskResolutionResult> {
-  if (!item.subagent_type) {
-    return { index, error: "'subagent_type' is required (e.g., 'explore' or 'librarian')" }
+  // Mirror delegate-task: category and subagent_type are mutually exclusive, exactly one required.
+  if (item.category && item.subagent_type) {
+    return { index, error: "Provide either 'category' or 'subagent_type', not both." }
+  }
+  if (!item.category && !item.subagent_type) {
+    return { index, error: "Must provide either 'category' or 'subagent_type'." }
   }
 
   const args: DelegateTaskArgs = {
@@ -78,6 +100,7 @@ async function resolveSingleTask(
     prompt: item.prompt,
     load_skills: item.load_skills,
     subagent_type: item.subagent_type,
+    category: item.category,
     run_in_background: false,
   }
 
@@ -97,17 +120,40 @@ async function resolveSingleTask(
     return { index, error: skillError }
   }
 
-  const resolution = await resolveSubagentExecution(args, options, parentContext.agent, categoryExamples)
-  if (resolution.error) {
-    return { index, error: resolution.error }
+  let agentToUse: string
+  let categoryModel: { providerID: string; modelID: string; variant?: string } | undefined
+  let categoryPromptAppend: string | undefined
+  let maxPromptTokens: number | undefined
+  let modelInfo: import("../../features/task-toast-manager/types").ModelFallbackInfo | undefined
+  let fallbackChain: import("../../shared/model-requirements").FallbackEntry[] | undefined
+
+  if (item.category) {
+    // Category path: mirror delegate-task/tools.ts category resolution.
+    const resolution = await resolveCategoryExecution(args, options, inheritedModel, systemDefaultModel)
+    if (resolution.error) {
+      return { index, error: resolution.error }
+    }
+    agentToUse = resolution.agentToUse
+    categoryModel = resolution.categoryModel
+    categoryPromptAppend = resolution.categoryPromptAppend
+    maxPromptTokens = resolution.maxPromptTokens
+    modelInfo = resolution.modelInfo
+    fallbackChain = resolution.fallbackChain
+  } else {
+    const resolution = await resolveSubagentExecution(args, options, parentContext.agent, categoryExamples)
+    if (resolution.error) {
+      return { index, error: resolution.error }
+    }
+    agentToUse = resolution.agentToUse
+    categoryModel = resolution.categoryModel
+    fallbackChain = resolution.fallbackChain
   }
-  const agentToUse = resolution.agentToUse
-  const categoryModel = resolution.categoryModel
-  const fallbackChain = resolution.fallbackChain
 
   const systemContent = buildSystemContent({
     skillContent,
     skillContents,
+    categoryPromptAppend,
+    maxPromptTokens,
     agentName: agentToUse,
     model: categoryModel,
     availableCategories,
@@ -121,6 +167,7 @@ async function resolveSingleTask(
     agentToUse,
     categoryModel,
     systemContent,
+    modelInfo,
     fallbackChain,
   }
 }

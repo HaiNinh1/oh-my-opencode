@@ -4,7 +4,10 @@ export interface ParallelTaskItem {
   description: string
   prompt: string
   load_skills: string[]
-  subagent_type: string
+  /** Provide EITHER category OR subagent_type (mutually exclusive, exactly one required). */
+  subagent_type?: string
+  /** Provide EITHER category OR subagent_type (mutually exclusive, exactly one required). */
+  category?: string
 }
 
 export interface ParallelTasksArgs {

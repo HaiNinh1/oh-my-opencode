@@ -191,7 +191,10 @@ task(subagent_type="plan", load_skills=[], run_in_background=false, prompt="<gat
 ## EXECUTION RULES
 - **TODO**: Track EVERY step. Mark complete IMMEDIATELY after each.
 - **PARALLEL**: Fire independent agent calls simultaneously via task(run_in_background=true) - NEVER wait sequentially.
-- **BACKGROUND FIRST**: Use task for exploration/research agents (10+ concurrent if needed).
+- **PARALLEL WAVES (`parallel_tasks`)**: When the plan's wave has N INDEPENDENT implementation subtasks touching DISJOINT files, dispatch all N TOGETHER in a SINGLE `parallel_tasks` call — each item routed by `category="..."` (domain executor) or an executor `subagent_type` — so they run concurrently and results return together. PREFER this over firing the same subtasks as separate sequential or background `task()` calls. Each item provides EITHER `category` OR `subagent_type`; research items still route via `explore`/`librarian`.
+  - **HARD SAFETY RULE**: NEVER parallelise edits to the SAME file or region — disjoint-file work only. Dependent tasks (B needs A's output) stay SEQUENTIAL across waves.
+  - **"Plan Many, Execute One" is a FAILURE**: if the wave has N independent tasks, fire all N in one `parallel_tasks` call — do NOT emit one and wait. Parallelism does NOT weaken the TDD/manual-QA/verification gates below.
+- **BACKGROUND FIRST**: Use task(run_in_background=true) for long-running SINGLE tasks and for exploration/research agents (10+ concurrent if needed).
 - **VERIFY**: Re-read request after completion. Check ALL requirements met before reporting done.
 - **DELEGATE**: Don't do everything yourself - orchestrate specialized agents for their strengths.
 

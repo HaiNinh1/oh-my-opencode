@@ -105,6 +105,9 @@ deep_context = background_output(task_id=...)
 **Execute:**
 - Surgical, minimal changes matching existing patterns
 - If delegating: provide exhaustive context and success criteria
+- **Parallel waves (`parallel_tasks`)**: When the plan's wave has N INDEPENDENT implementation subtasks touching DISJOINT files, dispatch all N TOGETHER in a SINGLE `parallel_tasks` call — each item routed by `category="..."` (domain executor) or an executor `subagent_type` — so they run concurrently and results return together. Prefer this over firing the same subtasks as separate sequential or background `task()` calls. Each item provides EITHER `category` OR `subagent_type`; research items still route via `explore`/`librarian`, and `task(run_in_background=true)` stays the tool for long-running SINGLE tasks.
+- **Hard safety rule**: NEVER parallelise edits to the SAME file or region — disjoint-file work only. Dependent tasks (B needs A's output) stay SEQUENTIAL across waves.
+- **"Plan many, execute one" is a failure**: if a wave has N independent tasks, fire all N in one `parallel_tasks` call — do not emit one and wait. Parallelism never weakens the per-scenario TDD/QA verification below.
 
 **Verify (per-scenario, not just "at the end"):**
 - RED→GREEN proof captured (test id + assertion msg in both states)
