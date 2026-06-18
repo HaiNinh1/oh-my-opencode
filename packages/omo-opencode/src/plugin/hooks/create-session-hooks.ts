@@ -20,6 +20,7 @@ import {
   createDelegateTaskRetryHook,
   createTaskResumeInfoHook,
   createStartWorkHook,
+  createExecutePlanHook,
   createPrometheusMdOnlyHook,
   createSisyphusJuniorNotepadHook,
   createNoSisyphusGptHook,
@@ -56,6 +57,7 @@ export type SessionHooks = {
   editErrorRecovery: ReturnType<typeof createEditErrorRecoveryHook> | null
   delegateTaskRetry: ReturnType<typeof createDelegateTaskRetryHook> | null
   startWork: ReturnType<typeof createStartWorkHook> | null
+  executePlan: ReturnType<typeof createExecutePlanHook> | null
   prometheusMdOnly: ReturnType<typeof createPrometheusMdOnlyHook> | null
   sisyphusJuniorNotepad: ReturnType<typeof createSisyphusJuniorNotepadHook> | null
   noSisyphusGpt: ReturnType<typeof createNoSisyphusGptHook> | null
@@ -186,6 +188,10 @@ export function createSessionHooks(args: {
     ? safeHook("start-work", () => createStartWorkHook(ctx))
     : null
 
+  const executePlan = isHookEnabled("execute-plan")
+    ? safeHook("execute-plan", () => createExecutePlanHook(ctx))
+    : null
+
   const prometheusMdOnly = isHookEnabled("prometheus-md-only")
     ? safeHook("prometheus-md-only", () => createPrometheusMdOnlyHook(ctx))
     : null
@@ -250,6 +256,7 @@ export function createSessionHooks(args: {
     editErrorRecovery,
     delegateTaskRetry,
     startWork,
+    executePlan,
     prometheusMdOnly,
     sisyphusJuniorNotepad,
     noSisyphusGpt,

@@ -78,6 +78,21 @@ export function createCommandExecuteBeforeHandler(args: {
         })
       }
     }
+
+    if (
+      hooks.executePlan
+      && normalizedCommand === "execute-plan"
+      && hasPartsOutput(output)
+    ) {
+      await hooks.executePlan["command.execute.before"]?.(input, output)
+      if (hooks.stopContinuationGuard?.isStopped(sessionID)) {
+        hooks.stopContinuationGuard.clear(sessionID)
+        log("[stop-continuation] Stop state cleared by native command", {
+          sessionID,
+          command: normalizedCommand,
+        })
+      }
+    }
   }
 }
 

@@ -70,5 +70,6 @@ export type ChatMessageHooks = {
   noHephaestusNonGpt?: ChatMessageHook | null
   hephaestusAgentsMdInjector?: ChatMessageHook | null
   startWork?: ChatMessageHook | null
+  executePlan?: ChatMessageHook | null
   ralphLoop?: RalphLoopHook | null
 }

@@ -5,6 +5,7 @@ import { RALPH_LOOP_TEMPLATE, ULW_LOOP_TEMPLATE, CANCEL_RALPH_TEMPLATE } from ".
 import { STOP_CONTINUATION_TEMPLATE } from "./templates/stop-continuation"
 import { REFACTOR_TEMPLATE, REFACTOR_TEAM_MODE_ADDENDUM } from "./templates/refactor"
 import { START_WORK_TEMPLATE } from "./templates/start-work"
+import { EXECUTE_PLAN_TEMPLATE } from "./templates/execute-plan"
 import { HANDOFF_TEMPLATE } from "./templates/handoff"
 import { REMOVE_AI_SLOPS_TEMPLATE, REMOVE_AI_SLOPS_TEAM_MODE_ADDENDUM } from "./templates/remove-ai-slops"
 import { HYPERPLAN_TEMPLATE } from "./templates/hyperplan"
@@ -79,6 +80,23 @@ ${refactorContent}
       agent: resolveStartWorkAgent(options),
       template: `<command-instruction>
 ${START_WORK_TEMPLATE}
+</command-instruction>
+
+<session-context>
+Session ID: $SESSION_ID
+Timestamp: $TIMESTAMP
+</session-context>
+
+<user-request>
+$ARGUMENTS
+</user-request>`,
+      argumentHint: "[plan-name]",
+    },
+    "execute-plan": {
+      description: "(builtin) Execute a saved plan directly and sequentially with Heracles (no delegation)",
+      agent: "heracles",
+      template: `<command-instruction>
+${EXECUTE_PLAN_TEMPLATE}
 </command-instruction>
 
 <session-context>

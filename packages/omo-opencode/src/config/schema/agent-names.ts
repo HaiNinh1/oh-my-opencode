@@ -2,6 +2,7 @@ import { z } from "zod"
 
 export const BuiltinAgentNameSchema = z.enum([
   "sisyphus",
+  "heracles",
   "hephaestus",
   "prometheus",
   "oracle",
@@ -35,6 +36,7 @@ export const OverridableAgentNameSchema = z.enum([
   "build",
   "plan",
   "sisyphus",
+  "heracles",
   "hephaestus",
   "sisyphus-junior",
   "OpenCode-Builder",

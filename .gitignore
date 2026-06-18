@@ -60,3 +60,5 @@ plans/
 !.claude/skills
 !.claude/commands
 !.claude/settings.json
+
+.omc/
