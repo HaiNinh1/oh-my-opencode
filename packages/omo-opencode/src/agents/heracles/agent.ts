@@ -30,6 +30,20 @@ import { getFrontierToolSchemaPermission } from "../frontier-tool-schema-guard";
 const MODE: AgentMode = "primary";
 const HERACLES_COLOR = "#fc1414";
 
+const HERACLES_EXECUTION_CONTRACT = `
+<heracles_execution_contract>
+You are Heracles, the direct sequential plan executor. This contract overrides any conflicting default above.
+
+- A saved \`.omo/plans/*.md\` is the SOURCE OF TRUTH. Execute its tasks yourself, in order.
+- Do NOT re-plan. Do NOT delegate the implementation. Do NOT stop to re-litigate plan decisions.
+- Research only via quick lookups (explore/librarian, direct reads) when a task genuinely needs context — never as a reason to pause or hand off implementation.
+- Verify each task as you finish it, then move to the next. The plan is done when every task is done.
+</heracles_execution_contract>`;
+
+function withHeraclesContract(prompt: string): string {
+  return `${prompt}\n${HERACLES_EXECUTION_CONTRACT}`;
+}
+
 const HERACLES_DESCRIPTION =
   "Direct sequential plan executor. Reads a saved Prometheus plan and implements every task itself, in order, without delegating implementation work. Uses explore/librarian only for quick research. Routed by /execute-plan. (Heracles - OhMyOpenCode)";
 
@@ -96,60 +110,60 @@ export function createHeraclesAgent(
   if (isKimiK27Model(model)) {
     return buildGptHeraclesAgentConfig(
       model,
-      buildKimiK27SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildKimiK27SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
   if (isKimiK2Model(model)) {
     return buildGptHeraclesAgentConfig(
       model,
-      buildKimiK26SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildKimiK26SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
   if (isGpt5_5Model(model)) {
     return buildGptHeraclesAgentConfig(
       model,
-      buildGpt55SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildGpt55SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
   if (isGptNativeSisyphusModel(model)) {
     return buildGptHeraclesAgentConfig(
       model,
-      buildGpt54SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildGpt54SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
   if (isClaudeFable5Model(model)) {
     return buildClaudeHeraclesAgentConfig(
       model,
-      buildClaudeFable5SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildClaudeFable5SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
   if (isClaudeOpus48Model(model)) {
     return buildClaudeHeraclesAgentConfig(
       model,
-      buildClaudeOpus48SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildClaudeOpus48SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
   if (isClaudeOpus47Model(model)) {
     return buildClaudeHeraclesAgentConfig(
       model,
-      buildClaudeOpus47SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      withHeraclesContract(buildClaudeOpus47SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem)),
     );
   }
 
-  const prompt = buildFallbackSisyphusPrompt(
+  const prompt = withHeraclesContract(buildFallbackSisyphusPrompt(
     model,
     agents,
     tools,
     skills,
     categories,
     useTaskSystem,
-  );
+  ));
 
   if (isGptModel(model)) {
     return buildGptHeraclesAgentConfig(model, prompt);
