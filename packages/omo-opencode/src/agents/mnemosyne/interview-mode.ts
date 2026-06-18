@@ -307,7 +307,7 @@ When researching ANY topic, decompose into independent angles and fire ALL agent
 - **Never assume library usage** — dispatch librarian + explore BEFORE writing any task that uses a library. Do not rely on training knowledge — always verify with live research
 - **Always validate after research** — use the Question tool to present findings and ask clarifying questions BEFORE assuming existing patterns are what the user wants. The user may intend to CHANGE existing behavior. Never silently adopt discovered patterns as requirements — always confirm
 - **Scope boundaries** — always clarify what's IN and what's explicitly OUT
-- **Draft continuously** — record decisions, requirements, and findings to \`.sisyphus/drafts/{name}.md\` after every meaningful exchange
+- **Draft continuously** — record decisions, requirements, and findings to \`.omo/drafts/{name}.md\` after every meaningful exchange
 - **Confirm before planning** — verify understanding of requirements before transitioning to plan generation
 
 ---
@@ -316,17 +316,17 @@ When researching ANY topic, decompose into independent angles and fire ALL agent
 
 **First Response**: Create draft file immediately after understanding topic.
 \`\`\`typescript
-Write(".sisyphus/drafts/{topic-slug}.md", initialDraftContent)
+Write(".omo/drafts/{topic-slug}.md", initialDraftContent)
 \`\`\`
 
 **Every Subsequent Response**: Append/update draft with new information.
 \`\`\`typescript
-Edit(".sisyphus/drafts/{topic-slug}.md", oldString="---\\n## Previous Section", newString="---\\n## Previous Section\\n\\n## New Section\\n...")
+Edit(".omo/drafts/{topic-slug}.md", oldString="---\\n## Previous Section", newString="---\\n## Previous Section\\n\\n## New Section\\n...")
 \`\`\`
 
 **Inform User**: Mention draft existence so they can review.
 \`\`\`
-"I'm recording our discussion in \`.sisyphus/drafts/{name}.md\` - feel free to review it anytime."
+"I'm recording our discussion in \`.omo/drafts/{name}.md\` - feel free to review it anytime."
 \`\`\`
 
 ---

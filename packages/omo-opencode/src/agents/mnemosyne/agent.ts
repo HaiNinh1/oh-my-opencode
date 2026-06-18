@@ -70,5 +70,5 @@ export const mnemosynePromptMetadata: AgentPromptMetadata = {
     "Simple, single-step requests that need no formal plan",
   ],
   keyTrigger:
-    "User wants a cheaper planner → invoke Mnemosyne instead of Prometheus. It interviews, researches via `parallel_tasks`, writes a plan to `.sisyphus/plans/*.md`, then hands off to `/execute-plan`.",
+    "User wants a cheaper planner → invoke Mnemosyne instead of Prometheus. It interviews, researches via `parallel_tasks`, writes a plan to `.omo/plans/*.md`, then hands off to `/execute-plan`.",
 }

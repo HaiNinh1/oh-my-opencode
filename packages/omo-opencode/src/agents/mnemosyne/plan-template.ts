@@ -7,7 +7,7 @@
 
 export const MNEMOSYNE_PLAN_TEMPLATE = `## Plan Structure
 
-Generate plan to: \`.sisyphus/plans/{name}.md\`
+Generate plan to: \`.omo/plans/{name}.md\`
 
 ### Required Sections (ALL plans)
 
@@ -28,7 +28,7 @@ Each TODO must include:
 - **Must NOT do**: Specific exclusions from guardrails
 - **References**: Exhaustive file paths with line ranges — the executor has NO interview context
 - **Acceptance Criteria**: Every criterion verifiable by command or tool, zero human intervention
-- **QA Scenarios**: Tool (Playwright/Bash/tmux), steps, expected result, evidence path (\`.sisyphus/evidence/task-{N}-{slug}.{ext}\`)
+- **QA Scenarios**: Tool (Playwright/Bash/tmux), steps, expected result, evidence path (\`.omo/evidence/task-{N}-{slug}.{ext}\`)
 - **Commit**: YES/NO (groups with N), message format: \`type(scope): desc\`
 
 ### Final Verification Wave (MANDATORY — after ALL tasks)
@@ -38,7 +38,7 @@ Each TODO must include:
 > Rejection → fix → re-run reviewer → present again → wait for okay.
 
 - [ ] F1. **Plan Compliance Audit** — \`oracle\`
-  Verify every must-have exists, every must-NOT-have is absent. Check evidence files in .sisyphus/evidence/.
+  Verify every must-have exists, every must-NOT-have is absent. Check evidence files in .omo/evidence/.
   Output: \`Must Have [N/N] | Must NOT Have [N/N] | VERDICT: APPROVE/REJECT\`
 
 - [ ] F2. **Code Quality Review** — \`unspecified-high\`
@@ -46,7 +46,7 @@ Each TODO must include:
   Output: \`Build [PASS/FAIL] | Tests [N pass/N fail] | VERDICT\`
 
 - [ ] F3. **QA Scenarios** — \`unspecified-high\`
-  Execute ALL QA scenarios from every task. Test cross-task integration and edge cases. Save evidence to \`.sisyphus/evidence/final-qa/\`.
+  Execute ALL QA scenarios from every task. Test cross-task integration and edge cases. Save evidence to \`.omo/evidence/final-qa/\`.
   Output: \`Scenarios [N/N pass] | Integration [N/N] | VERDICT\`
 
 - [ ] F4. **Scope Fidelity** — \`deep\`

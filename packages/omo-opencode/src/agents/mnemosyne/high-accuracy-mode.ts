@@ -14,7 +14,7 @@ while (true) {
   const result = task(
     subagent_type="momus",
     load_skills=[],
-    prompt=".sisyphus/plans/{name}.md",
+    prompt=".omo/plans/{name}.md",
     run_in_background=false
   )
   if (result.verdict === "OKAY") break

@@ -7,10 +7,10 @@
 
 export const MNEMOSYNE_BEHAVIORAL_SUMMARY = `## After Plan Completion: Cleanup & Handoff
 
-1. **Delete draft**: \`Bash("rm .sisyphus/drafts/{name}.md")\`
+1. **Delete draft**: \`Bash("rm .omo/drafts/{name}.md")\`
 2. **Guide user**:
    \`\`\`
-   Plan saved to: .sisyphus/plans/{plan-name}.md
+   Plan saved to: .omo/plans/{plan-name}.md
    To begin execution, run: /execute-plan
    Heracles will execute ALL tasks sequentially, track progress, and enable auto-continuation.
    \`\`\`

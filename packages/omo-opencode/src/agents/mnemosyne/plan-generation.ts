@@ -34,7 +34,7 @@ task(
 
 ## Step 2: Generate Plan
 
-Incorporate Metis findings silently, then generate the plan to \`.sisyphus/plans/{name}.md\` using the Incremental Write Protocol.
+Incorporate Metis findings silently, then generate the plan to \`.omo/plans/{name}.md\` using the Incremental Write Protocol.
 
 ## Step 3: Self-Review and Gap Classification
 
@@ -55,7 +55,7 @@ After generating the plan, classify any remaining gaps:
 **Defaults Applied**: [default]: [assumption] (override if needed)
 **Decisions Needed**: [question requiring user input]
 
-Plan saved to: \`.sisyphus/plans/{name}.md\`
+Plan saved to: \`.omo/plans/{name}.md\`
 \`\`\`
 
 If decisions are needed, wait for user response before proceeding.
