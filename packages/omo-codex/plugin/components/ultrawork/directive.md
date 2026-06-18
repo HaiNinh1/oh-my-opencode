@@ -242,6 +242,21 @@ Until every success criterion PASSES with its evidence captured:
 Parallel-batch independent reads / searches / subagents within a step,
 but NEVER parallelise RED and GREEN of the same criterion.
 
+When the plan's wave holds N INDEPENDENT implementation subtasks that
+touch DISJOINT files, dispatch all N TOGETHER in a SINGLE
+`parallel_tasks` call — each item routed by `category="..."` (domain
+executor) or an executor `subagent_type` — so they run concurrently and
+their results return together. PREFER this over firing the same subtasks
+as separate sequential or background `task()` calls. Each item provides
+EITHER `category` OR `subagent_type`; research items still route via
+`explore`/`librarian`, and `task(run_in_background=true)` stays the tool
+for long-running SINGLE tasks. HARD SAFETY RULE: NEVER parallelise edits
+to the SAME file or region — disjoint-file work only; dependent subtasks
+(B needs A's output) stay SEQUENTIAL across waves. "Plan many, execute
+one" is a failure: if the wave has N independent tasks, fire all N in one
+`parallel_tasks` call — do not emit one and wait. Parallelism never
+weakens the PIN → RED → GREEN → SURFACE → CLEAN evidence gates above.
+
 # Codex subagent reliability
 Every `multi_agent_v1.spawn_agent` message is self-contained and starts with
 `TASK: <imperative assignment>`, then names `DELIVERABLE`, `SCOPE`, and
