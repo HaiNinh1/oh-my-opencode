@@ -22,6 +22,7 @@ import {
   createHashlineEditTool,
   createLookAt,
   createMonitorTools,
+  createParallelTasksTool,
   createSessionManagerTools,
   createSkillMcpTool,
   createSkillTool,
@@ -44,6 +45,7 @@ export type ToolRegistryFactories = {
   createGlobTools: typeof createGlobTools
   createSessionManagerTools: typeof createSessionManagerTools
   createDelegateTask: typeof createDelegateTask
+  createParallelTasksTool: typeof createParallelTasksTool
   discoverCommandsSync: typeof discoverCommandsSync
   interactive_bash: typeof interactive_bash
   createTaskCreateTool: typeof createTaskCreateTool
@@ -76,6 +78,7 @@ export const defaultToolRegistryFactories: ToolRegistryFactories = {
   createGlobTools,
   createSessionManagerTools,
   createDelegateTask,
+  createParallelTasksTool,
   discoverCommandsSync,
   interactive_bash,
   createTaskCreateTool,
