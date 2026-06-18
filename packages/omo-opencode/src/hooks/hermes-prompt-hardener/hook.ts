@@ -106,7 +106,14 @@ function buildFileReplacements(parts: ChatMessagePart[]): {
       try {
         resolvedPath = fileURLToPath(part.url)
       } catch {
-        if (part.source?.path) resolvedPath = part.source.path
+        // fileURLToPath rejects POSIX-style file URLs (no drive letter) on
+        // Windows. Parse the URL pathname directly so resolution stays
+        // cross-platform, then fall back to the part's own source path.
+        try {
+          resolvedPath = decodeURIComponent(new URL(part.url).pathname)
+        } catch {
+          if (part.source?.path) resolvedPath = part.source.path
+        }
       }
     } else if (part.source?.path) {
       resolvedPath = part.source.path
