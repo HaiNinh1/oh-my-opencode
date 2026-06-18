@@ -14,6 +14,7 @@ import { createAtlasAgent, atlasPromptMetadata } from "./atlas"
 import { createMomusAgent, momusPromptMetadata } from "./momus"
 import { createHephaestusAgent } from "./hephaestus"
 import { createMnemosyneAgent, mnemosynePromptMetadata } from "./mnemosyne"
+import { createHermesAgent, HERMES_PROMPT_METADATA } from "./hermes"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
 import {
@@ -45,6 +46,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   // because it needs OrchestratorContext, not just a model string
   atlas: createAtlasAgent as AgentFactory,
   mnemosyne: createMnemosyneAgent,
+  hermes: createHermesAgent as AgentFactory,
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as AgentFactory,
 }
 
@@ -61,6 +63,7 @@ const agentMetadata: Partial<Record<BuiltinAgentName, AgentPromptMetadata>> = {
   momus: momusPromptMetadata,
   atlas: atlasPromptMetadata,
   mnemosyne: mnemosynePromptMetadata,
+  hermes: HERMES_PROMPT_METADATA,
 }
 
 export async function createBuiltinAgents(

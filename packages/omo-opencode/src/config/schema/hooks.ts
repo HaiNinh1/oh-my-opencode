@@ -60,6 +60,8 @@ export const HookNameSchema = z.enum([
   "fsync-skip-warning",
   "plan-format-validator",
   "legacy-plugin-toast",
+  "hermes-routing-guard",
+  "hermes-prompt-hardener",
 ])
 
 export type HookName = z.infer<typeof HookNameSchema>

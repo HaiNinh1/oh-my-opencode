@@ -262,6 +262,9 @@ describe("AGENT_DISPLAY_NAMES", () => {
     // given expected mappings
     const expectedMappings = {
       sisyphus: "Sisyphus - ultraworker",
+      heracles: "Heracles - Executor",
+      mnemosyne: "Mnemosyne - Compact Planner",
+      hermes: "Hermes - Task Router",
       hephaestus: "Hephaestus - Deep Agent",
       prometheus: "Prometheus - Plan Builder",
       atlas: "Atlas - Plan Executor",

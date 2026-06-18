@@ -2,6 +2,7 @@ import { recoverToolMetadata } from "../features/tool-metadata-store"
 import type { CreatedHooks } from "../create-hooks"
 import { log as defaultLog } from "../shared/logger"
 import { stripInvisibleAgentCharacters } from "../shared/agent-display-names"
+import { pinHermesChildSession } from "../hooks/hermes-routing-guard/child-session-pin"
 import type { PluginContext } from "./types"
 
 const VERIFICATION_ATTEMPT_PATTERN = /<ulw_verification_attempt_id>(.*?)<\/ulw_verification_attempt_id>/i
@@ -158,6 +159,10 @@ export function createToolExecuteAfterHandler(args: {
           extractedAttemptId: verificationAttemptId,
         })
       }
+
+      // Hermes proxy: capture child session ID on first successful task() and
+      // abort the Hermes parent so it cannot emit further output. No-op otherwise.
+      pinHermesChildSession(ctx, input.sessionID, sessionId, output.output)
     }
 
     const runToolExecuteAfterHooks = async (): Promise<void> => {

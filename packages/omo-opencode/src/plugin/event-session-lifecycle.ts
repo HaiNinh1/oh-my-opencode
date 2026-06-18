@@ -15,6 +15,7 @@ import { resetMessageCursor } from "../shared";
 import { clearSessionModel, setSessionModel } from "../shared/session-model-state";
 import { clearSessionPromptParams } from "../shared/session-prompt-params-state";
 import { deleteSessionTools } from "../shared/session-tools-store";
+import { HermesProxyState } from "../shared/hermes-proxy-state";
 import { dispatchOpenClawEvent } from "../openclaw/runtime-dispatch";
 import { resolveMessageEventSessionID, resolveSessionEventID } from "../shared/event-session-id";
 import type { OhMyOpenCodeConfig } from "../config";
@@ -106,6 +107,7 @@ export async function handleSessionDeletedEvent(args: {
   args.firstMessageVariantGate.clear(sessionID);
   clearSessionModel(sessionID);
   clearSessionPromptParams(sessionID);
+  HermesProxyState.clear(sessionID);
   syncSubagentSessions.delete(sessionID);
   await dispatchOpenClawSessionEvent({ ...args, rawEvent: "session.deleted", sessionID });
   if (wasSyncSubagentSession) subagentSessions.delete(sessionID);

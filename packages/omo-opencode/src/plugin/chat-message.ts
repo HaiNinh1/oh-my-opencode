@@ -8,6 +8,7 @@ import { handleRalphLoopMessage } from "./chat-message/loop-commands"
 import { notifyWhenModelCacheIsMissing } from "./chat-message/model-cache-warning"
 import { recordSessionModel, getStoredMainSessionModel } from "./chat-message/session-model"
 import { runStartWorkHookIfApplicable } from "./chat-message/start-work-message"
+import { applyHermesProxySessionBootstrap } from "../hooks/hermes-routing-guard/proxy-session"
 import type {
   ChatMessageHandlerOutput,
   ChatMessageHooks,
@@ -66,6 +67,7 @@ async function runChatMessageHooks(args: {
   await hooks.noSisyphusGpt?.["chat.message"]?.(input, output)
   await hooks.noHephaestusNonGpt?.["chat.message"]?.(input, output)
   await hooks.hephaestusAgentsMdInjector?.["chat.message"]?.(input, output)
+  await hooks.hermesPromptHardener?.["chat.message"]?.(input, output)
 }
 
 export function createChatMessageHandler(args: {
@@ -91,6 +93,11 @@ export function createChatMessageHandler(args: {
       })
       return
     }
+
+    // Hermes proxy: reset per-turn flag and pin @agent target on first message.
+    // No-op for non-Hermes sessions. Runs before firstMessageVariantGate is consumed
+    // below so the first-message gate still reflects the unparsed state for the target.
+    applyHermesProxySessionBootstrap(input, output, firstMessageVariantGate)
 
     if (input.agent) {
       updateSessionAgent(input.sessionID, input.agent)

@@ -11,6 +11,9 @@
  */
 export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   sisyphus: "Sisyphus - ultraworker",
+  heracles: "Heracles - Executor",
+  mnemosyne: "Mnemosyne - Compact Planner",
+  hermes: "Hermes - Task Router",
   hephaestus: "Hephaestus - Deep Agent",
   prometheus: "Prometheus - Plan Builder",
   atlas: "Atlas - Plan Executor",
@@ -103,6 +106,14 @@ const LEGACY_DISPLAY_NAMES: Record<string, string> = {
   "momus (plan critic)": "momus",
   "athena (council)": "athena",
   "athena-junior (council)": "athena-junior",
+  // Heracles / Mnemosyne / Hermes legacy parenthesized aliases (reverse-resolution
+  // only — never emitted into the x-opencode-agent-name header).
+  "heracles (executor)": "heracles",
+  "heracles(executor)": "heracles",
+  "heracles (forgeborn)": "heracles",
+  "heracles (direct executor)": "heracles",
+  "mnemosyne (compact planner)": "mnemosyne",
+  "hermes (task router)": "hermes",
 }
 
 function resolveKnownAgentConfigKey(agentName: string): string | undefined {

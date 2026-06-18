@@ -1,0 +1,1 @@
+export { createHermesPromptHardenerHook } from "./hook"

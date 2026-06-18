@@ -89,6 +89,7 @@ export function createToolExecuteBeforeHandler(args: {
       await hooks.webfetchRedirectGuard?.["tool.execute.before"]?.(input, output)
       await hooks.fsyncSkipWarning?.["tool.execute.before"]?.(input, output)
       await hooks.prometheusMdOnly?.["tool.execute.before"]?.(input, output)
+      await hooks.hermesRoutingGuard?.["tool.execute.before"]?.(input, output)
     await hooks.sisyphusJuniorNotepad?.["tool.execute.before"]?.(input, output)
     await hooks.atlasHook?.["tool.execute.before"]?.(input, output)
     await hooks.compactionTodoPreserver?.["tool.execute.before"]?.(input, output)

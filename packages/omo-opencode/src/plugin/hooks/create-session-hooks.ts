@@ -30,6 +30,7 @@ import {
   createPreemptiveCompactionHook,
   createRuntimeFallbackHook,
   createLegacyPluginToastHook,
+  createHermesPromptHardenerHook,
 } from "../../hooks"
 import {
   detectExternalNotificationPlugin,
@@ -67,6 +68,7 @@ export type SessionHooks = {
   taskResumeInfo: ReturnType<typeof createTaskResumeInfoHook> | null
   runtimeFallback: ReturnType<typeof createRuntimeFallbackHook> | null
   legacyPluginToast: ReturnType<typeof createLegacyPluginToastHook> | null
+  hermesPromptHardener: ReturnType<typeof createHermesPromptHardenerHook> | null
 }
 
 export function createSessionHooks(args: {
@@ -240,6 +242,10 @@ export function createSessionHooks(args: {
     ? safeHook("legacy-plugin-toast", () => createLegacyPluginToastHook(ctx))
     : null
 
+  const hermesPromptHardener = isHookEnabled("hermes-prompt-hardener")
+    ? safeHook("hermes-prompt-hardener", () => createHermesPromptHardenerHook())
+    : null
+
   return {
     preemptiveCompaction,
     sessionNotification,
@@ -266,5 +272,6 @@ export function createSessionHooks(args: {
     taskResumeInfo,
     runtimeFallback,
     legacyPluginToast,
+    hermesPromptHardener,
   }
 }
