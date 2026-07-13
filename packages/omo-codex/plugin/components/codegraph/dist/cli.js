@@ -1940,10 +1940,6 @@ function isNonFatalCodegraphGcError(error) {
 
 // components/codegraph/src/hook-sweep.ts
 import { fileURLToPath } from "node:url";
-// ../../utils/src/codegraph/process-sweeper.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync2, statSync as statSync2, utimesSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { homedir as homedir10 } from "node:os";
-import { dirname as dirname3, join as join10 } from "node:path";
 
 // ../../utils/src/codegraph/process-exec.ts
 import { execFile } from "node:child_process";
@@ -2253,6 +2249,9 @@ function isNonFatalFsError(error) {
 var OMO_CODEX_PLUGIN_CACHE_PUBLISHERS = new Set(["sisyphuslabs"]);
 
 // ../../utils/src/codegraph/process-sweeper.ts
+import { existsSync as existsSync7, mkdirSync as mkdirSync2, statSync as statSync2, utimesSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { homedir as homedir10 } from "node:os";
+import { dirname as dirname3, join as join10 } from "node:path";
 var DEFAULT_GRACE_MS = 2000;
 var DEFAULT_THROTTLE_MS = 60 * 60 * 1000;
 var SWEEP_STAMP_FILE = "zombie-sweep.stamp";
