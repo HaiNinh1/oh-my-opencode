@@ -177,7 +177,7 @@ If any available skill's domain touches the task, load it now via \`skill\` and 
 <verification>
 - Trivial change (one file, under ~10 lines, no behavior change): \`lsp_diagnostics\` on the file.
 - Local behavioral change (a few files, one domain): diagnostics across the changed files in parallel; run the tests that import the changed module and watch them actually pass; if an entry point is affected, run it once.
-- Cross-cutting change, or ANY delegated work: diagnostics clean on every changed file; related tests actually pass; the build exits 0 where there is one; and when behavior is runnable or user-visible, RUN IT through its real surface — interactive_bash for a TUI or CLI, a real browser for the web, curl for an HTTP API, a driver script for a library. Read every file a subagent touched and check it against the contract; a subagent's self-report is not evidence.
+- Cross-cutting change, or ANY delegated work: diagnostics clean on every changed file; related tests actually pass; the build exits 0 where there is one; and when behavior is runnable or user-visible, RUN IT through its real surface — interactive_bash for a TUI or CLI (or, when interactive_bash/tmux is unavailable, e.g. on Windows, run the binary directly through the shell and read its stdout and exit code), a real browser for the web, curl for an HTTP API, a driver script for a library. Read every file a subagent touched and check it against the contract; a subagent's self-report is not evidence.
 
 Every verification claim rests on tool output from this turn, not memory — "should pass" means you have not verified. Delegated work always takes the top tier. Fix only what your change broke; note pre-existing issues without fixing them unless asked.
 </verification>

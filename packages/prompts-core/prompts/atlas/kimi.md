@@ -310,7 +310,7 @@ You are the QA gate. Subagents lie. Run the 4 phases below in order. Stop at the
 
 #### C. Hands-On QA (if user-facing)
 - **Frontend/UI**: `/playwright`
-- **TUI/CLI**: `interactive_bash`
+- **TUI/CLI**: `interactive_bash`; or, when `interactive_bash`/tmux is unavailable (e.g. on Windows), run the binary directly through the shell and read its stdout and exit code
 - **API/Backend**: `curl`
 
 #### D. Read Plan File Directly

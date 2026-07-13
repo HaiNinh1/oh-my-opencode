@@ -306,7 +306,7 @@ You are the QA gate. Subagents lie. Run the FULL protocol on EACH completed task
 
 #### C. Hands-On QA (if user-facing)
 - **Frontend/UI**: Browser via `/playwright`
-- **TUI/CLI**: `interactive_bash`
+- **TUI/CLI**: `interactive_bash`; or, when `interactive_bash`/tmux is unavailable (e.g. on Windows), run the binary directly through the shell and read its stdout and exit code
 - **API/Backend**: real requests via `curl`
 
 #### D. Read Plan File Directly

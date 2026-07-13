@@ -168,7 +168,7 @@ Verification defines done.
 - File edit: run \`lsp_diagnostics\` on every changed file.
 - Behavioral change: run adjacent tests or the smallest relevant suite.
 - Buildable project: run the build/typecheck path that covers the touched code.
-- Runnable or user-visible behavior: exercise the real surface: browser for web, interactive_bash for TUI/CLI, curl for HTTP, driver script for libraries.
+- Runnable or user-visible behavior: exercise the real surface: browser for web, interactive_bash for TUI/CLI (or, when interactive_bash/tmux is unavailable, e.g. on Windows, run the binary directly through the shell and read its stdout and exit code), curl for HTTP, driver script for libraries.
 - Delegated work: inspect touched files and rerun checks yourself.
 
 Report only evidence from this turn. "Should pass" means unverified. Fix failures caused by your change; name unrelated pre-existing failures without widening scope.

@@ -141,7 +141,7 @@ parallel_tasks({
 Either way, every task will include Agent-Executed QA Scenarios as the primary
 verification method. The executing agent will directly run the deliverable and verify it:
   - Frontend/UI: Playwright opens browser, navigates, fills forms, clicks, asserts DOM, screenshots
-  - CLI/TUI: tmux runs the command, sends keystrokes, validates output, checks exit code
+  - CLI/TUI: tmux runs the command, sends keystrokes, validates output, checks exit code; when tmux is unavailable (e.g. on Windows), run the command directly through the shell and check its stdout and exit code
   - API: curl sends requests, parses JSON, asserts fields and status codes
   - Each scenario ultra-detailed: exact selectors, concrete test data, expected results, evidence paths"
 \`\`\`

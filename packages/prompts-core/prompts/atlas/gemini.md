@@ -334,7 +334,7 @@ If Phase 1 found issues but Phase 2 passes: Phase 2 is WRONG. The code has bugs 
 #### PHASE 3: HANDS-ON QA (MANDATORY for user-facing changes)
 
 - **Frontend/UI**: `/playwright` - load the page, click through the flow, check console.
-- **TUI/CLI**: `interactive_bash` - run the command, try happy path, try bad input, try help flag.
+- **TUI/CLI**: `interactive_bash` - run the command, try happy path, try bad input, try help flag; or, when `interactive_bash`/tmux is unavailable (e.g. on Windows), run the binary directly through the shell and read its stdout and exit code.
 - **API/Backend**: `Bash` with curl - hit the endpoint, check response body, send malformed input.
 - **Config/Infra**: Actually start the service or load the config.
 

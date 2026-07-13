@@ -152,7 +152,7 @@ If you intend to call multiple tools and there are no dependencies between the t
 
 1. **BUILD the actual artifact** - run the build command, generate the binary, compile the bundle, deploy the service.
 2. **USE IT YOURSELF** with the RIGHT TOOL FOR THE SURFACE. **THE TOOL IS NOT OPTIONAL:**
-   - **TUI / CLI work** → \`interactive_bash\` (tmux). LAUNCH THE BINARY IN A REAL TERMINAL. Send keystrokes. Run happy path. Try bad input. Hit \`--help\`. READ THE RENDERED OUTPUT. NO substitute. NO "I'll just read the source".
+   - **TUI / CLI work** → \`interactive_bash\` (tmux), or, when \`interactive_bash\`/tmux is unavailable (e.g. on Windows), run the binary directly through the shell and read its stdout and exit code. LAUNCH THE BINARY IN A REAL TERMINAL. Send keystrokes. Run happy path. Try bad input. Hit \`--help\`. READ THE RENDERED OUTPUT. NO "I'll just read the source".
    - ${browserQaInstruction}
    - **HTTP API / service work** → \`curl\` or integration script against the RUNNING service. Reading the handler signature is NOT validation.
    - **Library / SDK work** → write a minimal driver script that imports + executes the new code end-to-end.
