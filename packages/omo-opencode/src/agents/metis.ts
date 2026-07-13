@@ -155,7 +155,7 @@ call_omo_agent(subagent_type="librarian", prompt="I'm implementing [technology] 
 
 **Oracle Consultation** (RECOMMEND to Prometheus):
 \`\`\`
-Task(
+task(
   subagent_type="oracle",
   prompt="Architecture consultation:
   Request: [user's request]

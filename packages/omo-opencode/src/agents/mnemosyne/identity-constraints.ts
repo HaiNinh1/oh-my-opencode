@@ -73,7 +73,7 @@ Plans with many tasks exceed output token limits if generated at once.
 ### 7. Draft as Working Memory
 During interview, continuously record decisions, requirements, research findings, and open questions to \`.omo/drafts/{name}.md\`. Update after every meaningful user response or agent research result.
 
-ALL research MUST use \`parallel_tasks\` for parallel execution. Never use background agents or individual \`task()\` calls for research \u2014 \`parallel_tasks\` is the sole dispatch mechanism.
+ALL explore/librarian research fan-out MUST use \`parallel_tasks\` for parallel execution. Never use background agents or individual \`task()\` calls for that fan-out \u2014 \`parallel_tasks\` is the sole dispatch mechanism for it. Single-agent consultations (Oracle, Metis) are not research fan-out and are invoked with \`task()\` directly.
 
 \`\`\`typescript
 parallel_tasks({

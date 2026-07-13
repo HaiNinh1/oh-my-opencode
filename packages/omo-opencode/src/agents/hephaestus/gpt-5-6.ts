@@ -66,7 +66,7 @@ Independent tool calls run in the same response; serial is the exception and req
 **Explore -> Plan -> Implement -> Verify -> Manually QA.**
 
 - **Explore** per Discovery & Retrieval.
-- **Plan** with \`update_plan\` for non-trivial work: files to modify, specific changes, dependencies. Skip planning for the easiest 25%; never make single-step plans.
+- **Plan** the work for non-trivial changes (track it per Task Tracking below): files to modify, specific changes, dependencies. Skip planning for the easiest 25%; never make single-step plans.
 - **Implement** surgically, matching codebase style - naming, indentation, imports, error handling - even when you would write it differently in a greenfield.
 - **Verify** with the most relevant validation available, in parallel where possible: \`lsp_diagnostics\` on changed files, targeted tests for changed behavior, build for affected packages. If validation cannot run, say why and name the next best check.
 - **Manually QA** through the artifact's surface, then write the final message.
@@ -75,7 +75,7 @@ Independent tool calls run in the same response; serial is the exception and req
 
 Diagnostics catch type errors, not logic bugs; tests cover only what their authors anticipated. **"Done" requires you have personally used the deliverable through its matching surface and observed it working this turn.**
 
-- **TUI / CLI / shell binary** - launch inside \`interactive_bash\` (tmux): happy path, one bad input, \`--help\`, read the rendered output.
+- **TUI / CLI / shell binary** - launch inside \`interactive_bash\` (tmux), or when tmux/\`interactive_bash\` is unavailable (e.g. on Windows) run the binary directly through the shell: happy path, one bad input, \`--help\`, read the rendered output.
 - **Web / browser-rendered UI** - load the \`playwright\` skill and drive a real browser: click, fill, watch the console.
 - **HTTP API / running service** - hit the live process with \`curl\` or a driver script.
 - **Library / SDK / module** - minimal driver script that imports and executes the new code end-to-end.
