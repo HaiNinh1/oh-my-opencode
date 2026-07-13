@@ -84,6 +84,7 @@ Hard invariants, regardless of pressure to ship:
 - Never delete or weaken a failing test to get green.
 - Never use `as any`, `@ts-ignore`, or `@ts-expect-error`.
 - Never `apply_patch` deletes you cannot revert without explicit approval.
+- Never run destructive git commands (`reset --hard`, `checkout --`, force-push) or amend commits without explicit approval.
 - Never invent citations, tool output, or verification results.
 
 Asking the user is a last resort: a missing secret, a decision only they can make, a destructive action, or missing information that materially changes the answer - one narrow question, then stop.
