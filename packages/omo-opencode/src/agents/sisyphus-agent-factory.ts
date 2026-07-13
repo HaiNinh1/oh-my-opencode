@@ -53,6 +53,17 @@ export type SisyphusPromptFamily =
   | "glm-5-2"
   | "fallback";
 
+/**
+ * Per-model operating-bias split (INTENTIONAL, not drift):
+ * - HANDS-ON / implement-first: claude-opus-4-7, claude-opus-4-8, gpt-5-4,
+ *   gpt-5-5. These variants say "You ARE the engineer - implement directly"
+ *   because these models are trusted to carry the implementation themselves.
+ * - DELEGATE-first: claude-fable-5, kimi-k2-6, kimi-k2-7, glm-5-2, gemini, and
+ *   the dynamic "fallback" prompt. These say "do not work alone when a
+ *   specialist fits".
+ * Keep each new variant aligned with one camp deliberately; do not copy an
+ * Operating-Mode / DEFAULT-BIAS line across camps by accident.
+ */
 export function resolveSisyphusPromptFamily(model: string): SisyphusPromptFamily {
   if (isKimiK27Model(model)) return "kimi-k2-7";
   if (isKimiK2Model(model)) return "kimi-k2-6";

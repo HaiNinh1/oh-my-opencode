@@ -37,12 +37,12 @@ Defined in [`src/shared/agent-tool-restrictions.ts`](../shared/agent-tool-restri
 
 | Agent | Denied Tools |
 |-------|-------------|
-| Oracle | write, edit, task, call_omo_agent |
+| Oracle | write, edit, task (call_omo_agent allowed — explore/librarian research) |
 | Librarian | write, edit, task, call_omo_agent |
 | Explore | write, edit, task, call_omo_agent |
 | Multimodal-Looker | ALL except read |
-| Atlas | task, call_omo_agent |
-| Momus | write, edit, task |
+| Atlas | call_omo_agent (task allowed — Atlas orchestrates via `task()`; set in `tool-config-handler.ts`) |
+| Momus | write, edit (task allowed by design — see `tool-restrictions.test.ts`) |
 | Prometheus | enforces `.md`-only writes via `prometheus-md-only` hook (path-based, not tool-based) |
 
 ## TEAM-MODE ELIGIBILITY

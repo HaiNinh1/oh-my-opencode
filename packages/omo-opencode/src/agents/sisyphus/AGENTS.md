@@ -15,7 +15,7 @@ Model-specific prompt variants for the Sisyphus main orchestrator. Parent `sisyp
 
 | File | Purpose |
 |------|---------|
-| `default.ts` | Base/Claude variant: task management, delegation guides, 542 LOC |
+| `default.ts` | `buildTaskManagementSection` (shared helper, in use) + `buildDefaultSisyphusPrompt` (legacy base template, **currently unused** — the live fallback is `sisyphus-dynamic-prompt.ts`) |
 | `claude-opus-4-7.ts` | Opus 4.7-native: literal-instruction tuning, bounded exploration/thinking |
 | `claude-opus-4-8.ts` | Opus 4.8-native: silence-default narration, small-decision autonomy, bounded exploration |
 | `claude-fable-5.ts` | Fable 5-native: top-tier model, Opus 4.8 tuning direction |

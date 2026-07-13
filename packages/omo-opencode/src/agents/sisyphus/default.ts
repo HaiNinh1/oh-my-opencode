@@ -135,6 +135,13 @@ Should I proceed with [recommendation], or would you prefer differently?
 </Task_Management>`;
 }
 
+/**
+ * NOTE: currently unused by the runtime. The live "fallback" Sisyphus prompt is
+ * `buildFallbackSisyphusPrompt` in ../sisyphus-dynamic-prompt.ts (selected by
+ * sisyphus-agent-factory.ts). This builder is retained only as the legacy base
+ * template - edits here do NOT affect any running agent. `buildTaskManagementSection`
+ * (above) IS still shared and used.
+ */
 export function buildDefaultSisyphusPrompt(
   model: string,
   availableAgents: AvailableAgent[],
