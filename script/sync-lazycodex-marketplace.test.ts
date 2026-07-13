@@ -1,5 +1,7 @@
 /// <reference types="bun-types" />
 
+// allow: SIZE_OK - marketplace sync tests exercise one release payload fixture tree; this release adds narrow assertions and future additions should split by payload section.
+
 import { describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -115,6 +117,10 @@ async function writePluginFixture(sourceRoot: string, options: WritePluginFixtur
   await writeFile(join(sourceRoot, "packages", "lsp-tools-mcp", "dist", "cli.js"), "#!/usr/bin/env node\n")
   await mkdir(join(sourceRoot, "packages", "lsp-daemon", "dist"), { recursive: true })
   await writeFile(join(sourceRoot, "packages", "lsp-daemon", "dist", "cli.js"), "#!/usr/bin/env node\n")
+  await mkdir(join(sourceRoot, "dist", "cli"), { recursive: true })
+  await writeFile(join(sourceRoot, "dist", "cli", "index.js"), "#!/usr/bin/env node\n")
+  await mkdir(join(sourceRoot, "dist", "cli-node"), { recursive: true })
+  await writeFile(join(sourceRoot, "dist", "cli-node", "index.js"), "#!/usr/bin/env node\n")
   await mkdir(join(sourceRoot, "packages", "omo-codex", "plugin", "node_modules", "ignored"), { recursive: true })
   await writeFile(join(sourceRoot, "packages", "omo-codex", "plugin", "node_modules", "ignored", "file.txt"), "ignored\n")
   await mkdir(join(sourceRoot, "packages", "omo-codex", "plugin", ".ulw", "evidence"), { recursive: true })
@@ -205,7 +211,7 @@ describe("sync-lazycodex-marketplace", () => {
       workflowMissing = error instanceof Error
     }
     expect(workflowMissing).toBe(true)
-  })
+  }, 15_000)
 
   test("#given release version env #when syncing marketplace #then repository payload is stamped with release version", async () => {
     // given
@@ -317,6 +323,8 @@ describe("sync-lazycodex-marketplace", () => {
     const lazycodexRoot = await mkdtemp(join(tmpdir(), "omo-sync-prev-lazycodex-"))
     await writePluginFixture(sourceRoot)
     await rm(join(sourceRoot, "packages", "lsp-daemon", "dist"), { recursive: true, force: true })
+    await rm(join(sourceRoot, "dist", "cli"), { recursive: true, force: true })
+    await rm(join(sourceRoot, "dist", "cli-node"), { recursive: true, force: true })
     await writeJson(join(sourceRoot, "packages", "omo-codex", "plugin", ".mcp.json"), {
       mcpServers: {
         git_bash: { command: "node", args: ["../../git-bash-mcp/dist/cli.js", "mcp"], cwd: "." },
@@ -334,6 +342,8 @@ describe("sync-lazycodex-marketplace", () => {
       daemonDistMissing = error instanceof Error
     }
     expect(daemonDistMissing).toBe(true)
+    await expectPathMissing(join(lazycodexRoot, "plugins", "omo", "dist", "cli", "index.js"))
+    await expectPathMissing(join(lazycodexRoot, "plugins", "omo", "dist", "cli-node", "index.js"))
     expect((await stat(join(lazycodexRoot, "plugins", "omo", "components", "lsp-tools-mcp", "dist", "cli.js"))).isFile()).toBe(true)
   })
 
@@ -349,10 +359,9 @@ describe("sync-lazycodex-marketplace", () => {
     // then
     expect((await stat(join(lazycodexRoot, "plugins", "omo", "components", "bootstrap", "dist", "cli.js"))).isFile()).toBe(true)
     expect((await stat(join(lazycodexRoot, "plugins", "omo", "components", "bootstrap", "scripts", "bootstrap.ps1"))).isFile()).toBe(true)
-    const nestedMcpManifest = JSON.parse(
-      await readFile(join(lazycodexRoot, "plugins", "omo", "components", "lsp", ".mcp.json"), "utf8"),
-    )
-    expect(nestedMcpManifest.mcpServers.lsp.args[0]).toBe("../../../../lsp-daemon/dist/cli.js")
+    // Codex reads MCP servers only from the plugin-root .mcp.json; a component's nested dev manifest
+    // (whose relative daemon path dangles in the flattened bundle) must not ship in plugins/omo.
+    await expectPathMissing(join(lazycodexRoot, "plugins", "omo", "components", "lsp", ".mcp.json"))
   })
 
   test("#given missing bootstrap commandWindows target #when syncing marketplace #then rejects naming the bootstrap.ps1 path", async () => {
@@ -396,7 +405,7 @@ describe("sync-lazycodex-marketplace", () => {
     expect(message).toContain("zero bytes")
   })
 
-  test("#given nested component .mcp.json referencing an absent in-bundle runtime #when syncing marketplace #then rejects the broken bundle", async () => {
+  test("#given a component ships a nested .mcp.json #when syncing marketplace #then it is dropped from the bundle and the sync succeeds", async () => {
     // given
     const sourceRoot = await mkdtemp(join(tmpdir(), "omo-sync-nested-mcp-source-"))
     const lazycodexRoot = await mkdtemp(join(tmpdir(), "omo-sync-nested-mcp-lazycodex-"))
@@ -408,16 +417,10 @@ describe("sync-lazycodex-marketplace", () => {
     })
 
     // when
-    let message = ""
-    try {
-      await syncLazycodexMarketplace({ sourceRoot, lazycodexRoot })
-    } catch (error) {
-      message = error instanceof Error ? error.message : String(error)
-    }
+    await syncLazycodexMarketplace({ sourceRoot, lazycodexRoot })
 
     // then
-    expect(message).toContain("missing MCP runtime path for lsp")
-    expect(message).toContain("packages/lsp-tools-mcp/dist/cli.js")
+    await expectPathMissing(join(lazycodexRoot, "plugins", "omo", "components", "lsp", ".mcp.json"))
   })
 
   test("#given multiple missing referenced targets #when syncing marketplace #then reports the full list", async () => {

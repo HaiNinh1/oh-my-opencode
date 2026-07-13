@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { isUlwLoopSubcommand, ulwLoopCommand } from "./cli-commands.js";
 import { runPreToolUseGoalBudgetGuardCli, runUlwLoopHookCli } from "./codex-hook.js";
+import { runSpawnGuardCli } from "./spawn-guard.js";
+import { runStopResumeHookCli } from "./stop-resume-hook.js";
 
 const TOP_LEVEL_HELP =
-	"Usage:\n  omo ulw-loop <subcommand> [args]\n  omo hook user-prompt-submit         (Codex UserPromptSubmit hook)\n  omo help | --help | -h              (this message)\n\nRun `omo ulw-loop help` for ulw-loop subcommands.\n";
+	"Usage:\n  omo ulw-loop <subcommand> [args]\n  omo hook user-prompt-submit [--with-ultrawork]  (Codex UserPromptSubmit hook)\n  omo help | --help | -h                          (this message)\n\nRun `omo ulw-loop help` for ulw-loop subcommands.\n";
 
 async function main(): Promise<number> {
 	const argv = process.argv.slice(2);
@@ -16,11 +18,21 @@ async function main(): Promise<number> {
 	if (command === "hook") {
 		const sub = argv[1];
 		if (sub === "user-prompt-submit") {
-			await runUlwLoopHookCli(process.stdin, process.stdout);
+			await runUlwLoopHookCli(process.stdin, process.stdout, {
+				includeUltraworkDirective: argv.includes("--with-ultrawork"),
+			});
 			return 0;
 		}
 		if (sub === "pre-tool-use") {
 			await runPreToolUseGoalBudgetGuardCli(process.stdin, process.stdout);
+			return 0;
+		}
+		if (sub === "stop") {
+			await runStopResumeHookCli(process.stdin, process.stdout);
+			return 0;
+		}
+		if (sub === "pre-tool-use-spawn") {
+			await runSpawnGuardCli(process.stdin, process.stdout);
 			return 0;
 		}
 		process.stderr.write(`[omo] unknown hook subcommand: ${sub ?? "(none)"}\n`);

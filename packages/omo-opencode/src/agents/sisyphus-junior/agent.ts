@@ -12,7 +12,7 @@
 
 import type { AgentConfig } from "@opencode-ai/sdk"
 import type { AgentMode } from "../types"
-import { isGlmModel, isGpt5_5Model, isGptModel, isGeminiModel, isKimiK2Model, isKimiK27Model, buildClaudeThinkingConfig } from "../types"
+import { isGlmModel, isGpt5_5Model, isGpt5_6Model, isGptModel, isGeminiModel, isKimiK2Model, isKimiK27Model, buildClaudeThinkingConfig } from "../types"
 import type { AgentOverrideConfig } from "../../config/schema"
 import {
   createAgentToolRestrictions,
@@ -27,6 +27,7 @@ import { buildGptSisyphusJuniorPrompt } from "./gpt"
 import { buildGpt54SisyphusJuniorPrompt } from "./gpt-5-4"
 import { buildGpt55SisyphusJuniorPrompt } from "./gpt-5-5"
 import { buildGeminiSisyphusJuniorPrompt } from "./gemini"
+import { buildGlm52SisyphusJuniorPrompt } from "./glm-5-2"
 
 const MODE: AgentMode = "subagent"
 
@@ -50,12 +51,13 @@ export type SisyphusJuniorPromptSource =
   | "gpt-5-5"
   | "gpt-5-4"
   | "gemini"
+  | "glm-5-2"
 
 export function getSisyphusJuniorPromptSource(model?: string): SisyphusJuniorPromptSource {
   if (model && isKimiK27Model(model)) return "kimi-k2-7"
   if (model && isKimiK2Model(model)) return "kimi-k2"
   if (model && isGptModel(model)) {
-    if (isGpt5_5Model(model)) return "gpt-5-5"
+    if (isGpt5_5Model(model) || isGpt5_6Model(model)) return "gpt-5-5"
     const lower = model.toLowerCase()
     if (lower.includes("gpt-5.4") || lower.includes("gpt-5-4")) return "gpt-5-4"
     return "gpt"
@@ -63,6 +65,7 @@ export function getSisyphusJuniorPromptSource(model?: string): SisyphusJuniorPro
   if (model && isGeminiModel(model)) {
     return "gemini"
   }
+  if (model && isGlmModel(model)) return "glm-5-2"
   return "default"
 }
 
@@ -89,6 +92,8 @@ export function buildSisyphusJuniorPrompt(
       return buildGptSisyphusJuniorPrompt(useTaskSystem, promptAppend)
     case "gemini":
       return buildGeminiSisyphusJuniorPrompt(useTaskSystem, promptAppend)
+    case "glm-5-2":
+      return buildGlm52SisyphusJuniorPrompt(useTaskSystem, promptAppend)
     case "default":
     default:
       return buildDefaultSisyphusJuniorPrompt(useTaskSystem, promptAppend)

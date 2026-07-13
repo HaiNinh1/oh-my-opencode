@@ -264,6 +264,24 @@ describe("generateModelConfig", () => {
     })
   })
 
+  describe("Momus agent model resolution", () => {
+    test("Momus resolves to gpt-5.6-sol xhigh when OpenAI is available", () => {
+      // #given
+      const config = createConfig({ hasOpenAI: true })
+
+      // #when
+      const result = generateModelConfig(config)
+
+      // #then
+      expect(result.agents?.momus?.model).toBe("openai/gpt-5.6-sol")
+      expect(result.agents?.momus?.variant).toBe("xhigh")
+      expect(result.agents?.momus?.fallback_models?.[0]).toEqual({
+        model: "openai/gpt-5.5",
+        variant: "xhigh",
+      })
+    })
+  })
+
   describe("Hephaestus agent special cases", () => {
     test("Hephaestus is created when OpenAI is available (openai provider connected)", () => {
       // #given
@@ -273,8 +291,8 @@ describe("generateModelConfig", () => {
       const result = generateModelConfig(config)
 
       // #then
-      expect(result.agents?.hephaestus?.model).toBe("openai/gpt-5.5")
-      expect(result.agents?.hephaestus?.variant).toBe("medium")
+      expect(result.agents?.hephaestus?.model).toBe("openai/gpt-5.6-sol")
+      expect(result.agents?.hephaestus?.variant).toBe("high")
     })
 
     test("Hephaestus falls back to Copilot GPT-5.5 when only Copilot is available", () => {
@@ -482,8 +500,8 @@ describe("generateModelConfig", () => {
       // #when generateModelConfig is called
       const result = generateModelConfig(config)
 
-      // #then hephaestus should be created with gateway-routed gpt-5.5
-      expect(result.agents?.hephaestus?.model).toBe("vercel/openai/gpt-5.5")
+      // #then hephaestus should be created with gateway-routed gpt-5.6-sol
+      expect(result.agents?.hephaestus?.model).toBe("vercel/openai/gpt-5.6-sol")
     })
 
     test("native providers take priority over gateway", () => {

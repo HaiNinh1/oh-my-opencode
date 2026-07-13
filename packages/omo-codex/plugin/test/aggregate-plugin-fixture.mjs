@@ -17,6 +17,19 @@ export async function readPluginVersion() {
 	return (await readJson(".codex-plugin/plugin.json")).version;
 }
 
+export async function readAggregateHookManifests() {
+	const manifest = await readJson(".codex-plugin/plugin.json");
+	const hookPaths = Array.isArray(manifest.hooks) ? manifest.hooks : [manifest.hooks];
+	return Promise.all(
+		hookPaths
+			.filter((hookPath) => typeof hookPath === "string")
+			.map(async (hookPath) => {
+				const source = hookPath.replace(/^\.\//, "");
+				return { source, hooks: await readJson(source) };
+			}),
+	);
+}
+
 export async function exists(relativePath) {
 	try {
 		await stat(join(root, relativePath));
@@ -55,7 +68,7 @@ export function collectCommandHooks(hooks, source) {
 			}
 			group.hooks.forEach((handler, handlerIndex) => {
 				if (typeof handler !== "object" || handler === null || handler.type !== "command") return;
-				commandHooks.push({ source, eventName, groupIndex, handlerIndex, handler });
+				commandHooks.push({ source, eventName, groupIndex, handlerIndex, matcher: group.matcher, handler });
 			});
 		});
 	}
@@ -75,7 +88,7 @@ export function findSpawnAgentCallsWithoutForkContextFalse(content) {
 	const regex = /spawn_agent\(([^)]*)\)/g;
 	for (const match of content.matchAll(regex)) {
 		const call = match[0];
-		if (!/"fork_context"\s*:\s*false|fork_context:\s*false|fork_context=false/.test(call)) {
+		if (!/"fork_context"\s*:\s*false|fork_context:\s*false|fork_context=false|"fork_turns"\s*:\s*"none"|fork_turns:\s*"none"|fork_turns="none"/.test(call)) {
 			missingForkContext.push(call);
 		}
 	}

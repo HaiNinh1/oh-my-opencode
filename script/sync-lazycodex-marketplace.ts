@@ -2,12 +2,10 @@ import { isPlainRecord } from "@oh-my-opencode/utils"
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join, resolve, sep } from "node:path"
 import { validateLazycodexPluginBundle } from "./lazycodex-marketplace-validation"
+import { copyLazycodexRuntimeDists } from "./lazycodex-runtime-dists"
 
 const MARKETPLACE_SOURCE_PATH = join("packages", "omo-codex", "marketplace.json")
 const PLUGIN_SOURCE_PATH = join("packages", "omo-codex", "plugin")
-const GIT_BASH_MCP_DIST_SOURCE_PATH = join("packages", "git-bash-mcp", "dist")
-const LSP_TOOLS_MCP_DIST_SOURCE_PATH = join("packages", "lsp-tools-mcp", "dist")
-const LSP_DAEMON_DIST_SOURCE_PATH = join("packages", "lsp-daemon", "dist")
 const LAZYCODEX_PR_SOURCE_GUIDANCE_SOURCE_PATH = join(
   "packages",
   "omo-codex",
@@ -19,33 +17,12 @@ const LAZYCODEX_PR_SOURCE_GUIDANCE_SOURCE_PATH = join(
 const MARKETPLACE_DESTINATION_PATH = join(".agents", "plugins", "marketplace.json")
 const PLUGIN_DESTINATION_PATH = join("plugins", "omo")
 const LAZYCODEX_PR_SOURCE_GUIDANCE_DESTINATION_PATH = join(".github", "workflows", "pr-source-guidance.yml")
-const GIT_BASH_MCP_DIST_DESTINATION_PATH = join(PLUGIN_DESTINATION_PATH, "components", "git-bash-mcp", "dist")
-const LSP_TOOLS_MCP_DIST_DESTINATION_PATH = join(PLUGIN_DESTINATION_PATH, "components", "lsp-tools-mcp", "dist")
-const LSP_DAEMON_DIST_DESTINATION_PATH = join(PLUGIN_DESTINATION_PATH, "components", "lsp-daemon", "dist")
 const GIT_BASH_MCP_SOURCE_ARG = "../../git-bash-mcp/dist/cli.js"
 const GIT_BASH_MCP_PLUGIN_ARG = "./components/git-bash-mcp/dist/cli.js"
 const LSP_TOOLS_MCP_SOURCE_ARG = "../../lsp-tools-mcp/dist/cli.js"
 const LSP_TOOLS_MCP_PLUGIN_ARG = "./components/lsp-tools-mcp/dist/cli.js"
 const LSP_DAEMON_SOURCE_ARG = "../../lsp-daemon/dist/cli.js"
 const LSP_DAEMON_PLUGIN_ARG = "./components/lsp-daemon/dist/cli.js"
-
-const BUNDLED_MCP_DISTS = [
-  {
-    label: "git-bash MCP",
-    sourcePath: GIT_BASH_MCP_DIST_SOURCE_PATH,
-    destinationPath: GIT_BASH_MCP_DIST_DESTINATION_PATH,
-  },
-  {
-    label: "LSP MCP",
-    sourcePath: LSP_TOOLS_MCP_DIST_SOURCE_PATH,
-    destinationPath: LSP_TOOLS_MCP_DIST_DESTINATION_PATH,
-  },
-  {
-    label: "LSP daemon",
-    sourcePath: LSP_DAEMON_DIST_SOURCE_PATH,
-    destinationPath: LSP_DAEMON_DIST_DESTINATION_PATH,
-  },
-] as const
 
 const MCP_ARG_REWRITES = [
   [GIT_BASH_MCP_SOURCE_ARG, GIT_BASH_MCP_PLUGIN_ARG],
@@ -98,10 +75,16 @@ export async function syncLazycodexMarketplace(input: SyncLazycodexMarketplaceIn
     filter: (path) => shouldCopyPluginPath(path, pluginRoot),
   })
   await copyLazycodexRepositoryWorkflow(sourceRoot, lazycodexRoot)
-  await copyBundledMcpDists(sourceRoot, lazycodexRoot, input.allowMissingBundledDists === true)
+  await copyLazycodexRuntimeDists({
+    sourceRoot,
+    lazycodexRoot,
+    skipMissing: input.allowMissingBundledDists === true,
+  })
   await rewritePluginMcpManifest(destinationPluginRoot)
   await stampReleaseVersion(destinationPluginRoot, input.releaseVersion ?? process.env.LAZYCODEX_RELEASE_VERSION)
-  await validateLazycodexPluginBundle(destinationPluginRoot)
+  await validateLazycodexPluginBundle(destinationPluginRoot, {
+    requireRootCliRuntime: input.allowMissingBundledDists !== true,
+  })
 }
 
 async function readMarketplaceManifest(path: string): Promise<MarketplaceManifest> {
@@ -135,46 +118,12 @@ async function isFile(path: string): Promise<boolean> {
   }
 }
 
-async function isDirectory(path: string): Promise<boolean> {
-  try {
-    return (await stat(path)).isDirectory()
-  } catch (error) {
-    if (error instanceof Error) return false
-    return false
-  }
-}
-
-async function copyBundledMcpDists(sourceRoot: string, lazycodexRoot: string, skipMissing: boolean): Promise<void> {
-  for (const mcpDist of BUNDLED_MCP_DISTS) {
-    await copyBundledMcpDist(sourceRoot, lazycodexRoot, mcpDist, skipMissing)
-  }
-}
-
 async function copyLazycodexRepositoryWorkflow(sourceRoot: string, lazycodexRoot: string): Promise<void> {
   const sourcePath = join(sourceRoot, LAZYCODEX_PR_SOURCE_GUIDANCE_SOURCE_PATH)
   if (!(await isFile(sourcePath))) return
   const destinationPath = join(lazycodexRoot, LAZYCODEX_PR_SOURCE_GUIDANCE_DESTINATION_PATH)
   await mkdir(dirname(destinationPath), { recursive: true })
   await writeFile(destinationPath, await readFile(sourcePath, "utf8"))
-}
-
-async function copyBundledMcpDist(
-  sourceRoot: string,
-  lazycodexRoot: string,
-  mcpDist: (typeof BUNDLED_MCP_DISTS)[number],
-  skipMissing: boolean,
-): Promise<void> {
-  const sourcePath = join(sourceRoot, mcpDist.sourcePath)
-  if (!(await isDirectory(sourcePath))) {
-    if (skipMissing) {
-      console.warn(`[sync-lazycodex-marketplace] previous-payload reconstruction: skipping missing ${mcpDist.label} dist at ${sourcePath}`)
-      return
-    }
-    throw new Error(`missing built ${mcpDist.label} dist at ${sourcePath}`)
-  }
-  const destinationPath = join(lazycodexRoot, mcpDist.destinationPath)
-  await mkdir(dirname(destinationPath), { recursive: true })
-  await cp(sourcePath, destinationPath, { recursive: true })
 }
 
 async function rewritePluginMcpManifest(pluginRoot: string): Promise<void> {
@@ -273,7 +222,13 @@ const PLUGIN_COPY_DENYLIST = new Set([".git", "node_modules", ".ulw", ".claude"]
 function shouldCopyPluginPath(path: string, root: string): boolean {
   const relative = path === root ? "" : path.slice(root.length + sep.length)
   if (relative.length === 0) return true
-  return !relative.split(sep).some((part) => PLUGIN_COPY_DENYLIST.has(part))
+  const parts = relative.split(sep)
+  if (parts.some((part) => PLUGIN_COPY_DENYLIST.has(part))) return false
+  // Codex loads MCP servers only from the plugin-root .mcp.json (.codex-plugin/plugin.json declares
+  // "mcpServers": "./.mcp.json"). A component's own nested .mcp.json is a standalone-plugin dev
+  // manifest whose relative daemon path dangles once the plugin is flattened into the bundle, so it
+  // must never ship in plugins/omo.
+  return !(parts.length > 1 && parts.at(-1) === ".mcp.json")
 }
 
 

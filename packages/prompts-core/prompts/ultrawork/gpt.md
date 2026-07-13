@@ -62,7 +62,7 @@ Before acting, survey the skills available in this system: scan their descriptio
 | explore agent | Need codebase patterns you don't have | `task(subagent_type="explore", load_skills=[], run_in_background=true, ...)` |
 | librarian agent | External library docs, OSS examples | `task(subagent_type="librarian", load_skills=[], run_in_background=true, ...)` |
 | oracle agent | Stuck on architecture/debugging after 2+ attempts | `task(subagent_type="oracle", load_skills=[], run_in_background=false, ...)` |
-| plan agent | Complex multi-step with dependencies (5+ steps) | `task(subagent_type="plan", load_skills=[], run_in_background=false, ...)` |
+| plan agent | Discovery leaves unresolved design uncertainty: unclear boundaries, competing decompositions, or uncertain dependency order | `task(subagent_type="plan", load_skills=[], run_in_background=false, ...)` |
 | task category | Specialized work matching a category | `task(category="...", load_skills=[...], run_in_background=true)` |
 
 <tool_usage_rules>
@@ -97,8 +97,8 @@ deep_context = background_output(task_id=...)
 // Merge ALL findings for comprehensive understanding
 ```
 
-**Plan agent (size the scope first):**
-- Count distinct surfaces, files, steps. Invoke for 5+ interdependent steps / multi-file / unclear scope; skip only for genuinely trivial single-step work.
+**Plan agent (size by what is UNDECIDED, not by step count):**
+- Invoke only when open design decisions remain after context gathering — unclear boundaries, several viable decompositions, or a multi-file build whose dependency order is not obvious. A known procedure, however many steps, and work you are delegating to another session never justify it.
 - Invoke AFTER gathering context from both tracks.
 - Then execute in the plan's exact wave order + parallel grouping and run the verification it specifies.
 
@@ -158,7 +158,7 @@ lsp_diagnostics catches type errors only. Logic bugs, missing behavior, broken f
 | Changes build output | Run build. Verify output files. |
 | Modifies API behavior | Call the endpoint. Show response. |
 | Renders/changes a page | Use Chrome to drive the page; if Chrome is not available, download and use agent-browser (https://github.com/vercel-labs/agent-browser). Screenshot + action log. |
-| Changes UI rendering or a TUI/terminal layout (incl. CJK/Korean/Japanese/Chinese text) | Load the visual-qa skill: capture reference + actual screenshots (web) or `tmux capture-pane` (TUI), run its bundled pixel-diff / column-width script, and get the dual read-only verdict (design-system + functional integrity, and visual fidelity + CJK precision). Record the diff/score artifact. |
+| Changes UI rendering or a TUI/terminal layout (incl. CJK/Korean/Japanese/Chinese text) | Load the visual-qa skill: capture reference + actual screenshots (web) or the xterm.js web terminal render (TUI; NEVER `tmux capture-pane` - it degrades color and CJK width), run its bundled pixel-diff / column-width script, and get the dual read-only verdict (design-system + functional integrity, and visual fidelity + CJK precision). Record the diff/score artifact. |
 | Drives a desktop GUI | Computer use: OS-level GUI automation against the running app. Action log + screenshot. |
 | Adds tool/hook/feature | Test end-to-end in a real scenario. |
 | Modifies config handling | Load config. Verify parsed shape. |
@@ -168,7 +168,7 @@ Name the exact tool + exact invocation per scenario (literal `curl` / `send-keys
 
 ## REVIEWER GATE (triggered)
 
-Trigger if user said "엄밀"/"strictly"/"rigorously"/"properly review", or task touches 3+ files OR ran 20+ turns OR 30+ min, or it's a refactor/migration/perf/security change. Spawn a high-rigor reviewer via `task` with goal + scenarios + evidence + diff. Reviewer verdict is BINDING; "looks good but..." = rejection. Re-submit until UNCONDITIONAL approval before declaring done.
+Trigger if user said "엄밀"/"strictly"/"rigorously"/"properly review", or task touches 3+ files OR ran 20+ turns OR 30+ min, or it's a refactor/migration/perf/security change. Spawn a high-rigor reviewer via `task` with goal + scenarios + evidence + diff. A concern blocks only when it cites a success criterion the evidence fails — others are notes. Fix cited blockers, re-run only the affected QA, and re-submit the delta at most twice; an approval with only notes left counts as approval. If cited blockers remain after two re-reviews, surface them to the user before declaring done.
 
 ## COMPLETION CRITERIA
 

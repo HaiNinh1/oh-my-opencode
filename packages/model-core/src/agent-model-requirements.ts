@@ -32,12 +32,17 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
   hephaestus: {
     fallbackChain: [
       {
-        providers: ["openai", "github-copilot", "venice", "opencode", "vercel"],
+        providers: ["openai", "vercel"],
+        model: "gpt-5.6-sol",
+        variant: "high",
+      },
+      {
+        providers: ["openai", "github-copilot", "opencode", "vercel"],
         model: "gpt-5.5",
         variant: "medium",
       },
     ],
-    requiresProvider: ["openai", "github-copilot", "venice", "opencode", "vercel"],
+    requiresProvider: ["openai", "github-copilot", "opencode", "vercel"],
     requiresAnyModel: true,
   },
   oracle: {
@@ -57,7 +62,7 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
         model: "claude-opus-4-7",
         variant: "max",
       },
-      { providers: ["opencode-go", "vercel"], model: "glm-5.1" },
+      { providers: ["opencode-go", "vercel"], model: "glm-5.2" },
     ],
   },
   librarian: {
@@ -104,7 +109,7 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
         model: "gpt-5.5",
         variant: "high",
       },
-      { providers: ["opencode-go", "vercel"], model: "glm-5.1" },
+      { providers: ["opencode-go", "vercel"], model: "glm-5.2" },
       {
         providers: ["google", "github-copilot", "opencode", "vercel"],
         model: "gemini-3.1-pro",
@@ -127,12 +132,17 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
         model: "gpt-5.5",
         variant: "high",
       },
-      { providers: ["opencode-go", "vercel"], model: "glm-5.1" },
+      { providers: ["opencode-go", "vercel"], model: "glm-5.2" },
       { providers: ["kimi-for-coding"], model: "k2p5" },
     ],
   },
   momus: {
     fallbackChain: [
+      {
+        providers: ["openai", "vercel"],
+        model: "gpt-5.6-sol",
+        variant: "xhigh",
+      },
       {
         providers: ["openai", "github-copilot", "opencode", "vercel"],
         model: "gpt-5.5",
@@ -148,7 +158,7 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
         model: "gemini-3.1-pro",
         variant: "high",
       },
-      { providers: ["opencode-go", "vercel"], model: "glm-5.1" },
+      { providers: ["opencode-go", "vercel"], model: "glm-5.2" },
     ],
   },
   atlas: {

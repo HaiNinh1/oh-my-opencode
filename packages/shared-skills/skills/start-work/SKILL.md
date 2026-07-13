@@ -14,17 +14,22 @@ Translate any OpenCode-only tool name in an inherited example to its Codex equiv
 | OpenCode example | Codex tool to use |
 | --- | --- |
 | final-review `task(...)` | `multi_agent_v1.spawn_agent({"message":"TASK: act as a rigorous reviewer. ...","agent_type":"lazycodex-gate-reviewer","fork_context":false})` |
-| worker `task(...)` | `multi_agent_v1.spawn_agent({"message":"TASK: act as <role>. ...","fork_context":false})` |
+| worker `task(...)` | `multi_agent_v1.spawn_agent({"message":"TASK: act as <role>. ...","fork_context":false})` — for implementation workers add `agent_type: "lazycodex-worker-<low|medium|high>"` when the spawn schema exposes `agent_type` |
 | `background_output(task_id="...")` | `multi_agent_v1.wait_agent(...)` for mailbox signals |
 | `team_*(...)` | `multi_agent_v1.spawn_agent` + `multi_agent_v1.send_input` + `multi_agent_v1.wait_agent` + `multi_agent_v1.close_agent` |
 
 When translating `load_skills=[...]`, name the skills inside the spawned agent's `message`. If a code block below conflicts with this section, this section wins.
 
+Codex exposes ONE of two subagent tool surfaces per session; check your own tool list and route accordingly. If `multi_agent_v1.*` tools exist, use the table above as written. If instead a flat `spawn_agent` with a required `task_name` exists (`multi_agent_v2`), rewrite every `multi_agent_v1.*` example: `multi_agent_v1.spawn_agent({...,"fork_context":false})` becomes `spawn_agent({"task_name":"<lowercase_digits_underscores>","message":...,"agent_type":...,"fork_turns":"none"})` (`"all"` only when full parent history is truly required); `send_input` becomes `send_message`; do not call `close_agent`/`resume_agent` (finished agents end on their own; `followup_task` re-tasks one, `interrupt_agent` stops one); `wait_agent` takes only `timeout_ms` and returns on any child mailbox activity. On the v2 surface `agent_type` may be absent from the spawn schema — when absent, omit it and describe the role inside `message`. If a code block below conflicts with this section, this section wins.
+
+### Delegation by difficulty (Codex tier workers)
+When tier worker agents are installed (Codex), size each implementation lane by difficulty and pass the matching `agent_type` where the spawn schema exposes it: LOW (one-file fix, boilerplate, config/copy) -> `lazycodex-worker-low`; MEDIUM (standard feature, few files, known patterns) -> `lazycodex-worker-medium`; HIGH (new module, cross-module refactor, concurrency/security/migration) -> `lazycodex-worker-high`. Explorer/librarian research lanes keep their own roles. Difficulty (model power) is orthogonal to the LIGHT/HEAVY rigor tier in step 4 — judge each on its own facts. On spawn surfaces without `agent_type` (deployed v2), state the tier inside `message`.
+
 ## Codex Subagent Reliability
 
 Every `multi_agent_v1.spawn_agent` message is a self-contained executable assignment: `TASK: <imperative assignment>`, then `DELIVERABLE`, `SCOPE`, and `VERIFY`, with role instructions inside `message`. Use `fork_context: false` unless full history is truly required; paste only the context the child needs.
 
-Plan and reviewer agents may run for a long time: spawn them in the background, keep doing independent root work, and poll with short `multi_agent_v1.wait_agent` cycles — never a single long blocking wait. A timeout only means no new mailbox update arrived; treat a running child as alive. Require `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Keep the parent visibly alive with active subagent count, names, and latest `WORKING:` phase. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running — then record inconclusive (never a pass), close if safe, and respawn a smaller `fork_context: false` task with the missing deliverable.
+Plan and reviewer agents may run for a long time: spawn them in the background and keep doing independent root work. Between `multi_agent_v1.wait_agent` calls, back off — double the timeout up to ~5 minutes — instead of spinning short cycles. A timeout only means no new mailbox update arrived; treat a running child as alive. Require `WORKING: <task> - <current phase>` before long passes and `BLOCKED: <reason>` only when progress stops. Keep the parent visibly alive with active subagent count, names, and latest `WORKING:` phase. Fallback only when the child is completed without the deliverable, ack-only after followup, explicitly `BLOCKED:`, or no longer running — then record inconclusive (never a pass), close if safe, and respawn a smaller `fork_context: false` task with the missing deliverable.
 
 # start-work
 
@@ -37,7 +42,7 @@ $start-work [plan-name] [--worktree <absolute-path>]
 ```
 
 - `plan-name` (optional): a full or partial file stem under `.omo/plans/`.
-- `--worktree` (optional): only when the user explicitly asks for a separate git worktree.
+- `--worktree` (required for PR/branch work; otherwise optional): the task-owned git worktree path.
 
 ## Phase 1: Select the plan
 
@@ -80,7 +85,7 @@ Write `.omo/boulder.json` before implementation starts. Prefix session ids with 
 }
 ```
 
-If `--worktree` is set, verify the path with `git worktree list --porcelain` or create it with `git worktree add <path> <branch-or-HEAD>`, then store the absolute path as `worktree_path`. All edits, commands, tests, and evidence capture must run inside that worktree.
+For PR/branch work, `--worktree` is mandatory before implementation starts. Verify the path with `git worktree list --porcelain` or create it with `git worktree add <path> <branch-or-HEAD>`, then store the absolute path as `worktree_path`. All edits, commands, tests, and evidence capture must run inside that worktree.
 
 ## Phase 3: Execute the next checkbox
 
@@ -97,11 +102,12 @@ Each sub-task message must include:
 2. When the task touches existing behavior: a baseline characterization test, written first, that pins current observable behavior and passes on the unchanged code (exact inputs, exact observable, exact assertion). Then the failing-first proof for the new behavior before production changes — a unit test where a seam exists, otherwise the sub-task's Manual-QA scenario captured failing. A test that mirrors its implementation (mock-call assertions, pinned constants) is not evidence.
 3. Implementation constraints from the plan and project rules.
 4. Automated verification commands to run.
-5. One Manual-QA channel, named with the exact tool and exact invocation (the literal `curl`, `send-keys`, `page.click`, payload, selectors, and the binary observable that decides PASS/FAIL), not "verify it works". A LIGHT checkbox needs one real-surface proof of its deliverable, and auxiliary surfaces (CLI stdout, DB state diff, parsed config dump) are first-class when the surface is CLI- or data-shaped:
+5. One Manual-QA channel, named with the exact tool and exact invocation (the literal `curl`, `send-keys`, `browser:control-in-app-browser` action, `page.click`, payload, selectors, and the binary observable that decides PASS/FAIL), not "verify it works". A LIGHT checkbox needs one real-surface proof of its deliverable, and auxiliary surfaces (CLI stdout, DB state diff, parsed config dump) are first-class when the surface is CLI- or data-shaped:
    - HTTP call: `curl -i` against the live endpoint.
-   - tmux: a `tmux` session driven with `send-keys`, dumped via `capture-pane`.
-   - Browser use: drive the real page with Chrome, or agent-browser (https://github.com/vercel-labs/agent-browser) when Chrome is unavailable.
+   - Terminal / TUI: drive a real pty; `tmux send-keys` is fine for a boot/behavior smoke, but color/layout/CJK evidence goes through the xterm.js web terminal below, NEVER `tmux capture-pane`.
+   - Browser use: in Codex, use `browser:control-in-app-browser` first when available and the scenario does not need an authenticated or persistent user browser profile; otherwise drive the real page with Chrome, or agent-browser (https://github.com/vercel-labs/agent-browser) when Chrome is unavailable.
    - Computer use: OS-level GUI automation against the running desktop app when the surface is not a page.
+   - TUI visual evidence: when a TUI claim needs visual QA or PR proof, run `node script/qa/web-terminal-visual-qa.mjs --command "<cmd>" --input "{Enter}" --evidence-dir <dir>` (real pty rendered through xterm.js in Chrome) and attach `terminal.png` plus `metadata.json`.
 6. The adversarial classes that apply to this sub-task (from the 9 ultraqa classes) and how each is probed.
 7. Required artifact path and cleanup receipt.
 
@@ -163,7 +169,7 @@ Only after verification passes:
 When all top-level checkboxes in `## TODOs` and `## Final Verification Wave` are complete:
 
 1. Run the plan's final verification commands.
-2. If worktree mode was used, sync `.omo/` state back to the main repo, merge or hand off exactly as requested, and remove the worktree only after successful merge or explicit handoff.
+2. For PR/branch work, finish the lifecycle from the task-owned worktree: sync `.omo/` state back to the main repo, create or update the PR, wait for review/verification gates, merge by default unless explicitly opted out, and remove the worktree only after successful merge or explicit handoff.
 3. Remove or mark the Boulder work as completed.
 4. Print an `ORCHESTRATION COMPLETE` block with the plan path, verification commands, artifacts, and cleanup receipts.
 
@@ -174,5 +180,6 @@ When all top-level checkboxes in `## TODOs` and `## Final Verification Wave` are
 - No tests-only completion claim. A Manual-QA artifact is required.
 - **NO DIRECT IMPLEMENTATION BY THE ORCHESTRATOR.** Root NEVER edits product files, writes tests, or runs QA itself — a spawned worker does.
 - No completion claim while an applicable ultraqa adversarial class was never probed. Each applicable class needs a captured observable result; each skipped class needs a one-line not-applicable reason in the ledger.
+- No PR/branch implementation, review, or merge in the main worktree; use the task-owned git worktree.
 - No unprefixed session ids in Boulder state. Codex sessions are always `codex:<session_id>`.
 - No stale-memory execution. The plan and ledger are the durable source of truth.

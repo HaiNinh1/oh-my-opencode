@@ -165,18 +165,25 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     })
   })
 
-  test("momus has gpt-5.5 xhigh as primary", () => {
+  test("momus has gpt-5.6-sol xhigh as primary before gpt-5.5 xhigh", () => {
     // given
     const momus = AGENT_MODEL_REQUIREMENTS["momus"]
 
     // when
-    const primary = momus.fallbackChain[0]
+    const [primary, secondary] = momus.fallbackChain
 
     // then
-    expect(momus.fallbackChain.length).toBeGreaterThan(0)
-    expect(primary?.model).toBe("gpt-5.5")
-    expect(primary?.variant).toBe("xhigh")
-    expect(primary?.providers[0]).toBe("openai")
+    expect(momus.fallbackChain.length).toBeGreaterThan(1)
+    expect(primary).toEqual({
+      providers: ["openai", "vercel"],
+      model: "gpt-5.6-sol",
+      variant: "xhigh",
+    })
+    expect(secondary).toEqual({
+      providers: ["openai", "github-copilot", "opencode", "vercel"],
+      model: "gpt-5.5",
+      variant: "xhigh",
+    })
   })
 
   test("atlas keeps sonnet, kimi, gpt-5.5, and minimax fallback order", () => {
@@ -244,7 +251,7 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     expect(bigPickleIndex).toBeGreaterThan(minimaxIndex)
   })
 
-  test("hephaestus supports openai, github-copilot, venice, opencode, and vercel providers", () => {
+  test("hephaestus supports openai, github-copilot, opencode, and vercel providers", () => {
     // given
     const hephaestus = AGENT_MODEL_REQUIREMENTS["hephaestus"]
 
@@ -252,11 +259,32 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     expect(hephaestus.requiresProvider).toEqual([
       "openai",
       "github-copilot",
-      "venice",
       "opencode",
       "vercel",
     ])
+    expect(hephaestus.requiresProvider).not.toContain("venice")
+    expect(hephaestus.fallbackChain[0]?.providers).not.toContain("venice")
     expect(hephaestus.requiresModel).toBeUndefined()
     expect(hephaestus.requiresAnyModel).toBe(true)
+  })
+
+  test("hephaestus has gpt-5.6-sol high as primary before gpt-5.5 medium", () => {
+    // given
+    const hephaestus = AGENT_MODEL_REQUIREMENTS["hephaestus"]
+
+    // when
+    const [primary, secondary] = hephaestus.fallbackChain
+
+    // then
+    expect(primary).toEqual({
+      providers: ["openai", "vercel"],
+      model: "gpt-5.6-sol",
+      variant: "high",
+    })
+    expect(secondary).toEqual({
+      providers: ["openai", "github-copilot", "opencode", "vercel"],
+      model: "gpt-5.5",
+      variant: "medium",
+    })
   })
 })

@@ -6,6 +6,7 @@ import { getLocalVersion } from "./get-local-version"
 import { doctor, resolveDoctorTarget } from "./doctor"
 import { createMcpOAuthCommand } from "./mcp-oauth"
 import { configureRuntimeCommands } from "./runtime-commands"
+import { availableInstallPlatforms, isSenpiPlatformEnabled, SENPI_PLATFORM_ENV_FLAG } from "./senpi-platform-flag"
 import type { InstallArgs } from "./types"
 import type { RunOptions } from "./run"
 import type { GetLocalVersionOptions } from "./get-local-version/types"
@@ -39,11 +40,24 @@ type RootCommandOptions = {
   readonly platform?: InstallArgs["platform"]
 }
 
+type DoctorCommandOptions = {
+  readonly status?: boolean
+  readonly verbose?: boolean
+  readonly json?: boolean
+  readonly platform?: DoctorOptions["target"]
+}
+
 export function resolveInstallArgs(
   options: InstallCommandOptions,
   invocationName: string | undefined = process.env.OMO_INVOCATION_NAME,
 ): InstallArgs {
   const defaultPlatform = invocationName === "lazycodex" || invocationName === "lazycodex-ai" ? "codex" : undefined
+  const platform = options.platform ?? defaultPlatform
+  if (platform === "senpi" && !isSenpiPlatformEnabled()) {
+    throw new Error(
+      `The senpi install platform is not available in this release. Set ${SENPI_PLATFORM_ENV_FLAG}=1 to enable it from a source checkout.`,
+    )
+  }
 
   return {
     tui: options.tui !== false,
@@ -51,7 +65,7 @@ export function resolveInstallArgs(
     openai: options.openai,
     gemini: options.gemini,
     copilot: options.copilot,
-    platform: options.platform ?? defaultPlatform,
+    platform,
     opencodeZen: options.opencodeZen,
     zaiCodingPlan: options.zaiCodingPlan,
     kimiForCoding: options.kimiForCoding,
@@ -72,7 +86,7 @@ program
   .description("The ultimate OpenCode plugin - multi-model orchestration, LSP tools, and more")
   .version(VERSION, "-v, --version", "Show version number")
   .helpOption("-h, --help", "Display help for command")
-  .addOption(new Option("--platform <platform>", "Install target platform: opencode, codex, both").choices(["opencode", "codex", "both"]).hideHelp())
+  .addOption(new Option("--platform <platform>", `Install target platform: ${availableInstallPlatforms().join(", ")}`).choices(availableInstallPlatforms()).hideHelp())
   .enablePositionalOptions()
 
 program
@@ -84,7 +98,7 @@ program
   .option("--openai <value>", "OpenAI/ChatGPT subscription: no, yes (default: no)")
   .option("--gemini <value>", "Gemini integration: no, yes")
   .option("--copilot <value>", "GitHub Copilot subscription: no, yes")
-  .addOption(new Option("--platform <platform>", "Install target platform: opencode, codex, both").choices(["opencode", "codex", "both"]))
+  .addOption(new Option("--platform <platform>", `Install target platform: ${availableInstallPlatforms().join(", ")}`).choices(availableInstallPlatforms()))
   .option("--opencode-zen <value>", "OpenCode Zen access: no, yes (default: no)")
   .option("--zai-coding-plan <value>", "Z.ai Coding Plan subscription: no, yes (default: no)")
   .option("--kimi-for-coding <value>", "Kimi For Coding subscription: no, yes (default: no)")
@@ -220,18 +234,22 @@ program
   .option("--status", "Show compact system dashboard")
   .option("--verbose", "Show detailed diagnostic information")
   .option("--json", "Output results in JSON format")
+  .addOption(new Option("--platform <platform>", "Doctor target platform: opencode, codex").choices(["opencode", "codex"]))
   .addHelpText("after", `
 Examples:
   $ bunx oh-my-opencode doctor            # Show problems only
   $ bunx oh-my-opencode doctor --status   # Compact dashboard
   $ bunx oh-my-opencode doctor --verbose  # Deep diagnostics
   $ bunx oh-my-opencode doctor --json     # JSON output
+  $ omo doctor --platform=codex           # Codex/LazyCodex diagnostics only
 `)
-  .action(async (options) => {
+  .action(async (options: DoctorCommandOptions) => {
+    const rootOptions = program.opts<RootCommandOptions>()
+    const rootDoctorPlatform = rootOptions.platform === "opencode" || rootOptions.platform === "codex" ? rootOptions.platform : undefined
     const mode = options.status ? "status" : options.verbose ? "verbose" : "default"
     const doctorOptions: DoctorOptions = {
       mode,
-      json: options.json ?? false, target: resolveDoctorTarget(process.env.OMO_INVOCATION_NAME),
+      json: options.json ?? false, target: resolveDoctorTarget(process.env.OMO_INVOCATION_NAME, options.platform ?? rootDoctorPlatform),
     }
     const exitCode = await doctor(doctorOptions)
     process.exit(exitCode)

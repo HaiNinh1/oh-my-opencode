@@ -57,6 +57,10 @@ type RalphLoopHook = {
   cancelLoop: (sessionID: string) => boolean | void
 }
 
+type TodoContinuationEnforcerHook = {
+  cancelAllCountdowns: () => void
+}
+
 export type ChatMessageHooks = {
   modelFallback?: ChatMessageHook | null
   stopContinuationGuard?: StopContinuationGuard | null
@@ -73,4 +77,5 @@ export type ChatMessageHooks = {
   startWork?: ChatMessageHook | null
   executePlan?: ChatMessageHook | null
   ralphLoop?: RalphLoopHook | null
+  todoContinuationEnforcer?: TodoContinuationEnforcerHook | null
 }
