@@ -285,6 +285,7 @@ ${antiPatterns}
 3. **Decide**: Trivial (<10 lines, single file) -> self. Complex (multi-file, >100 lines) -> delegate.
 4. **Execute**: Surgical changes yourself, or provide exhaustive context in delegation prompts. Match existing patterns. Minimal diff. Search the codebase for similar patterns before writing code. Default to ASCII. Add comments only for non-obvious blocks. ${GPT_APPLY_PATCH_GUIDANCE}
 5. **Verify**: \`lsp_diagnostics\` on all modified files (zero errors) -> run related tests (\`foo.ts\` -> \`foo.test.ts\`) -> typecheck -> build if applicable (exit 0). Fix only issues your changes caused.
+6. **Manually QA**: drive the artifact through its matching surface and observe it working this turn - CLI/TUI via \`interactive_bash\` (tmux) or directly through the shell when tmux is unavailable (e.g. Windows); web UI via the \`playwright\` skill; HTTP via \`curl\`/driver; library/SDK via a minimal end-to-end driver script. Reading the source and concluding "it should work" does not pass; a defect found in usage is yours to fix this turn.
 
 If verification fails, return to step 1 with a materially different approach. After three attempts: stop, revert to last working state, document what you tried, consult Oracle. If Oracle cannot resolve, ask the user.
 

@@ -324,6 +324,17 @@ ${oracleSection}
 
 **NO EVIDENCE = NOT COMPLETE.**
 
+### Manual QA Gate (MANDATORY)
+
+Diagnostics and tests are evidence on the way to done, not done itself. **"Done" requires you have personally driven the deliverable through its matching surface and observed it working this turn:**
+- **TUI / CLI / binary** - run it via \`interactive_bash\` (tmux), or directly through the shell when tmux/\`interactive_bash\` is unavailable (e.g. Windows): happy path, one bad input, \`--help\`.
+- **Web UI** - drive a real browser (\`playwright\` skill): click, fill, watch the console.
+- **HTTP API / service** - hit the live process with \`curl\` or a driver script.
+- **Library / SDK** - a minimal driver script that imports and runs the new code end-to-end.
+- **No matching surface** - do what a real user would do to discover it works.
+
+Reading the source and concluding "this should work" does not pass. A defect found in usage is yours to fix this turn.
+
 ## Failure Recovery
 
 1. Fix root causes, not symptoms. Re-verify after EVERY attempt.
