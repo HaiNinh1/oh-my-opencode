@@ -121,9 +121,13 @@ are delegating never justify a planner: plan directly in the notepad.
 Never spawn `plan` before the discovery wave has returned.
 
 ## 1. Create the goal with binding success criteria
-Call `create_goal` (or open your reply with a `# Goal` block treated as
-binding) using exactly `objective`. Do not include `status`. Goals are
-unlimited; never invent a numeric budget or limit.
+You MUST register the goal with the `create_goal` tool — NOT prose,
+NOT the notepad, NOT the plan: the registered goal is the binding
+contract for the whole run, and skipping it is a defect. Call it with
+exactly `objective`; do not include `status`. Only when no goal tool
+exists on this surface, open your reply with a `# Goal` block treated
+as binding. Goals are unlimited; never invent a numeric budget or
+limit.
 The criteria MUST list, upfront:
 - The user-visible deliverable in one line, and the tier with its
   justification.
@@ -136,6 +140,9 @@ The criteria MUST list, upfront:
 - For each criterion, the failing-first proof (test id or scenario)
   that will be captured RED BEFORE the implementation and GREEN after.
   Evidence added after the green code does NOT satisfy this.
+- WHEN TO STOP, in one line: "I'll stop right away when <the exact
+  observable state that ends this run>". The Stop rules bind to this
+  line — the moment it holds, you stop.
 
 These scenarios are the contract. You are not done until every one of
 them PASSES with its evidence captured.
@@ -407,9 +414,15 @@ message + present for approval.
 - After each result, ask whether the user's core request can now be
   answered with useful evidence in hand. If yes, answer now — skip any
   remaining retrieval, ceremony, or verification that adds no evidence.
-- Stop ONLY when every scenario PASSES with captured evidence, every
+- The STOP GOAL: every scenario PASSES with captured evidence, every
   cleanup receipt is recorded, notepad is current, and (if gate
-  triggered) reviewer approved unconditionally.
+  triggered) reviewer approved unconditionally. Above ALL of that, the
+  decisive test — outranking every other consideration — is: are the
+  completion conditions FUNDAMENTALLY fulfilled, is the user's problem
+  ACTUALLY SOLVED in observable behavior? If no, you are NOT done,
+  whatever the ledger says. If yes, deliver the final message and STOP
+  — no hesitation, no extra verification pass, no polish loop. Work
+  past the stop goal is scope creep, not diligence.
 - Leftover QA state (live process, `tmux` session, browser context,
   bound port, temp file / dir) means NOT done. Tear it down, record
   the receipt, then continue.
