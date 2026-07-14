@@ -97,30 +97,6 @@ describe("hermes-routing-guard", () => {
           )
         ).resolves.toBeUndefined()
       })
-
-      test("#then should allow routing to mnemosyne", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "mnemosyne", prompt: "Compact plan" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow routing to heracles", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "heracles", prompt: "Execute plan" } },
-          )
-        ).resolves.toBeUndefined()
-      })
     })
 
     describe("#when calling task with category (forbidden for hermes)", () => {
@@ -300,66 +276,6 @@ describe("hermes-routing-guard", () => {
         ).resolves.toBeUndefined()
       })
 
-      test("#then should allow 'Mnemosyne (Compact Planner)' by resolving to mnemosyne", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "Mnemosyne (Compact Planner)", prompt: "Compact plan" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow 'Heracles (Executor)' by resolving to heracles", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "Heracles (Executor)", prompt: "Execute" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow previous Heracles no-space display name as compatibility alias", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "Heracles(Executor)", prompt: "Execute" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow previous Heracles Forgeborn display name as compatibility alias", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "Heracles (Forgeborn)", prompt: "Execute" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow previous Heracles Direct Executor display name as compatibility alias", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "Heracles (Direct Executor)", prompt: "Execute" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
       test("#then should still block display names of unauthorized agents", async () => {
         setupMessageStorage(TEST_SESSION_ID, "hermes")
         const hook = createHermesRoutingGuardHook(createMockPluginInput())
@@ -430,30 +346,6 @@ describe("hermes-routing-guard", () => {
           hook["tool.execute.before"](
             { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
             { args: { subagent_type: "pro", prompt: "Plan feature" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow 'mne' by resolving to mnemosyne", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "mne", prompt: "Compact plan" } },
-          )
-        ).resolves.toBeUndefined()
-      })
-
-      test("#then should allow 'her' by resolving to heracles", async () => {
-        setupMessageStorage(TEST_SESSION_ID, "hermes")
-        const hook = createHermesRoutingGuardHook(createMockPluginInput())
-
-        await expect(
-          hook["tool.execute.before"](
-            { tool: "task", sessionID: TEST_SESSION_ID, callID: "call-1" },
-            { args: { subagent_type: "her", prompt: "Execute" } },
           )
         ).resolves.toBeUndefined()
       })

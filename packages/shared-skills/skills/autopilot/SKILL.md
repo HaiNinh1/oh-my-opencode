@@ -1,6 +1,6 @@
 ---
 name: autopilot
-description: "Full autonomous execution from a brief idea to working, verified code. Orchestrates OMO's existing primitives end to end: clarify/plan (ulw-plan / prometheus / mnemosyne / metis) -> execute (ralph-loop persistence + parallel_tasks waves) -> QA (the ultraqa skill) -> final multi-perspective review (momus / review-work). MUST USE when the user wants hands-off, idea-to-working-code execution across multiple phases. Triggers: autopilot, auto pilot, full auto, autonomous, build me, create me, make me, handle it all end to end, take it from idea to working code, I want a/an ..."
+description: "Full autonomous execution from a brief idea to working, verified code. Orchestrates OMO's existing primitives end to end: clarify/plan (ulw-plan / prometheus / metis) -> execute (ralph-loop persistence + parallel_tasks waves) -> QA (the ultraqa skill) -> final multi-perspective review (momus / review-work). MUST USE when the user wants hands-off, idea-to-working-code execution across multiple phases. Triggers: autopilot, auto pilot, full auto, autonomous, build me, create me, make me, handle it all end to end, take it from idea to working code, I want a/an ..."
 metadata:
   short-description: Idea-to-working-code pipeline composing OMO's plan / ralph-loop / ultraqa / review primitives
 ---
@@ -19,7 +19,7 @@ You are running **autopilot** - an idea-to-working-code pipeline. You take a bri
 
 | Phase | OMO primitive | Role |
 | --- | --- | --- |
-| Clarify + plan | `ulw-plan` skill (Prometheus), `mnemosyne`, `metis` | turn the idea into ONE decision-complete plan under `.omo/plans/` |
+| Clarify + plan | `ulw-plan` skill (Prometheus), `metis` | turn the idea into ONE decision-complete plan under `.omo/plans/` |
 | Execute | `ralph-loop` persistence + `parallel_tasks` / `task` workers (`sisyphus`, `hephaestus`) | implement the plan in parallel waves until done |
 | QA | `ultraqa` skill | bounded test/diagnose/fix cycling per checkbox or globally |
 | Review | `momus`, `review-work` skill, `oracle` | adversarial multi-perspective validation |

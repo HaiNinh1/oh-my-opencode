@@ -9,8 +9,6 @@ export const HERMES_AGENT_NAMES = ["hermes"]
 export const HERMES_ALLOWED_SUBAGENT_TYPES = [
   "atlas",
   "prometheus",
-  "mnemosyne",
-  "heracles",
   "hephaestus",
   "sisyphus",
 ] as const
@@ -67,8 +65,8 @@ HOW TO FIX:
 1. Re-read the user's request to identify which AVAILABLE AGENT they want
 2. Use one of the allowed subagent_type values listed above
 3. If the user asked for "${subagentType}", route to the closest match from your table:
-   - For orchestration/execution: atlas or heracles
-   - For planning: prometheus or mnemosyne
+   - For orchestration/execution: atlas
+   - For planning: prometheus
    - For deep work: hephaestus
    - For general work: sisyphus`
 }

@@ -135,7 +135,6 @@ export function createChatMessageHandler(args: {
       runtimeFallbackEnabled,
     })
     await runStartWorkHookIfApplicable(hooks, input, output)
-    await hooks.executePlan?.["chat.message"]?.(input, output)
     notifyWhenModelCacheIsMissing(pluginContext.client.tui)
     handleRalphLoopMessage({
       hooks,

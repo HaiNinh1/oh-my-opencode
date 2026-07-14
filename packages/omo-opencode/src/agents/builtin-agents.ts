@@ -4,7 +4,6 @@ import type { CategoriesConfig, GitMasterConfig } from "../config/schema"
 import type { LoadedSkill } from "../features/opencode-skill-loader/types"
 import type { BrowserAutomationProvider } from "../config/schema"
 import { createSisyphusAgent } from "./sisyphus"
-import { createHeraclesAgent } from "./heracles"
 import { createOracleAgent, ORACLE_PROMPT_METADATA } from "./oracle"
 import { createLibrarianAgent, LIBRARIAN_PROMPT_METADATA } from "./librarian"
 import { createExploreAgent, EXPLORE_PROMPT_METADATA } from "./explore"
@@ -13,7 +12,6 @@ import { createMetisAgent, metisPromptMetadata } from "./metis"
 import { createAtlasAgent, atlasPromptMetadata } from "./atlas"
 import { createMomusAgent, momusPromptMetadata } from "./momus"
 import { createHephaestusAgent } from "./hephaestus"
-import { createMnemosyneAgent, mnemosynePromptMetadata } from "./mnemosyne"
 import { createHermesAgent, HERMES_PROMPT_METADATA } from "./hermes"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
@@ -34,7 +32,6 @@ type AgentSource = AgentFactory | AgentConfig
 
 const agentSources: Record<BuiltinAgentName, AgentSource> = {
   sisyphus: createSisyphusAgent,
-  heracles: createHeraclesAgent,
   hephaestus: createHephaestusAgent,
   oracle: createOracleAgent,
   librarian: createLibrarianAgent,
@@ -45,7 +42,6 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   // Note: Atlas is handled specially in createBuiltinAgents()
   // because it needs OrchestratorContext, not just a model string
   atlas: createAtlasAgent as AgentFactory,
-  mnemosyne: createMnemosyneAgent,
   hermes: createHermesAgent as AgentFactory,
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as AgentFactory,
 }
@@ -62,7 +58,6 @@ const agentMetadata: Partial<Record<BuiltinAgentName, AgentPromptMetadata>> = {
   metis: metisPromptMetadata,
   momus: momusPromptMetadata,
   atlas: atlasPromptMetadata,
-  mnemosyne: mnemosynePromptMetadata,
   hermes: HERMES_PROMPT_METADATA,
 }
 

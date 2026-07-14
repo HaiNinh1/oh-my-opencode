@@ -75,7 +75,6 @@ export type ChatMessageHooks = {
   hephaestusAgentsMdInjector?: ChatMessageHook | null
   hermesPromptHardener?: ChatMessageHook | null
   startWork?: ChatMessageHook | null
-  executePlan?: ChatMessageHook | null
   ralphLoop?: RalphLoopHook | null
   todoContinuationEnforcer?: TodoContinuationEnforcerHook | null
 }
