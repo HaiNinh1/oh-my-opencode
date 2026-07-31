@@ -11033,7 +11033,8 @@ async function runCodexInstaller(options = {}) {
     gitBashEnabled: platform === "win32" && gitBashResolution.found,
     trustedHookStates,
     agentConfigs: [...agentConfigs.values()].sort((left, right) => left.name.localeCompare(right.name)),
-    autonomousPermissions: options.autonomousPermissions !== false
+    autonomousPermissions: options.autonomousPermissions !== false,
+    ...options.reasoning === undefined ? {} : { reasoning: options.reasoning }
   });
   await seedAndMigrateOmoSot({ env: env2, log, repoRoot, runCommand });
   const projectCleanup = await repairProjectLocalCodexArtifactsBestEffort({

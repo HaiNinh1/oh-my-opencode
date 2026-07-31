@@ -8776,7 +8776,7 @@ async function runProcessFamilySweep(config2, options) {
   }
   try {
     const plan = await config2.collect();
-    const { failed, killed } = dryRun ? { failed: [], killed: [] } : await killTargets(plan.killList, options, config2.familyLabel);
+    const { failed, killed } = dryRun ? { failed: [], killed: [] } : await killTargets(plan.killList, options, config2);
     if (!dryRun)
       writeSweepStamp(config2.stampFile, nowMs);
     return {
@@ -8793,16 +8793,18 @@ async function runProcessFamilySweep(config2, options) {
     return { action: "failed", candidates: [], dryRun, failed: [], killed: [], spared: [], stampFile: config2.stampFile };
   }
 }
-async function killTargets(targets, options, familyLabel) {
+async function killTargets(targets, options, config2) {
   const failed = [];
   const killed = [];
   const context = {
     failed,
-    familyLabel,
+    familyLabel: config2.familyLabel,
     killer: options.killer ?? createDefaultProcessKiller(options.platform),
     log: options.log
   };
   for (const target of targets) {
+    if (!await passesSignalAttestation(target, config2.attestBeforeSignal, options.log, "SIGTERM"))
+      continue;
     const terminated = await safelyTerminate(target.pid, context);
     if (!terminated)
       continue;
@@ -8811,10 +8813,25 @@ async function killTargets(targets, options, familyLabel) {
       killed.push(target);
       continue;
     }
+    if (!await passesSignalAttestation(target, config2.attestBeforeSignal, options.log, "SIGKILL"))
+      continue;
     if (await safelyKill(target.pid, context))
       killed.push(target);
   }
   return { failed, killed };
+}
+async function passesSignalAttestation(target, attest, log, signal) {
+  if (attest === undefined)
+    return true;
+  try {
+    const attested = await attest(target);
+    if (!attested)
+      log?.(`process sweep sparing pid ${target.pid}: identity changed before ${signal}`);
+    return attested;
+  } catch (error) {
+    log?.(`process sweep sparing pid ${target.pid}: identity attestation failed before ${signal}: ${String(error)}`);
+    return false;
+  }
 }
 async function safelyTerminate(pid, context) {
   try {
@@ -10460,21 +10477,36 @@ function runProcessWithTreeTimeout(options) {
     };
     child.stdout.on("data", (chunk) => capture("stdout", chunk));
     child.stderr.on("data", (chunk) => capture("stderr", chunk));
-    const timeout = setTimeout(() => {
-      timedOut = true;
-      startTermination().then(() => settle(124, child.signalCode));
-    }, options.timeoutMs);
-    timeout.unref();
+    let removeTimeoutSignal = () => {
+      return;
+    };
+    let timeout;
     const settle = async (exitCode, signal) => {
       if (settled)
         return;
       settled = true;
       clearTimeout(timeout);
+      removeTimeoutSignal();
       const termination = treeTermination === undefined ? null : await treeTermination;
       stderr += stderrDecoder.end();
       stdout += stdoutDecoder.end();
       resolvePromise({ exitCode, signal, stderr, stdout, termination, timedOut });
     };
+    const triggerTimeout = () => {
+      if (settled)
+        return;
+      timedOut = true;
+      startTermination().then(() => settle(124, child.signalCode));
+    };
+    timeout = setTimeout(triggerTimeout, options.timeoutMs);
+    timeout.unref();
+    if (options.timeoutSignal?.aborted === true) {
+      triggerTimeout();
+    } else if (options.timeoutSignal !== undefined) {
+      const timeoutSignal = options.timeoutSignal;
+      timeoutSignal.addEventListener("abort", triggerTimeout, { once: true });
+      removeTimeoutSignal = () => timeoutSignal.removeEventListener("abort", triggerTimeout);
+    }
     child.once("error", () => {
       resolveChildClosed();
       settle(1, null);
