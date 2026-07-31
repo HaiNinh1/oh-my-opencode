@@ -1,6 +1,6 @@
 ---
 name: ulw-research
-description: "Maximum-saturation research orchestration: parallel explore+librarian swarms across codebase, web, official docs, and OSS repos; a recursive EXPAND loop driven by leads workers return in message text; empirical verification by running code; cited synthesis and optional MD/HTML/PDF/PPTX reports. ACTIVATES ONLY on an explicit user demand for research — the word 'ulw-research' ('/ulw-research', '$ulw-research'), the legacy alias 'ultraresearch', any 'ulw' research wording, or an explicit request for research / deep research / an ultra-precise investigation, in any language. Never self-activates for ordinary questions, debugging, or implementation context-gathering. While active it overrides exploration-bounding defaults: exhaustive coverage is the goal."
+description: "Maximum-saturation research orchestration: ALWAYS proposes the final materials first (PDF+DOCX default), then parallel explore+librarian swarms across codebase, web, official docs, and OSS repos — max-roster teammode when the harness has it — with live journaling, a recursive EXPAND loop driven by leads workers return in message text, empirical verification by running code, and a cited synthesis with charts/Mermaid/assets behind a mandatory visual-QA gate. ACTIVATES ONLY on an explicit user demand for research — the word 'ulw-research' ('/ulw-research', '$ulw-research'), any 'ulw' research wording, 'ultradebate' or 'hyperdebate' research requests, or an explicit request for research / deep research / an ultra-precise investigation, in any language. Never self-activates for ordinary questions, debugging, or implementation context-gathering. While active it overrides exploration-bounding defaults: exhaustive coverage is the goal."
 ---
 
 ## Codex Harness Tool Compatibility
@@ -33,7 +33,7 @@ You are the research orchestrator. The user has explicitly ordered exhaustive re
 
 ## Activation
 
-Run this skill only when the user explicitly demands it: the word "ulw-research" (also `/ulw-research`, `$ulw-research`), the legacy alias "ultraresearch" (also `/ultraresearch`, `$ultraresearch`), any "ulw" research wording, or an explicit request for research, deep research, or an ultra-precise investigation — in any language. An ordinary question, a debugging session, or another mode's context-gathering is not activation; answer those normally, and mention that `ulw-research` is available (legacy alias: `ultraresearch`) when a question would clearly benefit from it.
+Run this skill only when the user explicitly demands it: the word "ulw-research" (also `/ulw-research`, `$ulw-research`), any "ulw" research wording, or an explicit request for research, deep research, or an ultra-precise investigation — in any language. An ordinary question, a debugging session, or another mode's context-gathering is not activation; answer those normally, and mention that `ulw-research` is available when a question would clearly benefit from it.
 
 Open your reply with the line `ULW-RESEARCH MODE ENABLED!`. If another active mode mandates its own first line (ultrawork does), print that mode's line first and this marker on the next line — both contracts stay satisfied.
 
@@ -52,8 +52,9 @@ The research is done when all of these hold:
 - Claims that were contested, undocumented, or performance-shaped were proven or refuted by executed code.
 - Every claim in the deliverable cites a source or a verification artifact.
 - Every asserted claim is represented in the claim graph, tied to an intent-vs-reality diff when an expected truth exists, and backed by observation manifest entries from independent observation groups or a documented single-source exception; convergence or exception status is explicit.
-- Final materials follow the Phase 5 format default or the user's explicit format.
-- The session journal reconstructs what was searched, found, and expanded, wave by wave.
+- The format-proposal gate was asked and answered BEFORE the first wave, and the final materials match that answer.
+- The delivered artifact passed every delivery gate for this harness: visual QA on the rendered pages always, plus the proofread pass where the harness provides one (Phase 5).
+- The session journal reconstructs what was searched, found, and expanded, wave by wave, and it was written in real time rather than reconstructed at the end.
 
 ## Epistemic instrumentation
 
@@ -72,7 +73,12 @@ Observation candidates and claim candidates travel back from workers as message 
 Saturation research defaults to teammode, not isolated fire-and-forget workers: a lead one worker surfaces almost always reshapes what another should search next. When your harness gives you real cooperating members — Codex: the `teammode` skill (MultiAgentV2 agents, or `codex_app` threads as its fallback); OpenCode: `team_mode` — run this swarm as a team. Fall back to the background-worker swarm below only when team mode is unavailable, or the axes are genuinely independent with no cross-pollination expected.
 
 - **One member per axis — by part, ownership, or perspective, never a job title.** Each Phase 0 axis is one member owning one concrete slice: a codebase part, a source territory, or a question lens. No two members share an angle. "Backend researcher" or "the web person" gives no real boundary and invites overlap — name what the member owns.
-- **Many teammates by default.** Prefer a larger roster, usually 5-8 teammates, whenever the axes can be made distinct. Add at least one skeptic or red-team perspective for hyperdebate/ultradebate: cross-critique claims, evidence quality, synthesis structure, and visual-report choices before they reach the final deliverable.
+- **Always the maximum roster.** The team is not sized by taste: fill every member slot your harness allows (OpenCode `team_mode` caps members at 8; Codex teammode has its own ceiling) on every run. If you can only name five axes, split the broadest one — by source territory, by time window, by perspective — until the roster is full. A half-empty team is a half-covered topic.
+- **Compose deliberately across everything you can spawn.** Before writing the roster, enumerate what this session actually has — every delegation tier the harness or config defines and every spawnable role — and give each slot the cheapest tier that can do ITS job: broad recon on fast tiers, contested analysis on deep tiers, attack lanes on the strongest reasoning tier. Mixed tiers by design, never one tier across the whole board.
+- **Routing words from the user are literal.** "quick", "fast", "deep", "all quick", "max parallel" — in any language — are hard instructions, not mood. Route exactly as asked and journal `requested tier -> spawned worker -> fallback reason` for every slot. Silently promoting a "quick" roster to a heavier tier is a defect, and so is dropping to a cheaper one without saying why.
+- **Debate members are mandatory for ultradebate/hyperdebate, default otherwise.** At least one skeptic or red-team perspective attacks claims, evidence quality, source independence, synthesis structure, and report choices before they reach the deliverable. When the user says ultradebate or hyperdebate, run at least two attacking perspectives and give every contested claim a full round.
+
+**One team, or a sequence — decided by scale and precision.** One team is the floor, not the ceiling. When the brief shows 6+ axes, several source territories, or a long final document — or a wrong claim is expensive (legal, medical, financial, procurement, public-facing) — run the research team to convergence, disband it, and stand up a REFINEMENT team from your strongest reasoning tiers whose only job is to attack and sharpen the synthesis before the document is written. A fresh premium team reading a finished journal reasons better than the same researchers grading their own homework. Build each team from a written brief and disband it before the next one starts; never leave two research teams live at once.
 - **The raise law — broadcast every lead the instant it surfaces.** Members over-communicate relentlessly: every new lead, finding, contradiction, and dead end is raised to you the moment it surfaces, never hoarded for a final dump. Through long passes they send `WORKING: <axis> - <phase>`, and `BLOCKED: <reason>` the moment progress stops, so you always know a member is alive. Too many small updates is correct here; going quiet is the only failure.
 - **You lead; expand on each raised lead.** Members raise via message text, never write session files. Journal each lead and spawn its expansion the instant it lands (Phase 2), not only when a member's final reply arrives.
 
@@ -81,7 +87,7 @@ Saturation research defaults to teammode, not isolated fire-and-forget workers: 
 Research workers (explore, librarian, browsing) differ by harness, but assume:
 
 - **Read-only.** Most research workers cannot write files. Never ask a worker to write the journal or any session file — every journal write is yours.
-- **No recursion.** Workers cannot spawn their own subagents. Depth comes from your expansion waves, not from worker-side recursion.
+- **No recursion — workers AND members.** Workers cannot spawn their own subagents, and team members must not re-orchestrate: a member researches its axis and reports; it never stands up its own team, loads this skill, or fans out a research swarm of its own. Depth comes from YOUR expansion waves. Say so in every spawn message — a member that starts its own research protocol burns the run's budget on duplicated orchestration and returns nothing you can cite.
 - **Built-in brakes.** Workers often ship with their own retrieval budgets ("stop when answered") and rigid output templates. Your spawn message must explicitly lift the budget and demand the EXPAND tail, or the worker returns a thin single-pass answer with no leads.
 - **Capability routing.** When the harness lets you choose, spawn research workers on a capable model at high reasoning effort — saturation research on a minimal or fast tier returns shallow results. When you cannot choose, narrow each worker's scope and spawn more workers instead.
 
@@ -111,7 +117,8 @@ Before spawning anything, decompose the query. Start from "what must be true if 
 <analysis>
 Core question: <the actual information need>
 Axes (3+ orthogonal): <axis — what to search, where, why> ...
-Codebase relevant: <yes/no> · External: <yes/no> · Browsing: <yes/no> · Verification likely: <yes/no> · Final material format: <HTML/PDF default | explicit format | markdown only>
+Codebase relevant: <yes/no> · External: <yes/no> · Browsing: <yes/no> · Verification likely: <yes/no>
+Scale: <axis count, source territories, target document length> · Precision demand: <what a wrong claim costs here> → lifecycle: <single team | research team then refinement team>
 </analysis>
 ```
 
@@ -134,6 +141,21 @@ This is `$SESSION_DIR`. The orchestrator owns the journal: you write every file 
 
 Append each digest the moment its worker returns, not in a batch at the end — the journal is your recovery point after context loss and the user's audit trail.
 
+### Run it as a loop, and journal in real time
+
+ulw-loop is ON by default for this mode: when the `ulw-loop` skill is available, register the research axes as loop goals so the run has durable state and survives a compaction. From that point every finding, source, quote, number, and lead is written into `$SESSION_DIR` **the instant it lands** — never held in the conversation for an end-of-run dump. After any context loss, re-read the brief and the journal before doing anything else, then resume from the open wave.
+
+### Format-proposal gate — ALWAYS ask, before the first wave
+
+Never guess the shape of the deliverable. After the decomposition and before spawning wave 1, propose the final materials and WAIT for the user's answer:
+
+- **Default pair: PDF + DOCX.** Offer both as the baseline for any report/document request.
+- Name the alternatives that actually fit THIS domain — slides for a briefing, standalone HTML for a living page, Markdown for a working note, several at once when the audience differs.
+- Propose the TEMPLATE too, chosen from the domain and the user's own context: section skeleton, citation style, length target, language, and any house style they have used before. A prior document the user points at is the strongest template signal — read it and mirror its structure and tagging.
+- Ask once, compactly: proposed format + proposed template + what each option costs. Then stop and wait. Guessing here wastes the entire assembly pass.
+
+Record the answer in the journal; it is the binding contract for Phase 5.
+
 ## Phase 1 — Saturation wave
 
 Launch the entire first wave in one turn — every axis at once, as team members if you formed a team, else as background workers. Sequential launches and "start with one and see" defeat the mode.
@@ -147,6 +169,8 @@ Scaling floor — more angles always justify more workers:
 | Single topic, both | 2 | 3 | 1 | 1 | 7 |
 | Multi-faceted | 4 | 6 | 2 | 2 | 14 |
 | Full due diligence | 4 | 6 | 3 | 2 | 15 |
+
+**Disambiguate before you expand.** When the topic names something that could resolve several ways — a product, a person, a codename, a version — the first wave settles WHICH entity before any worker researches its history, benchmarks, or controversies: canonical name, first-party URL or account, whether it exists in the claimed category, and a confidence line. An unresolved entity never becomes a premise in a later wave's spawn message; that is exactly how a run starts inventing facts about something that does not exist.
 
 Role protocols — embed the relevant one in each spawn message; every worker gets a unique angle:
 
@@ -169,7 +193,7 @@ End your reply with the ## EXPAND tail: '- LEAD: <discovery> — WHY: <why> — 
 
 This loop is what makes the mode research rather than search. Collect returns as they land — and in team mode, act on each lead the moment a member raises it, never waiting for the full wave or a member's final reply:
 
-1. Journal the return: digest plus verbatim EXPAND markers into `wave-<N>-<kind>-<axis>.md`.
+1. Journal the return the moment it lands, never at the end of the wave: digest plus verbatim EXPAND markers into `wave-<N>-<kind>-<axis>.md`, appending each new source, quote, and number to the observation manifest in the same beat — after a compaction the journal, not your memory, is the state.
 2. Deduplicate new markers against `expansion-log.md` — every lead ever seen, not just confirmed ones, or rejected leads resurface each wave.
 3. Spawn an expansion worker immediately for each new unchecked lead:
 
@@ -181,12 +205,15 @@ End your reply with the ## EXPAND tail.")
 ```
 
 4. Record the wave in `expansion-log.md`: spawned, markers gained, leads opened/closed.
+5. **Relay the user's steering to everyone.** When the user changes scope, cadence, target sources, language, or format mid-run, broadcast it to every live worker and member immediately and record the exact wording in `expansion-log.md`. Steering only you saw silently splits the swarm's assignment from the user's actual ask.
 
 **Convergence — the only stop rules while this mode is active.** Run at least 2 expansion waves on any multi-faceted query before claiming convergence; then stop only when one holds:
 
 - Zero unchecked leads remain — each investigated or closed as duplicate/dead end.
 - 3 consecutive waves produced no new actionable leads.
 - Expansion depth reached 5 waves — pause, show the open leads, and ask the user whether to extend.
+
+**Never end the run on a worker's completion.** Workers finishing is not the deliverable; your synthesis is. Reserve the last fifth of the run's context and time for Phases 4-5 and stop opening waves the moment that reserve is threatened. A converged answer with two open leads beats nine finished workers and no report.
 
 ## Phase 3 — Verify contested claims by running code
 
@@ -227,7 +254,7 @@ Anything that fails goes to an `Unresolved` (insufficient evidence) or `Refuted`
 After convergence and all verifications, re-read the whole journal, start from `intent-diff.md`, `claim-graph.md`, and `observation-manifest.md`, then write `SYNTHESIS.md`:
 
 ```
-# Ultraresearch Synthesis: <query>
+# ULW-Research Synthesis: <query>
 Workers: <total> · Waves: <count> · Sources: <count> · Verifications: <count>
 
 ## Executive summary        — 2-3 paragraphs answering the core question
@@ -243,13 +270,42 @@ Workers: <total> · Waves: <count> · Sources: <count> · Verifications: <count>
 
 `SYNTHESIS.md` is the citation source of truth for final materials: every claim carries inline `[Source N]` citations, and every high-risk non-code claim you assert must be a verified-claims row from Phase 3b. Assert nothing the gate left in the unresolved/refuted annex.
 
+**Write the skeleton early and fill it as claims lock.** The moment the format gate is answered, create the deliverable file with its approved section headings and a `STATUS: draft — <n> sections open` line at the top. An interrupted run must leave a partial report on disk, never an empty directory and a lost conversation.
+
+**Keep sourced numbers, assumptions, and derived results visibly apart.** Every quantitative claim carries its lineage: `MEASURED` (a number a source states, cited), `ASSUMED` (a coefficient, distribution, or scope you chose — say why), `DERIVED` (computed from those, showing the formula), plus a sensitivity line whenever the assumption moves the answer. Presenting a derived estimate with the confidence of a measured one is the most damaging thing this mode can ship.
+
+**Search in English, deliver in the user's language.** Retrieval stays English-first (Search craft), but the synthesis and every final material are written in the language the user wrote to you in unless they ask otherwise — and a translated report still quotes its original-language sources verbatim.
+
 ## Phase 5 — Final materials
 
-Default final materials to HTML/PDF unless the user explicitly asks for a different format: "report" / "document" → HTML first, with a PDF default available through weasyprint (`uv run --with weasyprint python`) · "pdf" → HTML first, then weasyprint · "slides" / "presentation" / "deck" → python-pptx · "html" / "webpage" → standalone HTML · "markdown only" → Markdown.
+The format answered at the Phase 0 gate is binding. Absent an explicit user override, render **both PDF and DOCX**:
 
-Asset workers (background, parallel): actively use charts for quantitative findings (`uv run --with matplotlib --with plotly python`) saved by you to `$SESSION_DIR/assets/`; Mermaid graphs for process, architecture, argument, and evidence-flow structure; full-page screenshots of the top 5-10 sources (browsing skill); generated diagrams or editorial visuals with the imagegen skill when architecture, flows, or narrative framing benefit from bitmap assets.
+| Target | How |
+|---|---|
+| PDF (default) | Author the report as one self-contained HTML file, then print it headless: `chrome --headless --disable-gpu --no-pdf-header-footer --print-to-pdf=<out.pdf> file://<report.html>`. For CJK, embed a real webfont (Pretendard, Noto Sans KR) instead of trusting system fallbacks. `uv run --with weasyprint python` is the fallback renderer. |
+| DOCX (default) | `pandoc <report.md> -o <out.docx>`, adding `--reference-doc=<template.docx>` when the user has a house style; `uv run --with python-docx python` when pandoc is unavailable. Charts and Mermaid renders go in as images. |
+| Slides / deck | `uv run --with python-pptx python` — one claim per slide, a chart or diagram per claim. |
+| Standalone HTML / Markdown | The authored source itself. |
 
-Assembly worker — `task(category="deep", load_skills=["frontend", "visual-qa", "open-design", "data-scientist", "imagegen", "ulw-loop"], run_in_background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Run HTML/PDF output through the ULW loop with frontend and visual-qa, then repair until the reviewer says no broken parts and gives approval. Structure: executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications). Every claim cites `[Source N]`.
+Asset workers (background, parallel) — a research report without visuals is a wall of text nobody reads:
+
+- **Charts for every quantitative finding, computed from real data.** Pull the numbers into an actual table first (CSV/JSON under `$SESSION_DIR`), then plot from that table, never from prose. Follow the data-scientist tool doctrine — numpy always, Polars for filtering/sorting/transforms, DuckDB for joins/aggregations/window functions, never pandas — and load the `data-scientist` skill when this session has it: `uv run --with numpy --with polars --with duckdb --with pyarrow --with matplotlib python`. Keep `pyarrow` in that set — the DuckDB-to-Polars handoff (`.pl()`) fails without it, and `.df()` fails without pandas, so hand data across through `.pl()`, never `.df()`. Save to `$SESSION_DIR/assets/`.
+- **Mermaid graphs** for process, architecture, argument, timeline, and evidence-flow structure. Render each to SVG and confirm the file exists before the document references it.
+- **Generated visuals** through the imagegen skill when a diagram, cover, or narrative visual earns its place.
+- **Full-page screenshots** of the top 5-10 sources (browsing worker) as provenance you can show.
+
+**Verify the asset manifest before rendering.** List every asset the document references, assert each file exists and is non-empty on disk, and re-render whatever is missing. A document that renders with three broken diagrams is a document you will publish twice.
+
+Assembly worker — `task(category="deep", load_skills=["frontend", "visual-qa", "open-design", "data-scientist", "imagegen", "ulw-loop"], run_in_background=true, ...)`: before writing, read every available design and visualization skill and apply it — the report is a designed artifact, not a text dump. Use the template the user approved; absent a stronger house style the default skeleton is executive summary → key findings by theme → detailed analysis (quotes under 20 words with attribution, charts, Mermaid graphs, generated visuals, SHA-pinned permalinks, verification results) → comparative analysis when options compete → numbered sources with access dates → methodology appendix (workers, waves, searches, verifications, debate rounds) → correction log naming what verification overturned. Write it long and specific: every claim cites `[Source N]`, and the sources section lists every source the run actually used rather than a curated few.
+
+### The delivery gates — every gate must PASS, in order
+
+Nothing reaches the user until the gates pass:
+
+1. **Visual QA (always).** Render the produced artifact back to images — PDF pages to PNG, the HTML in a real browser — and look at them: missing or broken figures, clipped tables, overflowing CJK text, blank pages, unreadable chart labels, wrong page breaks. Fix and re-render until the pages are clean. Reading the source markup is not visual QA; inspect the pixels.
+2. **Proofread gate — `task(category="writing", ...)`.** Hand the final text to a dedicated `writing` worker whose only job is language: grammar, spelling, punctuation, terminology consistency, and whether the prose reads NATIVELY in the report's own language. It returns a defect list; fix every item and re-run the gate on the delta. Deliver only on a clean pass — this gate runs BEFORE the first delivery, not after the user finds the typo.
+
+Then deliver: the artifact plus a compact chat-readable summary of what it says — the answer in a few sentences, the numbers that matter, and what to look at first. The document is the deliverable; the summary is what gets it read. If you stood up a team, disband it and confirm every worker is terminal before the final answer.
 
 ## Search craft
 
@@ -281,3 +337,14 @@ High-yield combinations: official docs (`site:<docs domain>`), GitHub implementa
 | Two workers given the same angle | One unique angle per worker, always |
 | Contested claim settled by judgment | Phase 3 — run code, capture output, verdict |
 | Deliverable claims without citations | Every claim cites a source or a verification artifact |
+| Guessing the deliverable format instead of asking | The format gate is unconditional: propose PDF+DOCX plus the domain-fitting alternatives and the template, then wait before wave 1 |
+| A roster smaller than the harness ceiling | Fill every member slot; split the broadest axis until the team is full |
+| One tier across the whole roster | Mixed tiers by design — cheap breadth, premium attack |
+| Silently re-routing a "quick"/"fast" instruction | Routing words are literal; journal requested -> spawned -> fallback per slot |
+| A worker or member that starts its own research swarm | Members research one axis and report; orchestration is yours alone |
+| Expanding on an entity the first wave never disambiguated | Settle canonical identity and first-party source before any later spawn asserts it |
+| Batching findings into an end-of-run journal dump | Journal each return as it lands; the journal is what survives a compaction |
+| Ending the run because every worker finished | Reserve the final fifth of the run for synthesis and materials |
+| A derived estimate presented as a measured number | MEASURED / ASSUMED / DERIVED lineage on every quantitative claim, plus a sensitivity line |
+| Delivering before the delivery gates pass | Visual QA on rendered pages always, plus the harness's proofread gate — a typo the user finds means a gate did not run |
+| Referencing an asset that is not on disk | Verify the asset manifest before rendering; re-render whatever is missing |

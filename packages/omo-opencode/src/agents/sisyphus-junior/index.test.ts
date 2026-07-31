@@ -85,6 +85,7 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
       const result = createSisyphusJuniorAgentWithOverrides(override)
 
       // then
+      expect(SISYPHUS_JUNIOR_DEFAULTS.model).toBe("anthropic/claude-sonnet-5")
       expect(result.model).toBe(SISYPHUS_JUNIOR_DEFAULTS.model)
     })
 
@@ -156,9 +157,71 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
       expect(result.thinking).toBeUndefined()
     })
 
+    test("#given GPT model with variant override #when agent is created #then respects user variant", () => {
+      const override = {
+        model: "openai/gpt-5.6-sol",
+        variant: "xhigh",
+        reasoningEffort: "xhigh" as const,
+      }
+
+      const result = createSisyphusJuniorAgentWithOverrides(override)
+
+      expect(result.variant).toBe("xhigh")
+      expect(result.reasoningEffort).toBe("xhigh")
+    })
+
+    test("#given GPT model with reasoningEffort override only #when agent is created #then honors reasoningEffort without injecting variant", () => {
+      // given
+      const override = { model: "openai/gpt-5.6-sol", reasoningEffort: "high" as const }
+
+      // when
+      const result = createSisyphusJuniorAgentWithOverrides(override)
+
+      // then
+      expect(result.reasoningEffort).toBe("high")
+      expect(result.variant).toBeUndefined()
+    })
+
+    test("#given GPT model with variant override only #when agent is created #then keeps default reasoningEffort", () => {
+      // given
+      const override = { model: "openai/gpt-5.6-sol", variant: "xhigh" }
+
+      // when
+      const result = createSisyphusJuniorAgentWithOverrides(override)
+
+      // then
+      expect(result.variant).toBe("xhigh")
+      expect(result.reasoningEffort).toBe("medium")
+    })
+
+    test("#given GPT model with distinct variant and reasoningEffort #when agent is created #then applies each independently", () => {
+      // given
+      const override = { model: "openai/gpt-5.6-sol", variant: "xhigh", reasoningEffort: "low" as const }
+
+      // when
+      const result = createSisyphusJuniorAgentWithOverrides(override)
+
+      // then
+      expect(result.variant).toBe("xhigh")
+      expect(result.reasoningEffort).toBe("low")
+    })
+
+    test("#given Claude opus-4.7+ model with variant override #when agent is created #then honors variant and lets core derive effort", () => {
+      // given
+      const override = { model: "anthropic/claude-opus-4-7", variant: "max" }
+
+      // when
+      const result = createSisyphusJuniorAgentWithOverrides(override)
+
+      // then
+      expect(result.variant).toBe("max")
+      expect(result.thinking).toBeUndefined()
+      expect(result.reasoningEffort).toBeUndefined()
+    })
+
     test("#given Claude model #when agent is created #then injects thinking", () => {
       // given
-      const override = { model: "anthropic/claude-sonnet-4-6" }
+      const override = { model: "anthropic/claude-sonnet-5" }
 
       // when
       const result = createSisyphusJuniorAgentWithOverrides(override)
@@ -285,7 +348,7 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
   describe("useTaskSystem integration", () => {
     test("useTaskSystem=true produces Task_Discipline prompt for Claude", () => {
       //#given
-      const override = { model: "anthropic/claude-sonnet-4-6" }
+      const override = { model: "anthropic/claude-sonnet-5" }
 
       //#when
       const result = createSisyphusJuniorAgentWithOverrides(override, undefined, true)
@@ -323,7 +386,7 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
 
     test("useTaskSystem=true includes task_create/task_update in Claude prompt", () => {
       //#given
-      const override = { model: "anthropic/claude-sonnet-4-6" }
+      const override = { model: "anthropic/claude-sonnet-5" }
 
       //#when
       const result = createSisyphusJuniorAgentWithOverrides(override, undefined, true)
@@ -347,7 +410,7 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
 
     test("useTaskSystem=false uses todowrite instead of task_create", () => {
       //#given
-      const override = { model: "anthropic/claude-sonnet-4-6" }
+      const override = { model: "anthropic/claude-sonnet-5" }
 
       //#when
       const result = createSisyphusJuniorAgentWithOverrides(override, undefined, false)
@@ -373,7 +436,7 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
 
     test("Claude model uses default prompt with discipline section", () => {
       // given
-      const override = { model: "anthropic/claude-sonnet-4-6" }
+      const override = { model: "anthropic/claude-sonnet-5" }
 
       // when
       const result = createSisyphusJuniorAgentWithOverrides(override)
@@ -432,7 +495,7 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
       const gpt54Override = { model: "openai/gpt-5.4" }
       const gpt55Override = { model: "openai/gpt-5.5" }
       const gptGenericOverride = { model: "openai/gpt-4o" }
-      const claudeOverride = { model: "anthropic/claude-sonnet-4-6" }
+      const claudeOverride = { model: "anthropic/claude-sonnet-5" }
 
       // when
       const gpt54Result = createSisyphusJuniorAgentWithOverrides(gpt54Override)
@@ -455,8 +518,10 @@ describe("createSisyphusJuniorAgentWithOverrides", () => {
       const result = createSisyphusJuniorAgentWithOverrides(override)
 
       // then
-      const baseEndIndex = result.prompt!.indexOf("</Style>")
-      const appendIndex = result.prompt!.indexOf("CUSTOM_MARKER_FOR_TEST")
+      expect(result.prompt).toBeString()
+      const prompt = result.prompt
+      const baseEndIndex = prompt.indexOf("</Style>")
+      const appendIndex = prompt.indexOf("CUSTOM_MARKER_FOR_TEST")
       expect(baseEndIndex).not.toBe(-1)
       expect(appendIndex).toBeGreaterThan(baseEndIndex)
     })
@@ -495,6 +560,28 @@ describe("getSisyphusJuniorPromptSource", () => {
 
     // then
     expect(source).toBe("kimi-k2")
+  })
+
+  test("returns 'kimi-k3' for kimi-k3 model, not 'kimi-k2-7' or 'kimi-k2'", () => {
+    // given
+    const model = "opencode-go/kimi-k3"
+
+    // when
+    const source = getSisyphusJuniorPromptSource(model)
+
+    // then
+    expect(source).toBe("kimi-k3")
+  })
+
+  test("returns 'kimi-k3' for k3p1 shorthand", () => {
+    // given
+    const model = "kimi-for-coding/k3p1"
+
+    // when
+    const source = getSisyphusJuniorPromptSource(model)
+
+    // then
+    expect(source).toBe("kimi-k3")
   })
 
   test("returns 'kimi-k2-7' for kimi-k2.7 model, not 'kimi-k2'", () => {
@@ -563,6 +650,17 @@ describe("getSisyphusJuniorPromptSource", () => {
     expect(source).toBe("gpt-5-5")
   })
 
+  test("returns 'gpt-5-5' for GPT 5.6 models", () => {
+    // given
+    const model = "openai/gpt-5.6-sol"
+
+    // when
+    const source = getSisyphusJuniorPromptSource(model)
+
+    // then
+    expect(source).toBe("gpt-5-5")
+  })
+
   test("returns 'gpt' for generic GPT models", () => {
     // given
     const model = "openai/gpt-4o"
@@ -587,7 +685,7 @@ describe("getSisyphusJuniorPromptSource", () => {
 
   test("returns 'default' for Claude models", () => {
     // given
-    const model = "anthropic/claude-sonnet-4-6"
+    const model = "anthropic/claude-sonnet-5"
 
     // when
     const source = getSisyphusJuniorPromptSource(model)
@@ -654,7 +752,7 @@ describe("buildSisyphusJuniorPrompt", () => {
 
   test("Claude model prompt contains Claude-specific sections", () => {
     // given
-    const model = "anthropic/claude-sonnet-4-6"
+    const model = "anthropic/claude-sonnet-5"
 
     // when
     const prompt = buildSisyphusJuniorPrompt(model, false)
@@ -663,6 +761,16 @@ describe("buildSisyphusJuniorPrompt", () => {
     expect(prompt).toContain("<Role>")
     expect(prompt).toContain("<Todo_Discipline>")
     expect(prompt).toContain("todowrite")
+  })
+
+  test("K3 model uses the K3-native prompt, not the K2.7 or K2.6 prompt", () => {
+    // given
+    const k3 = buildSisyphusJuniorPrompt("opencode-go/kimi-k3", false)
+
+    // then
+    expect(k3).toContain("running on Kimi K3")
+    expect(k3).not.toContain("running on Kimi K2.7")
+    expect(k3).not.toContain("Toggle RL")
   })
 
   test("K2.7 model uses the from-scratch K2.7 prompt, not the K2.6 prompt", () => {
@@ -702,7 +810,7 @@ describe("buildSisyphusJuniorPrompt", () => {
 
   test("useTaskSystem=false includes Todo_Discipline for Claude", () => {
     // given
-    const model = "anthropic/claude-sonnet-4-6"
+    const model = "anthropic/claude-sonnet-5"
 
     // when
     const prompt = buildSisyphusJuniorPrompt(model, false)

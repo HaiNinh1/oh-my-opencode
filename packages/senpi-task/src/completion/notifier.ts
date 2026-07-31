@@ -52,7 +52,12 @@ export function createCompletionNotifier(deps: CompletionNotifierDeps): Completi
     const key = retryKey(entry)
     if (scheduledRetries.has(key)) return
     const retryNumber = (scheduledRetryCounts.get(key) ?? 0) + 1
-    if (retryNumber > MAX_SCHEDULED_RETRIES) return
+    if (retryNumber > MAX_SCHEDULED_RETRIES) {
+      // Exhausted the backoff ladder: drop the retry state so it does not leak for the lifetime of
+      // the process. A later reconcile or notifyTerminal for the same epoch will restart fresh.
+      finishRetryChain(entry)
+      return
+    }
     scheduledRetryCounts.set(key, retryNumber)
     const cancel = schedule(() => {
       scheduledRetries.delete(key)
@@ -115,7 +120,7 @@ export function createCompletionNotifier(deps: CompletionNotifierDeps): Completi
       return { kind: "skipped", reason: "already-notified" }
     }
 
-    const details = buildCompletionDetails(record, request.tokens === undefined ? {} : { tokens: request.tokens })
+    const details = buildDetails(record, request.tokens)
     return deliverRecord(record, details, request.parentState)
   }
 
@@ -155,8 +160,15 @@ export function createCompletionNotifier(deps: CompletionNotifierDeps): Completi
       if (record.notification.notified_epoch >= epoch) continue
       if (!TERMINAL_STATUSES.has(record.status)) continue
       if (!shouldNotifyStatus(record.status)) continue
-      deliverRecord(record, buildCompletionDetails(record), input.parentState)
+      deliverRecord(record, buildDetails(record), input.parentState)
     }
+  }
+
+  function buildDetails(record: TaskRecord, tokens?: number): CompletionDetails {
+    return buildCompletionDetails(record, {
+      ...(tokens === undefined ? {} : { tokens }),
+      ...(deps.stateDir === undefined ? {} : { stateDir: deps.stateDir }),
+    })
   }
 
   return { notifyTerminal, flushBuffered, reconcileFailedNotifications, bufferedCount }

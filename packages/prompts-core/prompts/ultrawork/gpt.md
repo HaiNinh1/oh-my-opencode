@@ -84,8 +84,8 @@ Before acting, survey the skills available in this system: scan their descriptio
 **ALWAYS run both tracks in parallel:**
 ```
 // Fire background agents for deep exploration
-task(subagent_type="explore", load_skills=[], prompt="I'm implementing [TASK] and need to understand [KNOWLEDGE GAP]. Find [X] patterns in the codebase - file paths, implementation approach, conventions used, and how modules connect. I'll use this to [DOWNSTREAM DECISION]. Focus on production code in src/. Return file paths with brief descriptions.", run_in_background=true)
-task(subagent_type="librarian", load_skills=[], prompt="I'm working with [TECHNOLOGY] and need [SPECIFIC INFO]. Find official docs and production examples for [Y] - API reference, configuration, recommended patterns, and pitfalls. Skip tutorials. I'll use this to [DECISION THIS INFORMS].", run_in_background=true)
+task(subagent_type="explore", load_skills=[], prompt="CONTEXT: implementing [TASK]; gap: [KNOWLEDGE GAP]. GOAL: find [X] patterns in the codebase - file paths, implementation approach, conventions, module connections - to unblock [DOWNSTREAM DECISION]. Focus on production code in src/. STOP WHEN: the findings answer the gap or two search rounds add nothing new. EVIDENCE: file:line refs with one-line descriptions.", run_in_background=true)
+task(subagent_type="librarian", load_skills=[], prompt="CONTEXT: working with [TECHNOLOGY]; need [SPECIFIC INFO]. GOAL: official docs and production examples for [Y] - API reference, configuration, recommended patterns, pitfalls - to unblock [DECISION THIS INFORMS]. Skip tutorials. STOP WHEN: the cited sources answer [SPECIFIC INFO] or sources repeat. EVIDENCE: source links with the claim each supports.", run_in_background=true)
 
 // WHILE THEY RUN - use direct tools for immediate context
 grep(pattern="relevant_pattern", path="src/")
@@ -104,7 +104,7 @@ deep_context = background_output(task_id=...)
 
 **Execute:**
 - Surgical, minimal changes matching existing patterns
-- If delegating: provide exhaustive context and success criteria
+- If delegating: every child prompt carries GOAL, STOP WHEN (the exact observable condition that ends its run — the child stops the moment it holds), and EVIDENCE (what it returns so you can verify, not trust) — plus exhaustive context. Judge the child by its returned EVIDENCE against its STOP WHEN, never by its self-report.
 - **Parallel waves (`parallel_tasks`)**: When the plan's wave has N INDEPENDENT implementation subtasks touching DISJOINT files, dispatch all N TOGETHER in a SINGLE `parallel_tasks` call — each item routed by `category="..."` (domain executor) or an executor `subagent_type` — so they run concurrently and results return together. Prefer this over firing the same subtasks as separate sequential or background `task()` calls. Each item provides EITHER `category` OR `subagent_type`; research items still route via `explore`/`librarian`, and `task(run_in_background=true)` stays the tool for long-running SINGLE tasks.
 - **Hard safety rule**: NEVER parallelise edits to the SAME file or region — disjoint-file work only. Dependent tasks (B needs A's output) stay SEQUENTIAL across waves.
 - **"Plan many, execute one" is a failure**: if a wave has N independent tasks, fire all N in one `parallel_tasks` call — do not emit one and wait. Parallelism never weakens the per-scenario TDD/QA verification below.
@@ -119,6 +119,14 @@ deep_context = background_output(task_id=...)
 
 At start, run `NOTE=$(mktemp -t ulw-$(date +%Y%m%d-%H%M%S).XXXXXX.md)` and echo the path. APPEND (never rewrite) to sections: Plan, Scenarios, Now, Todo, Findings (file:line refs), Learnings. If context is lost, re-read and resume.
 
+## GOAL REGISTRATION
+
+When a `create_goal` tool exists, register the run's goal with it before implementation: the objective, the scenario contract, and the WHEN TO STOP line. No tool → record the same contract in the notepad and treat it as binding.
+
+## TODO DISCIPLINE
+
+Maintain a live todo list for every multi-step task: one atomic item per action (`path: <action> for <scenario> — verify by <check>`), exactly one in_progress, transitions marked the instant they happen, discovered work inserted immediately. Never batch completions.
+
 ## SCENARIO CONTRACT (binding, defined BEFORE coding)
 
 Define 3+ scenarios covering: **happy path**, **edge** (boundary / empty / malformed / concurrent), **adjacent-surface regression**. For each, write:
@@ -126,7 +134,7 @@ Define 3+ scenarios covering: **happy path**, **edge** (boundary / empty / malfo
 - The real surface that proves it.
 - The test file + test id (written test-first; see TDD).
 
-Scenarios are the contract. Done = every scenario PASSES with RED→GREEN proof AND real-surface artifact captured.
+Scenarios are the contract. Done = every scenario PASSES with RED→GREEN proof AND real-surface artifact captured. Then declare WHEN TO STOP for the whole run, in one line: "I'll stop right away when <the exact observable state that ends this run>" — its end state MUST be the full STOP GOAL from the Stop rules, never scenario completion alone. The Stop rules bind to this line — the moment it holds, you stop.
 
 ## TDD (MANDATORY on every production change)
 
@@ -135,6 +143,10 @@ Features, fixes, refactors, perf, glue, config-with-logic — all follow RED→G
 Refactors: write characterization tests pinning current behavior FIRST, watch them GREEN against old code, THEN refactor. They stay green throughout.
 
 Exemption whitelist (no new test required): formatting, comment-only, version bumps with no behavior delta, rename-only. Each must be justified in writing. Unjustified exemption is rejection.
+
+## COMMIT DISCIPLINE
+
+Commit one atomic commit per verified increment; never one end-of-run omnibus. Before composing each message, read `git log --oneline -20` and `git log -5 -- <touched paths>`, then match the observed subject shape, scope names, message language, body style, and commit size. Skip only when the user forbade commits this session.
 
 ## QUALITY STANDARDS
 
@@ -170,13 +182,12 @@ Name the exact tool + exact invocation per scenario (literal `curl` / `send-keys
 
 Trigger if user said "엄밀"/"strictly"/"rigorously"/"properly review", or task touches 3+ files OR ran 20+ turns OR 30+ min, or it's a refactor/migration/perf/security change. Spawn a high-rigor reviewer via `task` with goal + scenarios + evidence + diff. A concern blocks only when it cites a success criterion the evidence fails — others are notes. Fix cited blockers, re-run only the affected QA, and re-submit the delta at most twice; an approval with only notes left counts as approval. If cited blockers remain after two re-reviews, surface them to the user before declaring done.
 
-## COMPLETION CRITERIA
+## STOP RULES
 
-Done when ALL of:
-1. Every scenario PASSES with RED→GREEN proof AND real-surface artifact captured.
-2. Full test suite green; lsp_diagnostics clean on changed files.
-3. Code matches existing patterns; no scope creep.
-4. Reviewer gate (if triggered) returned unconditional approval.
+- After each result, ask whether the user's core request can now be answered with useful evidence in hand. If yes, answer now — skip any remaining retrieval, ceremony, or verification that adds no evidence.
+- The STOP GOAL: every scenario PASSES with RED→GREEN proof AND real-surface artifact captured; full suite green and `lsp_diagnostics` clean on changed files; QA teardown receipts recorded; no scope creep; and (if triggered) the reviewer gate approved unconditionally. Above ALL of that, the decisive test — outranking every other consideration — is: is the user's problem ACTUALLY SOLVED in observable behavior? If no, you are NOT done, whatever the checklist says. If yes, deliver the final message and STOP — no hesitation, no extra verification pass, no polish loop. Work past the stop goal is scope creep, not diligence.
+- After 2 identical failed attempts at one step, surface what was tried and ask the user before another retry.
+- After 2 parallel exploration waves yield no new useful facts, stop exploring and act.
 
 **Deliver exactly what was asked. No more, no less.**
 

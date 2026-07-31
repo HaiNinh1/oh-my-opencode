@@ -1,10 +1,20 @@
-import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  type Stats,
+  writeFileSync,
+} from "node:fs"
 import { join } from "node:path"
 
 import { parseTaskId, transitionTaskRecord } from "../state"
 import type { TaskId, TaskRecord } from "../state"
+import { appendTaskEvent, closeAppendFd, type AppendFdCache } from "./event-log"
+import { withTaskRecordLock } from "./record-lock"
 import { parseTaskRecord } from "./record-parse"
-import { redactEventPayload } from "./redaction"
 import { resolveStateDir } from "./state-dir"
 import type {
   ListTaskRecordsResult,
@@ -15,6 +25,12 @@ import type {
 } from "./types"
 
 type WriteRecordMode = "create" | "replace"
+
+type CacheEntry = {
+  readonly record: TaskRecord
+  readonly mtimeMs: number
+  readonly size: number
+}
 
 export class TaskRecordCollisionError extends Error {
   readonly taskId: TaskId
@@ -30,62 +46,133 @@ export class TaskRecordCollisionError extends Error {
 
 export function createTaskRecordStore(config: StateDirConfig): TaskRecordStore {
   const stateDir = resolveStateDir(config)
+  const cache = new Map<string, CacheEntry>()
+  const appendFds: AppendFdCache = new Map()
+
+  function cacheSet(path: string): void {
+    const record = readRecord(path)
+    if (record === null) return
+    const stat = statSync(path)
+    cache.set(path, { record, mtimeMs: stat.mtimeMs, size: stat.size })
+  }
+
   return {
     stateDir,
     save(record) {
       writeRecord(stateDir, record, "create")
+      cacheSet(taskPath(stateDir, parseTaskId(record.task_id)))
     },
     replace(record) {
-      writeRecord(stateDir, record, "replace")
+      const taskId = parseTaskId(record.task_id)
+      const path = taskPath(stateDir, taskId)
+      withTaskRecordLock(path, () => {
+        writeRecord(stateDir, record, "replace")
+        cacheSet(path)
+      })
+    },
+    mutate(taskId, mutation) {
+      const parsedTaskId = parseTaskId(taskId)
+      const path = taskPath(stateDir, parsedTaskId)
+      return withTaskRecordLock(path, () => {
+        const current = readRecord(path)
+        if (current === null) return null
+        const next = mutation(current)
+        if (next !== current) writeRecord(stateDir, next, "replace")
+        cacheSet(path)
+        return next
+      })
     },
     load(taskId) {
-      const path = taskPath(stateDir, parseTaskId(taskId))
-      return readRecord(path)
+      return readCached(taskPath(stateDir, parseTaskId(taskId)), cache)
     },
     list() {
-      return listRecords(stateDir)
+      return listRecords(stateDir, cache)
     },
     appendEvent(taskId, event) {
-      return appendTaskEvent(stateDir, parseTaskId(taskId), event)
+      return appendTaskEvent(stateDir, parseTaskId(taskId), event, appendFds)
     },
     transition(taskId, transition) {
       const parsedTaskId = parseTaskId(taskId)
-      const record = readRecord(taskPath(stateDir, parsedTaskId))
-      if (record === null) throw new Error(`Task record not found: ${taskId}`)
-      const result = transitionTaskRecord(record, transition)
-      appendTaskEvent(stateDir, parsedTaskId, { type: result.audit.type, payload: result.audit })
-      if (result.applied) writeRecord(stateDir, result.record, "replace")
-      return result
+      const path = taskPath(stateDir, parsedTaskId)
+      return withTaskRecordLock(path, () => {
+        const record = readRecord(path)
+        if (record === null) throw new Error(`Task record not found: ${taskId}`)
+        const result = transitionTaskRecord(record, transition)
+        appendTaskEvent(stateDir, parsedTaskId, { type: result.audit.type, payload: result.audit }, appendFds)
+        if (result.applied) writeRecord(stateDir, result.record, "replace")
+        cacheSet(path)
+        return result
+      })
     },
     remove(taskId) {
-      removeRecord(stateDir, parseTaskId(taskId))
+      const parsedTaskId = parseTaskId(taskId)
+      const path = taskPath(stateDir, parsedTaskId)
+      withTaskRecordLock(path, () => removeRecord(stateDir, parsedTaskId, cache, appendFds))
     },
   }
 }
 
-function removeRecord(stateDir: string, taskId: TaskId): void {
-  rmSync(taskPath(stateDir, taskId), { force: true })
-  rmSync(join(stateDir, "logs", `${taskId}.jsonl`), { force: true })
+function removeRecord(
+  stateDir: string,
+  taskId: TaskId,
+  cache: Map<string, CacheEntry>,
+  appendFds: AppendFdCache,
+): void {
+  const recordPath = taskPath(stateDir, taskId)
+  const logPath = join(stateDir, "logs", `${taskId}.jsonl`)
+  rmSync(recordPath, { force: true })
+  rmSync(logPath, { force: true })
+  cache.delete(recordPath)
+  closeAppendFd(logPath, appendFds)
 }
 
-function listRecords(stateDir: string): ListTaskRecordsResult {
+function listRecords(stateDir: string, cache: Map<string, CacheEntry>): ListTaskRecordsResult {
   const tasksDir = join(stateDir, "tasks")
   mkdirSync(tasksDir, { recursive: true })
   const records: TaskRecord[] = []
   const diagnostics: TaskRecordDiagnostic[] = []
+  const seen = new Set<string>()
 
   for (const file of readdirSync(tasksDir).filter((entry) => entry.endsWith(".json")).toSorted()) {
     const path = join(tasksDir, file)
+    seen.add(path)
     try {
-      const parsed: unknown = JSON.parse(readFileSync(path, "utf8"))
-      records.push(parseTaskRecord(parsed, path))
+      const record = readCached(path, cache)
+      if (record !== null) records.push(record)
     } catch (error) {
       if (!(error instanceof Error)) throw error
       diagnostics.push({ type: "parse_error", path, message: error.message })
     }
   }
 
+  // Prune cached records that no longer exist on disk (e.g. TTL cleanup in another process).
+  for (const key of cache.keys()) {
+    if (!seen.has(key) && key.startsWith(tasksDir)) cache.delete(key)
+  }
+
   return { records, diagnostics }
+}
+
+function readCached(path: string, cache: Map<string, CacheEntry>): TaskRecord | null {
+  let stat: Stats
+  try {
+    stat = statSync(path)
+  } catch (error) {
+    if (isEnoent(error)) {
+      cache.delete(path)
+      return null
+    }
+    throw error
+  }
+
+  const hit = cache.get(path)
+  if (hit !== undefined && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
+    return hit.record
+  }
+
+  const record = readRecord(path)
+  if (record !== null) cache.set(path, { record, mtimeMs: stat.mtimeMs, size: stat.size })
+  return record
 }
 
 function readRecord(path: string): TaskRecord | null {
@@ -103,7 +190,7 @@ function writeRecord(stateDir: string, record: TaskRecord, mode: WriteRecordMode
   mkdirSync(tasksDir, { recursive: true })
   const taskId = parseTaskId(record.task_id)
   const path = taskPath(stateDir, taskId)
-  const payload = JSON.stringify(record, null, 2)
+  const payload = JSON.stringify(record)
   if (mode === "create") {
     try {
       writeFileSync(path, payload, { encoding: "utf8", flag: "wx" })
@@ -121,15 +208,10 @@ function writeRecord(stateDir: string, record: TaskRecord, mode: WriteRecordMode
   renameSync(tmpPath, path)
 }
 
-function appendTaskEvent(stateDir: string, taskId: TaskId, event: PersistedTaskEvent): string {
-  const logsDir = join(stateDir, "logs")
-  mkdirSync(logsDir, { recursive: true })
-  const path = join(logsDir, `${taskId}.jsonl`)
-  const line = JSON.stringify({ type: event.type, payload: redactEventPayload(event.payload) })
-  writeFileSync(path, `${line}\n`, { encoding: "utf8", flag: "a" })
-  return path
-}
-
 function taskPath(stateDir: string, taskId: TaskId): string {
   return join(stateDir, "tasks", `${taskId}.json`)
+}
+
+function isEnoent(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT"
 }

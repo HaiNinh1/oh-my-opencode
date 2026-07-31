@@ -42,7 +42,7 @@ function getProviderOverride(providerID: string, modelID: string): ModelCapabili
 }
 
 export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCapabilities {
-	const canonicalization = resolveModelIDAlias(input.modelID)
+	const canonicalization = resolveModelIDAlias(input.modelID, input.providerID)
 	const override = getOverride(input.modelID)
 	const providerOverride = getProviderOverride(input.providerID, canonicalization.canonicalModelID)
 	const runtimeModel = readRuntimeModel(
@@ -108,13 +108,13 @@ export function getModelCapabilities(input: GetModelCapabilitiesInput): ModelCap
 	const modalitiesSource: ModelCapabilitiesDiagnostics["modalities"]["source"] =
 		runtimeModalities !== undefined ? "runtime" : snapshotEntry?.modalities !== undefined ? snapshotSource : "none"
 	const resolutionMode: ModelCapabilitiesDiagnostics["resolutionMode"] =
-		snapshotSource !== "none" && canonicalization.source === "canonical"
-			? "snapshot-backed"
-			: snapshotSource !== "none"
-			? "alias-backed"
-			: familySource === "heuristic" || variantsSource === "heuristic" || reasoningEffortsSource === "heuristic"
-			? "heuristic-backed"
-			: "unknown"
+		canonicalization.source === "canonical"
+			? snapshotSource !== "none"
+				? "snapshot-backed"
+				: familySource === "heuristic" || variantsSource === "heuristic" || reasoningEffortsSource === "heuristic"
+					? "heuristic-backed"
+					: "unknown"
+			: "alias-backed"
 
 	return {
 		requestedModelID: canonicalization.requestedModelID,

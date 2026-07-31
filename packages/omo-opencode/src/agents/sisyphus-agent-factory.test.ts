@@ -35,6 +35,10 @@ describe("createSisyphusAgent", () => {
       // given
       const cases = [
         {
+          model: "opencode-go/kimi-k3",
+          promptAnchors: ["running on Kimi K3", "<k3_calibration>"],
+        },
+        {
           model: "moonshotai/kimi-k2.6",
           promptAnchors: ["<re_entry_rule>", "<verification_loop>"],
         },
@@ -59,6 +63,10 @@ describe("createSisyphusAgent", () => {
           promptAnchors: ["<use_parallel_tool_calls>", "<Task_Management>", "claude-opus-4-8"],
         },
         {
+          model: "anthropic/claude-opus-5",
+          promptAnchors: ["<use_parallel_tool_calls>", "<Task_Management>", "claude-opus-5"],
+        },
+        {
           model: "anthropic/claude-fable-5",
           promptAnchors: ["<use_parallel_tool_calls>", "<Task_Management>", "claude-fable-5"],
         },
@@ -74,19 +82,46 @@ describe("createSisyphusAgent", () => {
         }
       }
     });
+
+    test("#when selecting a tracking mode #then wires the matching tool contract", () => {
+      // given
+      const models = ["openai/gpt-5.5", "openai/gpt-5.6-sol"];
+
+      for (const model of models) {
+        // when
+        const taskAgent = createSisyphusAgent(model, undefined, undefined, undefined, undefined, true);
+        const todoAgent = createSisyphusAgent(model, undefined, undefined, undefined, undefined, false);
+
+        // then
+        expect(taskAgent.prompt).toContain("task_create");
+        expect(taskAgent.prompt).toContain("task_update");
+        expect(taskAgent.prompt).not.toContain("todowrite");
+        expect(todoAgent.prompt).toContain("todowrite");
+        expect(todoAgent.prompt).not.toContain("task_create");
+        expect(todoAgent.prompt).not.toContain("task_update");
+      }
+    });
   });
 
-  describe("#given Kimi K2.7 vs K2.6 models", () => {
-    test("#when creating agents #then K2.7 routes to its own restrained variant, not the K2.6 prompt", () => {
+  describe("#given Kimi K3 vs K2.7 vs K2.6 models", () => {
+    test("#when creating agents #then each Kimi generation routes to its own variant", () => {
       // given
+      const k3Agent = createSisyphusAgent("opencode-go/kimi-k3");
       const k27Agent = createSisyphusAgent("opencode-go/kimi-k2.7");
       const k26Agent = createSisyphusAgent("opencode-go/kimi-k2.6");
 
       // then
+      expect(k3Agent.prompt).toContain("running on Kimi K3");
+      expect(k3Agent.prompt).toContain("<k3_calibration>");
+      expect(k3Agent.prompt).not.toContain("running on Kimi K2.7");
+
       expect(k27Agent.prompt).toContain("running on Kimi K2.7");
       expect(k27Agent.prompt).not.toContain("Toggle RL");
+      expect(k27Agent.prompt).not.toContain("running on Kimi K3");
+
       expect(k26Agent.prompt).toContain("Toggle RL");
       expect(k26Agent.prompt).not.toContain("Kimi K2.7");
+      expect(k26Agent.prompt).not.toContain("running on Kimi K3");
     });
   });
 
@@ -112,12 +147,14 @@ describe("createSisyphusAgent", () => {
       // given
       const opus47Agent = createSisyphusAgent("anthropic/claude-opus-4-7");
       const opus48Agent = createSisyphusAgent("anthropic/claude-opus-4-8");
+      const opus5Agent = createSisyphusAgent("anthropic/claude-opus-5");
       const fable5Agent = createSisyphusAgent("anthropic/claude-fable-5");
       const sonnetAgent = createSisyphusAgent("anthropic/claude-sonnet-4-6");
 
       // then
       expect(opus47Agent.thinking).toBeUndefined();
       expect(opus48Agent.thinking).toBeUndefined();
+      expect(opus5Agent.thinking).toBeUndefined();
       expect(fable5Agent.thinking).toBeUndefined();
       expect(sonnetAgent.thinking).toEqual({
         type: "enabled",

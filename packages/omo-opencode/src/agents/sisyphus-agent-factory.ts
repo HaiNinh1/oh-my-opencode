@@ -14,16 +14,19 @@ import { buildFallbackSisyphusPrompt } from "./sisyphus-dynamic-prompt";
 import { buildClaudeFable5SisyphusPrompt } from "./sisyphus/claude-fable-5";
 import { buildClaudeOpus47SisyphusPrompt } from "./sisyphus/claude-opus-4-7";
 import { buildClaudeOpus48SisyphusPrompt } from "./sisyphus/claude-opus-4-8";
+import { buildClaudeOpus5SisyphusPrompt } from "./sisyphus/claude-opus-5";
 import { buildGlm52SisyphusPrompt } from "./sisyphus/glm-5-2";
 import { buildGpt54SisyphusPrompt } from "./sisyphus/gpt-5-4";
 import { buildGpt55SisyphusPrompt } from "./sisyphus/gpt-5-5";
 import { buildKimiK26SisyphusPrompt } from "./sisyphus/kimi-k2-6";
 import { buildKimiK27SisyphusPrompt } from "./sisyphus/kimi-k2-7";
+import { buildKimiK3SisyphusPrompt } from "./sisyphus/kimi-k3";
 import type { AgentMode } from "./types";
 import {
   isClaudeFable5Model,
   isClaudeOpus47Model,
   isClaudeOpus48Model,
+  isClaudeOpus5Model,
   isGlmModel,
   isGpt5_5Model,
   isGpt5_6Model,
@@ -31,6 +34,7 @@ import {
   isGptNativeSisyphusModel,
   isKimiK2Model,
   isKimiK27Model,
+  isKimiK3Model,
 } from "./types";
 
 const MODE: AgentMode = "primary";
@@ -43,11 +47,13 @@ const MODE: AgentMode = "primary";
  * body is the wrong family and must be rebuilt (issue #5297/#5316).
  */
 export type SisyphusPromptFamily =
+  | "kimi-k3"
   | "kimi-k2-7"
   | "kimi-k2-6"
   | "gpt-5-5"
   | "gpt-5-4"
   | "claude-fable-5"
+  | "claude-opus-5"
   | "claude-opus-4-8"
   | "claude-opus-4-7"
   | "glm-5-2"
@@ -65,11 +71,13 @@ export type SisyphusPromptFamily =
  * Operating-Mode / DEFAULT-BIAS line across camps by accident.
  */
 export function resolveSisyphusPromptFamily(model: string): SisyphusPromptFamily {
+  if (isKimiK3Model(model)) return "kimi-k3";
   if (isKimiK27Model(model)) return "kimi-k2-7";
   if (isKimiK2Model(model)) return "kimi-k2-6";
   if (isGpt5_5Model(model) || isGpt5_6Model(model)) return "gpt-5-5";
   if (isGptNativeSisyphusModel(model)) return "gpt-5-4";
   if (isClaudeFable5Model(model)) return "claude-fable-5";
+  if (isClaudeOpus5Model(model)) return "claude-opus-5";
   if (isClaudeOpus48Model(model)) return "claude-opus-4-8";
   if (isClaudeOpus47Model(model)) return "claude-opus-4-7";
   if (isGlmModel(model)) return "glm-5-2";
@@ -90,6 +98,12 @@ export function createSisyphusAgent(
   const agents = availableAgents ?? [];
 
   switch (resolveSisyphusPromptFamily(model)) {
+    case "kimi-k3":
+      return buildGptSisyphusAgentConfig(
+        MODE,
+        model,
+        buildKimiK3SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      );
     case "kimi-k2-7":
       return buildGptSisyphusAgentConfig(
         MODE,
@@ -119,6 +133,12 @@ export function createSisyphusAgent(
         MODE,
         model,
         buildClaudeFable5SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      );
+    case "claude-opus-5":
+      return buildClaudeSisyphusAgentConfig(
+        MODE,
+        model,
+        buildClaudeOpus5SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
       );
     case "claude-opus-4-8":
       return buildClaudeSisyphusAgentConfig(

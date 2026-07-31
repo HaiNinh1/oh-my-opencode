@@ -95,6 +95,10 @@ export function createSteeringEngine(port: SteeringPort): SteeringEngine {
     return { kind: "queued", task_id: taskId, queue_position: queue.length }
   }
 
+  function dropPending(taskId: string): void {
+    pending.delete(taskId)
+  }
+
   async function notifyStarted(taskId: string): Promise<void> {
     const queue = pending.get(taskId)
     if (queue === undefined || queue.length === 0) return
@@ -158,10 +162,12 @@ export function createSteeringEngine(port: SteeringPort): SteeringEngine {
     }
     // Transition BEFORE abort so this cancel is the single terminal write; the tracker's later
     // complete/cancel transition (settled by abort) is rejected by terminal idempotence.
+    const runStats = port.runStatsSnapshot(record.task_id)
     const result = port.store.transition(record.task_id, {
       type: "cancel",
       timestamp: nowIso(),
       ...(reason !== undefined ? { error_message: reason } : {}),
+      ...(runStats !== undefined ? { run_stats: runStats } : {}),
     })
     if (!result.applied) {
       return { kind: "noop", task_id: record.task_id, status: result.record.status, reason: `Task ${record.task_id} could not be cancelled from running.` }
@@ -184,7 +190,7 @@ export function createSteeringEngine(port: SteeringPort): SteeringEngine {
     return { kind: "cancelled", task_id: record.task_id, previous_status: "running" }
   }
 
-  return { sendToTask, interruptTask, cancelTask, notifyStarted }
+  return { sendToTask, interruptTask, cancelTask, notifyStarted, dropPending }
 }
 
 function scopeDenied(record: TaskRecord, input: SendInput): SendOutcome | undefined {
@@ -206,7 +212,9 @@ function notContinuableReason(record: TaskRecord): string {
 }
 
 function buildRevived(record: TaskRecord, timestamp: string): TaskRecord {
-  const { final_response: _final, error_message: _error, ...rest } = record
+  // run_stats describes the FINISHED run; carrying it into the revived one would let a later
+  // terminal transition report stale throughput for a run that produced nothing yet.
+  const { final_response: _final, error_message: _error, run_stats: _stats, ...rest } = record
   return {
     ...rest,
     status: "running",

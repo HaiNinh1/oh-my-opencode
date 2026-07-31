@@ -255,6 +255,7 @@ describe("steering pending cancellation", () => {
         dequeued.push(taskId)
         return true
       },
+      runStatsSnapshot: () => undefined,
       destruction: {
         destroyResidentTask: async (taskId) => {
           destroyed.push(taskId)
@@ -292,5 +293,23 @@ describe("steering pending cancellation", () => {
     // then
     expect(interrupted.kind).toBe("noop")
     expect(harness.store.load(record.task_id)?.status).toBe("pending")
+  })
+
+  test("#given a pending child with queued sends w2pend #when dropPending then notified started #then buffered messages are discarded", async () => {
+    // given a queued task with two buffered messages
+    const harness = makeHarness()
+    const record = harness.seedRecord()
+    await harness.engine.sendToTask({ idOrName: record.task_id, message: "first" })
+    await harness.engine.sendToTask({ idOrName: record.task_id, message: "second" })
+
+    // when the manager forgets the task before it ever launches, then a stale start fires
+    harness.engine.dropPending(record.task_id)
+    const fake = makeFakeHandle(record.task_id, "in-process")
+    harness.setLive(record.task_id, fake.handle)
+    await harness.engine.notifyStarted(record.task_id)
+
+    // then nothing is delivered (the buffer was released, not retained for the session)
+    expect(fake.followUpCalls).toEqual([])
+    expect(fake.steerCalls).toEqual([])
   })
 })
