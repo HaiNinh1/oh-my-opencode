@@ -3,7 +3,7 @@
 // allow: SIZE_OK - team runtime creation tests share filesystem and tmux mock state; this release adds small lock/spawn coverage and future edits should split by runtime phase.
 
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { access, mkdtemp, readdir, rm } from "node:fs/promises"
+import { access, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -32,6 +32,7 @@ const resolveMemberMock = mock(async (member: TeamSpec["members"][number]) => ({
 mock.module("./resolve-member", () => ({ resolveMember: resolveMemberMock }))
 
 const { createTeamRun, TeamRunCreateError } = await import("./create")
+const { deleteTeam } = await import("./delete-team")
 
 function createConfig(baseDir: string, maxParallelMembers = 4) {
   return TeamModeConfigSchema.parse({ base_dir: baseDir, max_parallel_members: maxParallelMembers, max_wall_clock_minutes: 1 })
@@ -534,5 +535,51 @@ describe("createTeamRun", () => {
       { name: "captain", sessionId: "lead-session" },
       { name: "member-1", sessionId: "member-1-agent-session-1" },
     ])
+  })
+
+  test("#given a git project and Windows-style member worktree paths #when the team is created then deleted #then members run in real git worktrees seeded with uncommitted changes and their edits merge back", async () => {
+    // given
+    const git = (cwd: string, ...args: string[]): string => {
+      const result = Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" })
+      if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`)
+      return result.stdout.toString()
+    }
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-git-base-"))
+    const projectDir = await realpath(await mkdtemp(path.join(tmpdir(), "team-runtime-git-project-")))
+    temporaryDirectories.push(baseDir, projectDir)
+    git(projectDir, "init", "-q")
+    git(projectDir, "config", "user.email", "test@example.com")
+    git(projectDir, "config", "user.name", "Test User")
+    git(projectDir, "config", "core.autocrlf", "false")
+    await writeFile(path.join(projectDir, "shared.txt"), "base\n")
+    git(projectDir, "add", "-A")
+    git(projectDir, "commit", "-q", "-m", "init")
+    await writeFile(path.join(projectDir, "uncommitted.txt"), "lead work in progress\n")
+    let launchCount = 0
+    const { manager, launchMock } = createManager(baseDir, async () => ({ id: `task-${++launchCount}`, sessionId: `session-${launchCount}`, status: "running" } as BackgroundTask))
+    const spec = createSpec(2)
+    spec.members = spec.members.map((member, index) => ({ ...member, worktreePath: `.\\wt\\member-${index + 1}` }))
+    const config = createConfig(baseDir)
+
+    // when
+    await createTeamRun(spec, "lead-session", { ...createContext(baseDir, manager), directory: projectDir }, config, manager)
+    const runtimeState = await loadSingleRuntimeState(baseDir)
+    const worktrees = runtimeState.members.map((member) => member.worktreePath ?? "")
+    await writeFile(path.join(worktrees[0]!, "shared.txt"), "base\nmember-1 edit\n")
+    await writeFile(path.join(worktrees[1]!, "member-2-new.txt"), "created by member-2\n")
+    const deleted = await deleteTeam(runtimeState.teamRunId, config, undefined, undefined, { force: true })
+
+    // then
+    expect(worktrees.map((worktree) => worktree.toLowerCase())).toEqual([1, 2].map((index) => `${projectDir.replaceAll("\\", "/")}/wt/member-${index}`.toLowerCase()))
+    const launchCwds = (launchMock.mock.calls as Array<[LaunchInput]>).map(([input]) => input.cwd).sort()
+    expect(launchCwds).toEqual([...worktrees].sort())
+    expect(deleted.worktreeMerges.map((merge) => merge.status)).toEqual(["applied", "applied"])
+    expect(deleted.worktreeMerges[1]?.filesChanged).toEqual(["member-2-new.txt"])
+    expect((await readFile(path.join(projectDir, "shared.txt"), "utf8")).replaceAll("\r\n", "\n")).toBe("base\nmember-1 edit\n")
+    expect(await readFile(path.join(projectDir, "member-2-new.txt"), "utf8")).toContain("created by member-2")
+    expect(await readFile(path.join(projectDir, "uncommitted.txt"), "utf8")).toContain("lead work in progress")
+    expect(await pathExists(worktrees[0]!)).toBe(false)
+    expect(await pathExists(worktrees[1]!)).toBe(false)
+    expect(git(projectDir, "diff", "--cached", "--name-only").trim()).toBe("")
   })
 })

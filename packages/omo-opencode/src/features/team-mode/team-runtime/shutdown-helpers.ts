@@ -1,6 +1,12 @@
 import { randomUUID } from "node:crypto"
 import { rm } from "node:fs/promises"
 
+import {
+  mergeBackWorktree,
+  readIsolationMetadata,
+  type WorktreeMergeResult,
+} from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
+
 import type { Message, RuntimeState } from "../types"
 
 export const DELETABLE_MEMBER_STATUSES = new Set<RuntimeState["members"][number]["status"]>([
@@ -63,6 +69,33 @@ export function findLatestShutdownRequestIndex(
   }
 
   return -1
+}
+
+/**
+ * Merge each isolated git worktree back into its parent checkout (sequentially, member order),
+ * removing it only when merged or unchanged. Conflicting/failed worktrees are kept and reported.
+ * Plain (non-git) member directories are removed as before.
+ */
+export async function integrateAndRemoveWorktrees(memberPaths: Array<string | undefined>): Promise<{
+  removedWorktrees: string[]
+  worktreeMerges: WorktreeMergeResult[]
+}> {
+  const removedWorktrees: string[] = []
+  const worktreeMerges: WorktreeMergeResult[] = []
+
+  for (const memberPath of new Set(memberPaths)) {
+    if (!memberPath) continue
+    if (await readIsolationMetadata(memberPath)) {
+      const merge = await mergeBackWorktree(memberPath)
+      worktreeMerges.push(merge)
+      if (!merge.retainedPath) removedWorktrees.push(memberPath)
+      continue
+    }
+    await rm(memberPath, { recursive: true, force: true })
+    removedWorktrees.push(memberPath)
+  }
+
+  return { removedWorktrees, worktreeMerges }
 }
 
 export async function removeWorktrees(memberPaths: Array<string | undefined>): Promise<string[]> {

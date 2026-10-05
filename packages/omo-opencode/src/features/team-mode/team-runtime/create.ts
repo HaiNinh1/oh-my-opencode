@@ -1,6 +1,9 @@
 import { access, mkdir } from "node:fs/promises"
 import path from "node:path"
 
+import { createIsolatedWorktree, resolveGitRoot } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
+import { normalizeWorktreeSpec, validateWorktreeSpec } from "@oh-my-opencode/team-core/team-worktree/manager"
+
 import type { TeamModeConfig } from "../../../config/schema/team-mode"
 import { QUESTION_DENIED_SESSION_PERMISSION } from "../../../shared/question-denied-session-permission"
 import type { ExecutorContext } from "../../../tools/delegate-task/executor-types"
@@ -73,8 +76,19 @@ async function findExistingRuntime(spec: TeamSpec, leadSessionId: string, config
   }
 }
 
+/**
+ * Inside a git repo a member gets a real detached worktree seeded with the lead's current
+ * files (uncommitted changes included); its changes are merged back on team delete.
+ * Outside git it stays a plain directory, as before.
+ */
 async function createMemberWorktree(memberWorktreePath: string, projectRoot: string): Promise<string> {
-  const absolutePath = path.isAbsolute(memberWorktreePath) ? memberWorktreePath : path.resolve(projectRoot, memberWorktreePath)
+  validateWorktreeSpec(memberWorktreePath)
+  const normalizedPath = normalizeWorktreeSpec(memberWorktreePath)
+  const absolutePath = path.isAbsolute(normalizedPath) ? normalizedPath : path.resolve(projectRoot, normalizedPath)
+  const repoRoot = await resolveGitRoot(projectRoot)
+  if (repoRoot) {
+    return (await createIsolatedWorktree({ repoRoot, worktreePath: absolutePath })).worktreePath
+  }
   await mkdir(absolutePath, { recursive: true })
   return absolutePath
 }
@@ -161,6 +175,7 @@ export async function createTeamRun(
   const deadlineAt = Date.now() + (config.max_wall_clock_minutes * 60_000)
   const resources: SpawnedMemberResource[] = spec.members.map(() => ({}))
   let createdLayout = false
+  let worktreeCreationQueue: Promise<void> = Promise.resolve()
 
   try {
     let nextMemberIndex = 0
@@ -181,7 +196,13 @@ export async function createTeamRun(
         if (!resource) return
 
         try {
-          if (member.worktreePath) resource.worktreePath = await createMemberWorktree(member.worktreePath, ctx.directory)
+          if (member.worktreePath) {
+            const memberWorktreePath = member.worktreePath
+            // `git worktree add` is not safe to run concurrently against one repository.
+            const creation = worktreeCreationQueue.then(() => createMemberWorktree(memberWorktreePath, ctx.directory))
+            worktreeCreationQueue = creation.then(() => undefined, () => undefined)
+            resource.worktreePath = await creation
+          }
           if (reusesCallerLeadSession && member.name === spec.leadAgentId) {
             if (resource.worktreePath) {
               await updateMemberInRuntimeState(runtimeState.teamRunId, member.name, (currentMember) => ({

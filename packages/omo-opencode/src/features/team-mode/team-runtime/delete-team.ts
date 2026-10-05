@@ -8,13 +8,21 @@ import { getRuntimeStateDir, resolveBaseDir } from "../team-registry/paths"
 import { unregisterTeamSessionsByTeam } from "../team-session-registry"
 import { listActiveTeams, loadRuntimeState, saveRuntimeState, transitionRuntimeState } from "../team-state-store/store"
 import type { RuntimeState } from "../types"
-import { DELETABLE_MEMBER_STATUSES, removeWorktrees } from "./shutdown-helpers"
+import { DELETABLE_MEMBER_STATUSES, integrateAndRemoveWorktrees, removeWorktrees } from "./shutdown-helpers"
+import type { WorktreeMergeResult } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
 import { unregisterTeamRunForSessionCleanup } from "./session-team-run-registry"
 
 export type DeleteTeamDeps = {
   canVisualize: typeof canVisualize
   removeTeamLayout: typeof removeTeamLayout
   log: typeof log
+}
+
+export type DeleteTeamResult = {
+  removedWorktrees: string[]
+  removedLayout: boolean
+  /** Merge-back outcome per isolated git worktree; conflicting/failed ones are kept on disk. */
+  worktreeMerges: WorktreeMergeResult[]
 }
 
 export type DeleteTeamBackgroundManager = Pick<BackgroundManager, "getTasksByParentSession" | "cancelTask">
@@ -69,7 +77,7 @@ export async function deleteTeam(
   bgMgr?: DeleteTeamBackgroundManager,
   options?: { force?: boolean },
   deps: DeleteTeamDeps = defaultDeleteTeamDeps,
-): Promise<{ removedWorktrees: string[]; removedLayout: boolean }> {
+): Promise<DeleteTeamResult> {
   const runtimeState = await loadRuntimeState(teamRunId, config)
   const nonLeadMembers = runtimeState.members.filter((member) => member.agentType !== "leader")
 
@@ -110,7 +118,7 @@ async function deleteTeamResources(
   tmuxMgr?: TmuxSessionManager,
   options?: { force?: boolean },
   deps: DeleteTeamDeps = defaultDeleteTeamDeps,
-): Promise<{ removedWorktrees: string[]; removedLayout: boolean }> {
+): Promise<DeleteTeamResult> {
 
   if (options?.force === true) {
     await transitionRuntimeState(teamRunId, (currentRuntimeState) => ({
@@ -175,7 +183,7 @@ async function deleteTeamResources(
     }
   }
 
-  const removedWorktrees = await removeWorktrees(runtimeState.members.map((member) => member.worktreePath))
+  const { removedWorktrees, worktreeMerges } = await integrateAndRemoveWorktrees(runtimeState.members.map((member) => member.worktreePath))
 
   if (runtimeState.status !== "deleted") {
     await transitionRuntimeState(teamRunId, (currentRuntimeState) => (
@@ -193,5 +201,5 @@ async function deleteTeamResources(
   const activeTeams = await listActiveTeams(config)
   sweepStaleTeamSessions(new Set(activeTeams.map((team) => team.teamRunId))).catch(ignoreStaleTeamSessionSweepFailure)
 
-  return { removedWorktrees, removedLayout }
+  return { removedWorktrees, removedLayout, worktreeMerges }
 }
