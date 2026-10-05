@@ -2,7 +2,10 @@ export { GitUnavailableError, createWorktree, isGitAvailable, normalizeWorktreeS
 export { findOrphanWorktrees, removeWorktree } from "./cleanup"
 export {
   ISOLATED_WORKTREES_DIR,
+  MIN_GIT_VERSION_TEXT,
+  checkGitIsolationSupport,
   createIsolatedWorktree,
+  removeDirectoryIfDisposable,
   defaultIsolatedWorktreePath,
   isWorkingTreeDirty,
   mergeBackWorktree,

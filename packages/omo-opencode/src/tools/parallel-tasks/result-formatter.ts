@@ -28,6 +28,11 @@ function formatIsolation(isolation: TaskIsolationReport): string {
   }
   if (merge.error && merge.status !== "conflict") lines.push(`Merge error: ${merge.error}`)
   if (merge.cleanupError) lines.push(`Cleanup warning: ${merge.cleanupError}`)
+  if (merge.ignoredNotMerged?.length) {
+    const shown = merge.ignoredNotMerged.slice(0, 10)
+    const more = merge.ignoredNotMerged.length - shown.length
+    lines.push(`Not merged (gitignored in worktree): ${shown.join(", ")}${more > 0 ? ` (+${more} more)` : ""}`)
+  }
   return lines.join("\n")
 }
 

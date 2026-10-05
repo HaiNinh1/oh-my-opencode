@@ -1,4 +1,8 @@
-import { resolveGitRoot } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
+import {
+  MIN_GIT_VERSION_TEXT,
+  checkGitIsolationSupport,
+  resolveGitRoot,
+} from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
 import type {
   ParallelTaskIsolation,
   ParallelTaskItem,
@@ -59,10 +63,9 @@ function createChildContext(
   }
 }
 
-function describeSkippedIsolation(item: ParallelTaskItem, inGitRepo: boolean): string | undefined {
+function describeSkippedIsolation(item: ParallelTaskItem, unavailableReason: string | undefined): string | undefined {
   if (isResearchItem(item)) return "research item"
-  if (!inGitRepo) return "session directory is not inside a git repository"
-  return undefined
+  return unavailableReason
 }
 
 export async function executeParallelTasks(
@@ -102,7 +105,15 @@ export async function executeParallelTasks(
   }
 
   const sessionDirectory = ctx.directory ?? options.directory
-  const repoRoot = await resolveGitRoot(sessionDirectory)
+  const detectedRoot = await resolveGitRoot(sessionDirectory)
+  const gitSupport = detectedRoot ? await checkGitIsolationSupport() : undefined
+  // Old git would make every merge fail; degrade to "none" up front with a clear note instead.
+  const repoRoot = detectedRoot && gitSupport?.ok ? detectedRoot : null
+  const isolationUnavailable = !detectedRoot
+    ? "session directory is not inside a git repository"
+    : gitSupport && !gitSupport.ok
+      ? `worktree isolation needs git >= ${MIN_GIT_VERSION_TEXT} (found: ${gitSupport.version})`
+      : undefined
   const modes = decideIsolation({
     items,
     callIsolation,
@@ -148,7 +159,7 @@ export async function executeParallelTasks(
       const isolation: TaskIsolationReport | undefined = worktree
         ? { mode: "worktree", worktreePath: worktree.worktreePath }
         : reportIsolation
-          ? { mode: "none", note: describeSkippedIsolation(task.item, repoRoot !== null) }
+          ? { mode: "none", note: describeSkippedIsolation(task.item, isolationUnavailable) }
           : undefined
       // System context, not the user prompt: a path note inside the prompt reads like an injection to some models.
       const systemContent = worktree && repoRoot

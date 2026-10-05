@@ -4,6 +4,7 @@ import { rm } from "node:fs/promises"
 import {
   mergeBackWorktree,
   readIsolationMetadata,
+  removeDirectoryIfDisposable,
   type WorktreeMergeResult,
 } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
 
@@ -74,7 +75,7 @@ export function findLatestShutdownRequestIndex(
 /**
  * Merge each isolated git worktree back into its parent checkout (sequentially, member order),
  * removing it only when merged or unchanged. Conflicting/failed worktrees are kept and reported.
- * Plain (non-git) member directories are removed as before.
+ * Directories without isolation metadata are removed only when empty; otherwise kept and reported.
  */
 export async function integrateAndRemoveWorktrees(memberPaths: Array<string | undefined>): Promise<{
   removedWorktrees: string[]
@@ -91,8 +92,20 @@ export async function integrateAndRemoveWorktrees(memberPaths: Array<string | un
       if (!merge.retainedPath && !merge.cleanupError) removedWorktrees.push(memberPath)
       continue
     }
-    await rm(memberPath, { recursive: true, force: true })
-    removedWorktrees.push(memberPath)
+    // No metadata (non-git project, or git could not vouch for it): only an empty directory may go.
+    const disposal = await removeDirectoryIfDisposable(memberPath)
+    if (disposal.removed) {
+      removedWorktrees.push(memberPath)
+      continue
+    }
+    worktreeMerges.push({
+      status: "failed",
+      worktreePath: memberPath,
+      filesChanged: [],
+      conflictFiles: [],
+      retainedPath: memberPath,
+      error: disposal.error,
+    })
   }
 
   return { removedWorktrees, worktreeMerges }

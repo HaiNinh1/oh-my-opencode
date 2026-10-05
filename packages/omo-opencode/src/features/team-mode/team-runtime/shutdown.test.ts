@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { access, mkdir, rm } from "node:fs/promises"
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import { sendMessage } from "../team-mailbox/send"
@@ -184,6 +184,31 @@ describe("team-runtime shutdown", () => {
       () => { throw new Error(`expected ${runtimeStateDirectory} to be removed`) },
       () => undefined,
     )
+  })
+
+  test("#given a member directory with content but no isolation metadata #when deleting the team #then it is kept and reported, never rm -rf'd", async () => {
+    // given
+    const fixture = await createFixture()
+    temporaryDirectories.push(fixture.baseDir)
+    await updateMemberStatuses(fixture.teamRunId, fixture.config, {
+      "member-a": "shutdown_approved",
+      "member-b": "shutdown_approved",
+    })
+    const [withWork, empty] = fixture.worktreePaths
+    await mkdir(withWork!, { recursive: true })
+    await mkdir(path.join(withWork!, ".git"), { recursive: true })
+    await writeFile(path.join(withWork!, "work.ts"), "export const unmerged = true\n")
+    await mkdir(empty!, { recursive: true })
+
+    // when
+    const result = await deleteTeam(fixture.teamRunId, fixture.config)
+
+    // then
+    expect(result.removedWorktrees).toEqual([empty!])
+    expect(result.worktreeMerges).toHaveLength(1)
+    expect(result.worktreeMerges[0]).toMatchObject({ status: "failed", retainedPath: withWork })
+    expect(result.worktreeMerges[0]?.error).toContain("left in place")
+    expect(await readFile(path.join(withWork!, "work.ts"), "utf8")).toContain("unmerged")
   })
 
   test("#given a team run is tracked for session cleanup #when deleteTeam succeeds #then it unregisters the run", async () => {

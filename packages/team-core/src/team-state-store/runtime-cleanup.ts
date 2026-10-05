@@ -3,7 +3,7 @@ import { rm, stat } from "node:fs/promises"
 import type { TeamModeConfig } from "../config"
 import { getRuntimeStateDir, resolveBaseDir } from "../team-registry/paths"
 import type { RuntimeState } from "../types"
-import { mergeBackWorktree, readIsolationMetadata } from "../team-worktree/isolated-worktree"
+import { mergeBackWorktree, readIsolationMetadata, removeDirectoryIfDisposable } from "../team-worktree/isolated-worktree"
 
 function isEnoentError(error: unknown): boolean {
   return typeof error === "object"
@@ -28,7 +28,10 @@ export async function removeRuntimeDirectory(teamRunId: string, config: TeamMode
   return true
 }
 
-/** Isolated git worktrees are merged back (kept on conflict) instead of deleted, so resumed cleanup never drops member work. */
+/**
+ * Isolated git worktrees are merged back (kept on conflict) instead of deleted; other member
+ * directories are removed only when empty, so resumed cleanup never drops member work.
+ */
 export async function cleanupMemberWorktrees(runtimeState: RuntimeState): Promise<void> {
   for (const member of runtimeState.members) {
     if (!member.worktreePath) continue
@@ -36,6 +39,6 @@ export async function cleanupMemberWorktrees(runtimeState: RuntimeState): Promis
       await mergeBackWorktree(member.worktreePath)
       continue
     }
-    await rm(member.worktreePath, { recursive: true, force: true })
+    await removeDirectoryIfDisposable(member.worktreePath)
   }
 }

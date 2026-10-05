@@ -1,7 +1,7 @@
 import { access, mkdir } from "node:fs/promises"
 import path from "node:path"
 
-import { createIsolatedWorktree, resolveGitRoot } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
+import { checkGitIsolationSupport, createIsolatedWorktree, resolveGitRoot } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
 import { normalizeWorktreeSpec, validateWorktreeSpec } from "@oh-my-opencode/team-core/team-worktree/manager"
 
 import type { TeamModeConfig } from "../../../config/schema/team-mode"
@@ -79,14 +79,14 @@ async function findExistingRuntime(spec: TeamSpec, leadSessionId: string, config
 /**
  * Inside a git repo a member gets a real detached worktree seeded with the lead's current
  * files (uncommitted changes included); its changes are merged back on team delete.
- * Outside git it stays a plain directory, as before.
+ * Outside git (or with git older than 2.32) it stays a plain directory, as before.
  */
 async function createMemberWorktree(memberWorktreePath: string, projectRoot: string): Promise<string> {
   validateWorktreeSpec(memberWorktreePath)
   const normalizedPath = normalizeWorktreeSpec(memberWorktreePath)
   const absolutePath = path.isAbsolute(normalizedPath) ? normalizedPath : path.resolve(projectRoot, normalizedPath)
   const repoRoot = await resolveGitRoot(projectRoot)
-  if (repoRoot) {
+  if (repoRoot && (await checkGitIsolationSupport()).ok) {
     return (await createIsolatedWorktree({ repoRoot, worktreePath: absolutePath })).worktreePath
   }
   await mkdir(absolutePath, { recursive: true })
