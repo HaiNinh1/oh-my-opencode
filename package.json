@@ -149,7 +149,8 @@
     "test:windows-codex": "bun run test:codex",
     "build:git-bash-mcp": "bun run --cwd packages/git-bash-mcp build",
     "build:ast-grep-mcp": "bun run --cwd packages/ast-grep-mcp build",
-    "test:desktop": "bun script/check-cargo-pinned-deps.mjs && bun run --cwd packages/senpi-desktop-protocol test && bun run --cwd packages/senpi-desktop-engine test && bun run --cwd packages/senpi-desktop-prelude test && bun run --cwd packages/senpi-desktop-service test && bun run --cwd packages/senpi-desktop-tool test"
+    "test:desktop": "bun script/check-cargo-pinned-deps.mjs && bun run --cwd packages/senpi-desktop-protocol test && bun run --cwd packages/senpi-desktop-engine test && bun run --cwd packages/senpi-desktop-prelude test && bun run --cwd packages/senpi-desktop-service test && bun run --cwd packages/senpi-desktop-tool test",
+    "install:fork": "bun run script/install-fork.ts"
   },
   "keywords": [
     "opencode",
