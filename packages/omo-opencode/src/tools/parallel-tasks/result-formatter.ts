@@ -1,12 +1,33 @@
-import type { TaskResult } from "./types"
+import type { TaskIsolationReport, TaskResult } from "./types"
 import { formatDuration } from "../delegate-task/time-formatter"
 
 const SUCCESS_PREFIX = "Task completed in "
 
-function classifyOutcome(result: TaskResult): "success" | "failed" | "error" {
+export function classifyOutcome(result: Pick<TaskResult, "errorMessage" | "output">): "success" | "failed" | "error" {
   if (result.errorMessage !== null) return "error"
   if (result.output?.startsWith(SUCCESS_PREFIX)) return "success"
   return "failed"
+}
+
+function formatIsolation(isolation: TaskIsolationReport): string {
+  if (isolation.mode === "none") {
+    return `Isolation: none${isolation.note ? ` (${isolation.note})` : ""} | Merge: n/a (edits made directly in the parent checkout)`
+  }
+  const lines = [`Isolation: worktree${isolation.worktreePath ? ` ${isolation.worktreePath}` : ""}`]
+  const merge = isolation.merge
+  if (!merge) {
+    lines.push(`Merge: not attempted${isolation.note ? ` (${isolation.note})` : ""}`)
+    return lines.join("\n")
+  }
+  const files = merge.filesChanged.length > 0 ? merge.filesChanged.join(", ") : "(none)"
+  lines.push(`Merge: ${merge.status}${isolation.note ? ` (${isolation.note})` : ""}`)
+  lines.push(`Files changed: ${files}`)
+  if (merge.conflictFiles.length > 0) lines.push(`Conflicting files: ${merge.conflictFiles.join(", ")}`)
+  if (merge.retainedPath) {
+    lines.push(`Worktree kept at ${merge.retainedPath}${merge.patchPath ? `; patch: ${merge.patchPath} (apply manually with \`git apply --3way\`)` : ""}`)
+  }
+  if (merge.error && merge.status !== "conflict") lines.push(`Merge error: ${merge.error}`)
+  return lines.join("\n")
 }
 
 export function formatResults(
@@ -57,6 +78,10 @@ export function formatResults(
       } else {
         parts.push("(No output)")
       }
+    }
+
+    if (result.isolation) {
+      parts.push(formatIsolation(result.isolation))
     }
   }
 

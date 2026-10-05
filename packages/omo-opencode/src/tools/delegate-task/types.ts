@@ -71,6 +71,8 @@ export interface ToolContextWithMetadata {
   messageID: string
   agent: string
   abort: AbortSignal
+  /** Session working directory supplied by OpenCode's ToolContext. */
+  directory?: string
   metadata?: (input: { title?: string; metadata?: Record<string, unknown> }) => void | Promise<void>
   /**
    * Tool call ID injected by OpenCode's internal context (not in plugin ToolContext type,

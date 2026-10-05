@@ -486,6 +486,14 @@ Priority: `modelConcurrency` > `providerConcurrency` > `defaultConcurrency`
 
 The OpenCode edition's orchestration key (`sisyphus_agent`) and its file-based task storage options are documented on the legacy page linked from [Agents](#agents).
 
+### Parallel Tasks Worktree Isolation
+
+`parallel_tasks.isolation` (`"auto"` default, `"worktree"`, `"none"`) sets the default for the `parallel_tasks` tool. In `auto`, a call with 2+ implementation items in a git repo runs each implementation item in its own detached worktree at `<repo>/.omo/worktrees/<id>` (added to `.git/info/exclude`), seeded with the parent's current files including uncommitted changes. After all items finish, each worktree's changes (edits, new untracked files, commits) are merged back into the parent working tree in item order with a conflict-checked `git apply --3way` against a throwaway index: nothing is committed and the user's index is untouched. A conflicting or failed merge leaves the parent unchanged, keeps the worktree plus a `.patch` next to it, and the tool result lists the conflicting files. Research items (`explore`, `librarian`) are never isolated. The call-level and per-item `isolation` arguments override this default. Team-mode members with `worktreePath` use the same worktrees and merge back on `team_delete`.
+
+```json
+{ "parallel_tasks": { "isolation": "auto" } }
+```
+
 ---
 
 ## Features

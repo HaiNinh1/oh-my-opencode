@@ -120,6 +120,7 @@ export function createCoreTools(args: {
     sisyphusAgentConfig: pluginConfig.sisyphus_agent,
     syncPollTimeoutMs: pluginConfig.background_task?.syncPollTimeoutMs,
     modelFallbackControllerAccessor: managers.modelFallbackControllerAccessor,
+    isolationDefault: pluginConfig.parallel_tasks?.isolation,
   })
   const skillMcpTool = factories.createSkillMcpTool({
     manager: managers.skillMcpManager,

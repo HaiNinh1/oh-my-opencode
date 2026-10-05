@@ -52,6 +52,7 @@ export async function executeSyncTask(
       agentToUse,
       description: args.description,
       defaultDirectory: directory,
+      directoryOverride: executorCtx.sessionDirectory,
       categoryModel,
     })
 

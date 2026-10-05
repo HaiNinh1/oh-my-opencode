@@ -9,11 +9,15 @@ export async function createSyncSession(
     agentToUse: string
     description: string
     defaultDirectory: string
+    /** Forces the child session's working directory (e.g. an isolated git worktree) instead of inheriting the parent's. */
+    directoryOverride?: string
     categoryModel?: DelegatedModelConfig
   }
 ): Promise<{ ok: true; sessionID: string; parentDirectory: string } | { ok: false; error: string }> {
-  const parentSession = await client.session.get({ path: { id: input.parentSessionID } }).catch(() => null)
-  const parentDirectory = parentSession?.data?.directory ?? input.defaultDirectory
+  const parentSession = input.directoryOverride
+    ? null
+    : await client.session.get({ path: { id: input.parentSessionID } }).catch(() => null)
+  const parentDirectory = input.directoryOverride ?? parentSession?.data?.directory ?? input.defaultDirectory
 
   const createResult = await client.session.create({
     body: {

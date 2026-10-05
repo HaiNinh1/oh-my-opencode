@@ -7,6 +7,8 @@ export interface ExecutorContext {
   manager: BackgroundManager
   client: OpencodeClient
   directory: string
+  /** When set, sync child sessions run in this directory (e.g. an isolated git worktree) instead of the parent session's. */
+  sessionDirectory?: string
   userCategories?: CategoriesConfig
   gitMasterConfig?: GitMasterConfig
   sisyphusJuniorModel?: string

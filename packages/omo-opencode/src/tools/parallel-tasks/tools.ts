@@ -13,7 +13,9 @@ export function createParallelTasksTool(options: ParallelTasksToolOptions): Tool
 Unlike individual task() calls which may execute sequentially across turns, this tool guarantees all tasks run concurrently.
 
 ⚠️ CRITICAL SAFETY RULE — ONLY parallelize INDEPENDENT tasks that touch DISJOINT files.
-NEVER parallelize edits to the same file or overlapping region: concurrent writes race and corrupt the file. If two tasks could touch the same file, or any task depends on another's output, do NOT use parallel_tasks — run them sequentially with the \`task\` tool instead. When in doubt, prefer \`task\`.
+NEVER parallelize edits to the same file or overlapping region. If two tasks could touch the same file, or any task depends on another's output, do NOT use parallel_tasks — run them sequentially with the \`task\` tool instead. When in doubt, prefer \`task\`.
+
+WORKTREE ISOLATION: in a git repo, when a call has 2+ implementation items each one runs in its own git worktree (\`<repo>/.omo/worktrees/<id>\`, starting from the current files incl. uncommitted changes) and its changes are merged back into the parent checkout sequentially in item order (uncommitted, never committed). Conflicting merges keep their worktree and are reported. Override with \`isolation: "worktree" | "none"\` on the call or per item. Research items are never isolated.
 
 Two kinds of agents you can run here (each task picks EXACTLY ONE of these per item):
 - RESEARCH (read-only) — set subagent_type to "explore" (internal codebase analysis) or "librarian" (external docs / OSS / web research).
@@ -55,14 +57,20 @@ parallel_tasks({
           load_skills: tool.schema.array(tool.schema.string()).describe("Skill names to inject. Pass [] if no skills needed."),
           subagent_type: tool.schema.string().optional().describe("Agent to run. REQUIRED if category not provided; do NOT provide both. Research: 'explore' (internal codebase) or 'librarian' (external docs / OSS / web). Implementation: an executor agent."),
           category: tool.schema.string().optional().describe("Domain-routed executor category for model-tier routing. REQUIRED if subagent_type not provided; do NOT provide both."),
+          isolation: tool.schema.enum(["worktree", "none"]).optional().describe("Per-item override of the call-level isolation. Ignored for research items."),
         }),
       ).describe("Array of task definitions to execute in parallel"),
+      isolation: tool.schema.enum(["worktree", "none"]).optional().describe("'worktree' runs each implementation item in its own git worktree and merges changes back afterwards; 'none' edits the parent checkout directly. Default: 'worktree' when there are 2+ implementation items in a git repo, else 'none'."),
     },
     async execute(args: ParallelTasksArgs, toolContext) {
       const ctx = toolContext as ToolContextWithMetadata
 
       if (!args.tasks || !Array.isArray(args.tasks) || args.tasks.length === 0) {
         return "Invalid arguments: 'tasks' must be a non-empty array of task definitions."
+      }
+
+      if (args.isolation !== undefined && args.isolation !== "worktree" && args.isolation !== "none") {
+        return `Invalid arguments: 'isolation' must be "worktree" or "none".`
       }
 
       if (args.tasks.length > MAX_PARALLEL_TASKS) {
@@ -80,6 +88,9 @@ parallel_tasks({
         if (!task.category && !task.subagent_type) {
           return `Task ${i + 1} ("${task.description}"): must provide either 'category' or 'subagent_type'.`
         }
+        if (task.isolation !== undefined && task.isolation !== "worktree" && task.isolation !== "none") {
+          return `Task ${i + 1} ("${task.description}"): 'isolation' must be "worktree" or "none".`
+        }
         if (task.load_skills === undefined || task.load_skills === null) {
           task.load_skills = []
         }
@@ -93,10 +104,12 @@ parallel_tasks({
           description: t.description,
           subagent_type: t.subagent_type,
           category: t.category,
+          isolation: t.isolation,
         })),
+        isolation: args.isolation,
       })
 
-      return executeParallelTasks(args.tasks, ctx, options)
+      return executeParallelTasks(args.tasks, ctx, options, args.isolation)
     },
   })
 }

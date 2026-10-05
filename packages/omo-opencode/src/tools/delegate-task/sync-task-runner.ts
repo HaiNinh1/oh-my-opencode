@@ -184,6 +184,7 @@ export async function runSyncTaskLoop(input: SyncTaskRunnerInput): Promise<strin
         agentToUse,
         description: args.description,
         defaultDirectory: directory,
+        directoryOverride: executorCtx.sessionDirectory,
         categoryModel: nextFallbackModel,
       })
       if (!retrySessionResult.ok) {

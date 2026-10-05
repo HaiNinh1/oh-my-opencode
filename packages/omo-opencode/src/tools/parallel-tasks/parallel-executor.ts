@@ -1,8 +1,24 @@
-import type { ParallelTaskItem, ParallelTasksToolOptions, TaskResult, ToolContextWithMetadata } from "./types"
+import { resolveGitRoot } from "@oh-my-opencode/team-core/team-worktree/isolated-worktree"
+import type {
+  ParallelTaskIsolation,
+  ParallelTaskItem,
+  ParallelTasksToolOptions,
+  TaskIsolationReport,
+  TaskResult,
+  ToolContextWithMetadata,
+} from "./types"
 import type { ResolvedTask } from "./task-resolver"
 import { resolveParentContext, executeSyncTask } from "../delegate-task/executor"
 import { resolveAllTasks } from "./task-resolver"
-import { formatResults } from "./result-formatter"
+import { classifyOutcome, formatResults } from "./result-formatter"
+import {
+  buildWorktreePreamble,
+  decideIsolation,
+  isResearchItem,
+  mergeBackInOrder,
+  prepareWorktrees,
+  type PreparedWorktree,
+} from "./worktree-isolation"
 import { log } from "../../shared/logger"
 import {
   resolveMessageID,
@@ -43,10 +59,17 @@ function createChildContext(
   }
 }
 
+function describeSkippedIsolation(item: ParallelTaskItem, inGitRepo: boolean): string | undefined {
+  if (isResearchItem(item)) return "research item"
+  if (!inGitRepo) return "session directory is not inside a git repository"
+  return undefined
+}
+
 export async function executeParallelTasks(
   items: ParallelTaskItem[],
   ctx: ToolContextWithMetadata,
   options: ParallelTasksToolOptions,
+  callIsolation?: ParallelTaskIsolation,
 ): Promise<string> {
   const startTime = new Date()
   const parentContext = await resolveParentContext(ctx, options.client)
@@ -78,10 +101,28 @@ export async function executeParallelTasks(
     log("[parallel_tasks] TUI part emission disabled — could not resolve messageID")
   }
 
+  const sessionDirectory = ctx.directory ?? options.directory
+  const repoRoot = await resolveGitRoot(sessionDirectory)
+  const modes = decideIsolation({
+    items,
+    callIsolation,
+    configDefault: options.isolationDefault,
+    inGitRepo: repoRoot !== null,
+  })
+  const reportIsolation = items.some((item) => !isResearchItem(item))
+  const prepared = repoRoot
+    ? await prepareWorktrees({
+      repoRoot,
+      sessionDirectory,
+      indices: resolved.filter((task) => modes[task.index] === "worktree").map((task) => task.index),
+    })
+    : new Map<number, PreparedWorktree | { error: string }>()
+
   log("[parallel_tasks] Executing tasks in parallel", {
     total: items.length,
     resolved: resolved.length,
     failed: errors.length,
+    isolated: prepared.size,
   })
 
   const taskResults: TaskResult[] = await Promise.all(
@@ -89,6 +130,30 @@ export async function executeParallelTasks(
       const partId = createPartId()
       const taskStartTime = Date.now()
       let childSessionId: string | undefined
+      const worktree = prepared.get(task.index)
+
+      if (worktree && "error" in worktree) {
+        // Running unisolated would reintroduce the concurrent-write race isolation exists to prevent.
+        return {
+          index: task.index,
+          description: task.item.description,
+          output: null,
+          errorMessage: `Worktree isolation setup failed, task not started: ${worktree.error}`,
+          emitted: false,
+          childSessionId,
+          agent: task.agentToUse,
+          isolation: { mode: "worktree", note: "setup failed" },
+        }
+      }
+      const isolation: TaskIsolationReport | undefined = worktree
+        ? { mode: "worktree", worktreePath: worktree.worktreePath }
+        : reportIsolation
+          ? { mode: "none", note: describeSkippedIsolation(task.item, repoRoot !== null) }
+          : undefined
+      const taskArgs = worktree && repoRoot
+        ? { ...task.args, prompt: `${buildWorktreePreamble(worktree.worktreePath, repoRoot)}\n${task.args.prompt}` }
+        : task.args
+      const executorCtx = worktree ? { ...options, sessionDirectory: worktree.sessionDirectory } : options
 
       const taskInput = {
         description: task.item.description,
@@ -107,9 +172,9 @@ export async function executeParallelTasks(
 
       try {
         const result = await executeSyncTask(
-          task.args,
+          taskArgs,
           childCtx,
-          options,
+          executorCtx,
           parentContext,
           task.agentToUse,
           task.categoryModel,
@@ -142,6 +207,7 @@ export async function executeParallelTasks(
           emitted,
           childSessionId,
           agent: task.agentToUse,
+          isolation,
         }
       } catch (error) {
         let emitted = false
@@ -162,10 +228,25 @@ export async function executeParallelTasks(
           emitted,
           childSessionId,
           agent: task.agentToUse,
+          isolation,
         }
       }
     }),
   )
+
+  const mergeEntries = taskResults.flatMap((result) => {
+    const worktreePath = result.isolation?.worktreePath
+    return worktreePath
+      ? [{ index: result.index, worktreePath, taskSucceeded: classifyOutcome(result) === "success" }]
+      : []
+  })
+  if (mergeEntries.length > 0) {
+    const reports = await mergeBackInOrder(mergeEntries)
+    for (const result of taskResults) {
+      const report = reports.get(result.index)
+      if (report) result.isolation = report
+    }
+  }
 
   return formatResults(taskResults, errors, startTime, items.length)
 }

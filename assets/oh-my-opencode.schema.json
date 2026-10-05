@@ -9264,6 +9264,20 @@
       },
       "additionalProperties": false
     },
+    "parallel_tasks": {
+      "type": "object",
+      "properties": {
+        "isolation": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "worktree",
+            "none"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "notification": {
       "type": "object",
       "properties": {
