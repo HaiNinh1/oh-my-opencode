@@ -88,7 +88,7 @@ export async function integrateAndRemoveWorktrees(memberPaths: Array<string | un
     if (await readIsolationMetadata(memberPath)) {
       const merge = await mergeBackWorktree(memberPath)
       worktreeMerges.push(merge)
-      if (!merge.retainedPath) removedWorktrees.push(memberPath)
+      if (!merge.retainedPath && !merge.cleanupError) removedWorktrees.push(memberPath)
       continue
     }
     await rm(memberPath, { recursive: true, force: true })

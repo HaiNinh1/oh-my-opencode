@@ -27,6 +27,7 @@ function formatIsolation(isolation: TaskIsolationReport): string {
     lines.push(`Worktree kept at ${merge.retainedPath}${merge.patchPath ? `; patch: ${merge.patchPath} (apply manually with \`git apply --3way\`)` : ""}`)
   }
   if (merge.error && merge.status !== "conflict") lines.push(`Merge error: ${merge.error}`)
+  if (merge.cleanupError) lines.push(`Cleanup warning: ${merge.cleanupError}`)
   return lines.join("\n")
 }
 

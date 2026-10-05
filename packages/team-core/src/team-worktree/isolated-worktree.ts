@@ -37,6 +37,8 @@ export type WorktreeMergeResult = {
   /** Patch of the worktree's changes, kept next to a retained worktree for manual `git apply --3way`. */
   patchPath?: string
   error?: string
+  /** Changes landed (or there were none) but the worktree directory could not be removed. */
+  cleanupError?: string
 }
 
 export function toForwardSlashes(value: string): string {
@@ -178,8 +180,23 @@ export async function createIsolatedWorktree(input: {
 export async function removeIsolatedWorktree(parentRoot: string, worktreePath: string): Promise<void> {
   const result = await git(["worktree", "remove", "--force", worktreePath], parentRoot)
   if (result.code !== 0) {
-    await rm(worktreePath, { recursive: true, force: true })
+    // Windows: a just-finished agent's process may still hold handles; rm retries EBUSY/EPERM.
+    await rm(worktreePath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
     await git(["worktree", "prune"], parentRoot)
+  }
+}
+
+/**
+ * Drop the metadata first so an already-integrated worktree can never be merged twice,
+ * then remove it. Returns the removal error instead of throwing: the merge already landed.
+ */
+async function retireWorktree(parentRoot: string, worktreePath: string): Promise<string | undefined> {
+  try {
+    await rm(await metadataPath(worktreePath), { force: true })
+    await removeIsolatedWorktree(parentRoot, worktreePath)
+    return undefined
+  } catch (error) {
+    return `worktree could not be removed (remove it later with \`git worktree remove --force ${worktreePath}\`): ${error instanceof Error ? error.message : String(error)}`
   }
 }
 
@@ -209,8 +226,8 @@ export async function mergeBackWorktree(
   try {
     const worktreeTree = await snapshotWorkingTree(worktreePath)
     if (worktreeTree === baseTree) {
-      await removeIsolatedWorktree(parentRoot, worktreePath)
-      return { ...base, status: "no-changes" }
+      const cleanupError = await retireWorktree(parentRoot, worktreePath)
+      return { ...base, status: "no-changes", ...(cleanupError ? { cleanupError } : {}) }
     }
 
     const filesChanged = splitLines(await gitOrThrow(["diff-tree", "-r", "--name-only", "--no-renames", baseTree, worktreeTree], parentRoot))
@@ -263,8 +280,8 @@ export async function mergeBackWorktree(
     }
 
     await rm(patchPath, { force: true })
-    await removeIsolatedWorktree(parentRoot, worktreePath)
-    return { ...base, status: "applied", filesChanged }
+    const cleanupError = await retireWorktree(parentRoot, worktreePath)
+    return { ...base, status: "applied", filesChanged, ...(cleanupError ? { cleanupError } : {}) }
   } catch (error) {
     return {
       ...base,

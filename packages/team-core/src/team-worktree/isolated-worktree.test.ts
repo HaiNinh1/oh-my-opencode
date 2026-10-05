@@ -193,6 +193,34 @@ describe("isolated worktree", () => {
     expect(git(root, "diff", "--cached", "--name-only").trim()).toBe("")
   })
 
+  test("#given a process still running inside the worktree #when merging back #then the merge still lands, removal problems are only a cleanup warning, and it cannot be merged twice", async () => {
+    // given
+    const root = await initRepo()
+    const created = await createIsolatedWorktree({ repoRoot: root, worktreePath: defaultIsolatedWorktreePath(root, "busy") })
+    await fs.writeFile(path.join(created.worktreePath, "busy.txt"), "busy\n")
+    // Like a lingering agent process: on Windows its cwd handle blocks directory removal.
+    const holder = Bun.spawn([process.execPath, "-e", "setInterval(() => {}, 1000)"], { cwd: created.worktreePath, stdout: "ignore", stderr: "ignore" })
+
+    // when
+    let first: Awaited<ReturnType<typeof mergeBackWorktree>>
+    try {
+      first = await mergeBackWorktree(created.worktreePath)
+    } finally {
+      holder.kill()
+      await holder.exited
+    }
+    const second = await mergeBackWorktree(created.worktreePath)
+
+    // then
+    expect(first.status).toBe("applied")
+    expect(first.retainedPath).toBeUndefined()
+    if (process.platform === "win32") expect(first.cleanupError).toContain("could not be removed")
+    else expect(first.cleanupError).toBeUndefined()
+    expect(await readText(path.join(root, "busy.txt"))).toBe("busy\n")
+    expect(second.status).toBe("failed")
+    expect(second.error).toContain("missing isolation metadata")
+  })
+
   test("#given an untouched worktree #when merging back #then it reports no changes and removes the worktree", async () => {
     // given
     const root = await initRepo()

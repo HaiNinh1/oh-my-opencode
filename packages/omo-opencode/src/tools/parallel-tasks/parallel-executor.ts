@@ -241,6 +241,12 @@ export async function executeParallelTasks(
       : []
   })
   if (mergeEntries.length > 0) {
+    // Release OpenCode's per-directory instance (file watchers, LSP) so the worktree can be removed.
+    for (const entry of prepared.values()) {
+      if ("error" in entry) continue
+      await options.client.instance?.dispose?.({ query: { directory: entry.sessionDirectory } })
+        .catch((error: unknown) => log("[parallel_tasks] Failed to dispose worktree instance", { error: String(error) }))
+    }
     const reports = await mergeBackInOrder(mergeEntries)
     for (const result of taskResults) {
       const report = reports.get(result.index)

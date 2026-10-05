@@ -36,6 +36,9 @@ export interface OmoAgentClient {
   readonly model?: {
     readonly list?: () => Promise<unknown>
   }
+  readonly instance?: {
+    readonly dispose?: (input: { readonly query?: { readonly directory?: string } }) => Promise<unknown>
+  }
   readonly session: {
     readonly abort: (input: SessionPathInput) => Promise<unknown>
     readonly delete?: (input: SessionPathInput) => Promise<unknown>
