@@ -150,9 +150,10 @@ export async function executeParallelTasks(
         : reportIsolation
           ? { mode: "none", note: describeSkippedIsolation(task.item, repoRoot !== null) }
           : undefined
-      const taskArgs = worktree && repoRoot
-        ? { ...task.args, prompt: `${buildWorktreePreamble(worktree.worktreePath, repoRoot)}\n${task.args.prompt}` }
-        : task.args
+      // System context, not the user prompt: a path note inside the prompt reads like an injection to some models.
+      const systemContent = worktree && repoRoot
+        ? [task.systemContent, buildWorktreePreamble(worktree.worktreePath, repoRoot)].filter(Boolean).join("\n\n")
+        : task.systemContent
       const executorCtx = worktree ? { ...options, sessionDirectory: worktree.sessionDirectory } : options
 
       const taskInput = {
@@ -172,13 +173,13 @@ export async function executeParallelTasks(
 
       try {
         const result = await executeSyncTask(
-          taskArgs,
+          task.args,
           childCtx,
           executorCtx,
           parentContext,
           task.agentToUse,
           task.categoryModel,
-          task.systemContent,
+          systemContent,
           task.modelInfo,
           task.fallbackChain,
         )
