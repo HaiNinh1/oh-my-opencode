@@ -1,5 +1,0 @@
-export const PLUGIN_NAME = "oh-my-opencode"
-export const LEGACY_PLUGIN_NAME = "oh-my-openagent"
-export const CONFIG_BASENAME = "oh-my-opencode"
-export const LOG_FILENAME = "oh-my-opencode.log"
-export const CACHE_DIR_NAME = "oh-my-opencode"
