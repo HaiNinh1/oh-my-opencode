@@ -1,17 +1,21 @@
 import { relative } from "node:path"
 
-import type { OmoConfigEnv } from "@oh-my-opencode/omo-config-core"
+import { omoConfigDiagnosticLines, type OmoConfigEnv } from "@oh-my-opencode/omo-config-core"
+import type * as z from "zod"
 
 import { applyDisabledProviders } from "../shared/disabled-providers"
 import { log } from "../shared/logger"
-import { loadOmoOpenCodeConfigChain } from "../plugin-config/omo-config-chain"
+import { loadOmoOpenCodeConfigChain, type OmoOpenCodeConfigView } from "../plugin-config/omo-config-chain"
 import { mergeConfigs } from "../plugin-config/config-merger"
 import { findUnknownKeyPaths } from "../plugin-config/unknown-key-diagnostics"
+import { prunePluginView } from "./prune-plugin-view"
 import { OhMyOpenCodeConfigSchema, type OhMyOpenCodeConfig } from "./schema"
 
 export type PluginConfigValidation = {
   readonly valid: boolean
   readonly messages: readonly string[]
+  /** One line per value that was ignored while the rest of its file still loaded. */
+  readonly warnings: readonly string[]
   readonly path: string | null
   readonly config: OhMyOpenCodeConfig
 }
@@ -20,6 +24,7 @@ type LoadedConfigView = {
   readonly config: Partial<OhMyOpenCodeConfig>
   readonly messages: readonly string[]
   readonly path: string
+  readonly warnings: readonly string[]
 }
 
 function shortPath(configPath: string): string {
@@ -32,11 +37,8 @@ function formatIssuePath(path: readonly PropertyKey[]): string {
   return formatted.length > 0 ? formatted : "<root>"
 }
 
-function schemaMessages(configPath: string, rawConfig: Record<string, unknown>): readonly string[] {
-  const result = OhMyOpenCodeConfigSchema.safeParse(rawConfig)
-  const validationMessages = result.success
-    ? []
-    : result.error.issues.map((issue) => `${shortPath(configPath)}: ${formatIssuePath(issue.path)}: ${issue.message}`)
+function schemaMessages(configPath: string, rawConfig: Record<string, unknown>, issues: readonly z.core.$ZodIssue[]): readonly string[] {
+  const validationMessages = issues.map((issue) => `${shortPath(configPath)}: ${formatIssuePath(issue.path)}: ${issue.message}`)
   const unknownKeyMessages = findUnknownKeyPaths(OhMyOpenCodeConfigSchema, rawConfig)
     .map((path) => `${shortPath(configPath)}: Unknown config key: ${formatIssuePath(path)}`)
   return [...validationMessages, ...unknownKeyMessages]
@@ -53,11 +55,13 @@ function parseConfig(rawConfig: Record<string, unknown>): Partial<OhMyOpenCodeCo
   return config
 }
 
-function parseConfigView(path: string, rawConfig: Record<string, unknown>): LoadedConfigView {
+function parseConfigView(view: OmoOpenCodeConfigView, homeDir: string | undefined): LoadedConfigView {
+  const pruned = prunePluginView({ config: view.config, homeDir, keyPrefix: view.keyPrefix, path: view.path })
   return {
-    config: parseConfig(rawConfig),
-    messages: schemaMessages(path, rawConfig),
-    path,
+    config: parseConfig(pruned.config),
+    messages: schemaMessages(view.path, view.config, pruned.issues),
+    path: view.path,
+    warnings: pruned.warnings,
   }
 }
 
@@ -95,6 +99,69 @@ function protectUserFields(
   }
 }
 
+function materializeAgentModelChains(config: OhMyOpenCodeConfig): OhMyOpenCodeConfig {
+  if (config.agents === undefined) return config
+
+  let changed = false
+  const agents = Object.fromEntries(Object.entries(config.agents).map(([name, agent]) => {
+    if (agent?.models === undefined) return [name, agent]
+
+    const [primary, ...fallbacks] = agent.models
+    const {
+      models: _models,
+      model: _model,
+      fallback_models: _fallbackModels,
+      reasoning: _reasoning,
+      variant: _variant,
+      reasoningEffort: _reasoningEffort,
+      temperature: _temperature,
+      top_p: _topP,
+      maxTokens: _maxTokens,
+      thinking: _thinking,
+      ...rest
+    } = agent
+    const primarySettings = primary === undefined
+      ? {}
+      : typeof primary === "string"
+        ? { model: primary }
+        : primary
+    changed = true
+    return [name, {
+      ...rest,
+      ...primarySettings,
+      fallback_models: fallbacks,
+    }]
+  })) as typeof config.agents
+
+  return changed ? { ...config, agents } : config
+}
+
+const START_WORK_DEPRECATION_MESSAGE = 'config key "start_work" is deprecated, rename to "ulw_execute" - will be removed next release'
+
+let deprecationWarningSink: (message: string) => void = log
+
+export function _setDeprecationWarningSinkForTesting(sink: (message: string) => void): void {
+  deprecationWarningSink = sink
+}
+
+export function _resetDeprecationWarningSinkForTesting(): void {
+  deprecationWarningSink = log
+}
+
+function warnLegacyUlwExecuteKey(views: readonly OmoOpenCodeConfigView[]): void {
+  for (const view of views) {
+    if (!Object.hasOwn(view.config, "start_work")) continue
+    deprecationWarningSink(`[config] ${shortPath(view.path)}: ${START_WORK_DEPRECATION_MESSAGE}`)
+  }
+}
+
+function migrateLegacyUlwExecuteKey(config: OhMyOpenCodeConfig): OhMyOpenCodeConfig {
+  const legacy = config.start_work
+  if (legacy === undefined || config.ulw_execute !== undefined) return config
+
+  return { ...config, ulw_execute: legacy }
+}
+
 function migrateRalphLoopConfig(config: OhMyOpenCodeConfig): OhMyOpenCodeConfig {
   const legacy = config.ralph_loop
   if (legacy === undefined) return config
@@ -120,18 +187,31 @@ export function validatePluginConfig(
   environment: OmoConfigEnv = process.env,
 ): PluginConfigValidation {
   const chain = loadOmoOpenCodeConfigChain(directory, environment)
-  const views = chain.views.map((view) => parseConfigView(view.path, view.config))
-  const chainMessages = chain.diagnostics.map((diagnostic) => `${shortPath(diagnostic.path)}: ${diagnostic.message}`)
+  const homeDir = environment.HOME ?? environment.USERPROFILE
+  const views = chain.views.map((view) => parseConfigView(view, homeDir))
+  // A deprecated key still loads and still applies, so it is a notice, not a validation failure:
+  // counting it here would make `valid` false and report a working config as invalid in doctor.
+  // An ignored invalid value is the same: the rest of its file loads, so it is a warning.
+  const failing = chain.diagnostics.filter((diagnostic) => diagnostic.kind !== "deprecated-keys" && diagnostic.kind !== "invalid-value")
+  const chainMessages = failing.map((diagnostic) => `${shortPath(diagnostic.path)}: ${diagnostic.message}`)
   const messages = [...chainMessages, ...views.flatMap((view) => view.messages)]
+  const warnings = [
+    ...omoConfigDiagnosticLines(chain.diagnostics.flatMap((diagnostic) => diagnostic.kind === "invalid-value" ? [diagnostic] : []), { homeDir }),
+    ...views.flatMap((view) => view.warnings),
+  ]
   const firstFailingView = views.find((view) => view.messages.length > 0)
   const firstView = views[0]
-  const userConfig = parseConfig(chain.protectedUserView)
-  const config = applyDisabledProviders(protectUserFields(mergeViews(views), userConfig))
+  const userConfig = parseConfig(prunePluginView({ config: chain.protectedUserView, homeDir, keyPrefix: "", path: "" }).config)
+  const config = applyDisabledProviders(materializeAgentModelChains(
+    protectUserFields(mergeViews(views), userConfig),
+  ))
+  warnLegacyUlwExecuteKey(chain.views)
 
   return {
     valid: messages.length === 0,
     messages,
-    path: chainMessages.length > 0 ? chain.diagnostics[0]?.path ?? null : firstFailingView?.path ?? firstView?.path ?? null,
-    config: migrateRalphLoopConfig(config),
+    warnings,
+    path: failing[0]?.path ?? firstFailingView?.path ?? firstView?.path ?? null,
+    config: migrateRalphLoopConfig(migrateLegacyUlwExecuteKey(config)),
   }
 }

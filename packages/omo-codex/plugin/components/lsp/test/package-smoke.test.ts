@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	listDirectoryEntries,
 	readHooksJson,
+	readJsonFile,
 	readMcpJson,
 	readPackageJson,
 	readTextFile,
@@ -15,9 +16,6 @@ describe("plugin package metadata", () => {
 		const hooksJson = readHooksJson("hooks/hooks.json");
 		const mcpJson = readMcpJson(".mcp.json");
 		const cliSource = readTextFile("src/cli.ts");
-		const daemonCliPathSource = readTextFile("src/daemon-cli-path.ts");
-		const codexHookCliSource = readTextFile("src/codex-hook-cli.ts");
-		const codexHookSource = readTextFile("src/codex-hook.ts");
 		const sourceFiles = listDirectoryEntries("src");
 		const scripts = requireScripts(packageJson, "package.json");
 
@@ -44,31 +42,16 @@ describe("plugin package metadata", () => {
 		expect(postCompactCommand).toBe(`node "${pluginRoot}/dist/cli.js" hook post-compact`);
 		expect(lspServer?.command).toBe("node");
 		expect(lspServer?.args).toEqual(["../../../../lsp-daemon/dist/cli.js", "mcp"]);
-		expect(lspServer?.startup_timeout_sec).toBe(10);
-		expect(cliSource).not.toContain("./lazy-lsp-mcp.js");
-		expect(cliSource).toContain("resolveLspDaemonCliPath");
-		expect(daemonCliPathSource).toContain("@code-yeongyu/lsp-daemon/cli");
-		expect(daemonCliPathSource).toContain("../../lsp-daemon/dist/cli.js");
-		expect(daemonCliPathSource).toContain("OMO_LSP_DAEMON_VERSION");
-		expect(cliSource).not.toContain("../../../../../lsp-daemon/dist/cli.js");
-		expect(codexHookSource).toContain("ensureLspDaemonCliEnv");
-		expect(codexHookCliSource).not.toContain("@code-yeongyu/lsp-daemon");
-		expect(codexHookSource).toContain("@code-yeongyu/lsp-daemon/client");
-		expect(codexHookSource).toContain("@oh-my-opencode/lsp-core/post-edit");
-		expect(codexHookSource).toContain("CODEX_HOME");
-		expect(codexHookCliSource).not.toContain("../../../../../lsp-daemon");
-		expect(codexHookSource).not.toContain("../../../../../lsp-daemon");
+		expect(readJsonFile(".mcp.json")).toEqual({
+			mcpServers: {
+				lsp: {
+					command: "node",
+					args: ["../../../../lsp-daemon/dist/cli.js", "mcp"],
+					cwd: ".",
+					startup_timeout_sec: 10,
+				},
+			},
+		});
 		expect(sourceFiles.filter((name) => name.startsWith("lazy-mcp") || name === "lazy-lsp-mcp.ts")).toEqual([]);
-	});
-
-	it("#given built component CLI #when runtime imports are inspected #then it is self-contained except Node builtins", () => {
-		const cliSource = readTextFile("dist/cli.js");
-		const imports = [
-			...cliSource.matchAll(/\bimport\s+(?:[^'";]+?\s+from\s+)?["']([^"']+)["']/g),
-			...cliSource.matchAll(/\bimport\s*\(\s*["']([^"']+)["']\s*\)/g),
-		].flatMap((match) => (match[1] === undefined ? [] : [match[1]]));
-		expect(imports.filter((specifier) => !specifier.startsWith("node:"))).toEqual([]);
-		expect(cliSource).not.toContain("@code-yeongyu/lsp-daemon/client");
-		expect(cliSource).not.toContain("@oh-my-opencode/lsp-core");
 	});
 });

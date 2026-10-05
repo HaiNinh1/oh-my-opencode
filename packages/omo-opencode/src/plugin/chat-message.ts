@@ -2,14 +2,19 @@ import type { OhMyOpenCodeConfig } from "../config"
 
 import { updateSessionAgent } from "../features/claude-code-session-state"
 import { detectSlashCommand, extractPromptText } from "../hooks/auto-slash-command/detector"
-import { isSyntheticOrInternalOnlyTextParts, log } from "../shared"
+import {
+  isRuntimeFallbackRetryTextParts,
+  isSyntheticOrInternalOnlyTextParts,
+  log,
+} from "../shared"
 import { applyUltraworkModelOverrideOnMessage } from "./ultrawork-model-override"
 import type { PluginContext } from "./types"
 import { handleGoalMessage } from "./chat-message/loop-commands"
+import { extractPromptText as extractGoalPromptText } from "./chat-message/prompt-text"
 import { notifyWhenModelCacheIsMissing } from "./chat-message/model-cache-warning"
 import { recordSessionModel, getStoredMainSessionModel } from "./chat-message/session-model"
-import { runStartWorkHookIfApplicable } from "./chat-message/start-work-message"
 import { applyHermesProxySessionBootstrap } from "../hooks/hermes-routing-guard/proxy-session"
+import { runUlwExecuteHookIfApplicable } from "./chat-message/ulw-execute-message"
 import { consumeNativeGoalCommandMarker } from "./command-execute-before"
 import { stopContinuation } from "./stop-continuation"
 import type {
@@ -92,6 +97,9 @@ export function createChatMessageHandler(args: {
   ): Promise<void> => {
     const nativeGoalCommand = consumeNativeGoalCommandMarker(output.parts)
     if (isSyntheticOrInternalOnlyTextParts(output.parts)) {
+      if (isRuntimeFallbackRetryTextParts(output.parts)) {
+        await hooks.runtimeFallback?.["chat.message"]?.(input, output)
+      }
       log("[chat-message] Skipping synthetic/internal-only message", {
         sessionID: input.sessionID,
       })
@@ -107,6 +115,7 @@ export function createChatMessageHandler(args: {
       updateSessionAgent(input.sessionID, input.agent)
     }
 
+    const originalPromptText = extractGoalPromptText(output.parts)
     const slashCommand = detectSlashCommand(extractPromptText(output.parts))
     if (slashCommand?.command === "stop-continuation") {
       stopContinuation({
@@ -136,7 +145,7 @@ export function createChatMessageHandler(args: {
       hooks,
       runtimeFallbackEnabled,
     })
-    await runStartWorkHookIfApplicable(hooks, input, output)
+    await runUlwExecuteHookIfApplicable(hooks, input, output)
     notifyWhenModelCacheIsMissing(pluginContext.client.tui)
     handleGoalMessage({
       hooks,
@@ -145,6 +154,7 @@ export function createChatMessageHandler(args: {
       isFirstMessage,
       pluginConfig,
       nativeGoalCommand,
+      originalPromptText,
     })
     await applyUltraworkModelOverrideOnMessage(
       pluginConfig,

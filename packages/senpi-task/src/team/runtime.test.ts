@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 import { readMemberTaskMap } from "./member-map"
 import { normalizeSenpiTeamSpec } from "./normalize"
 import { createTeam } from "./runtime"
+import { resolveStateDir } from "../store"
 import { resolveTeamRuntimeDirs } from "./storage"
 import {
   FakeTeamManager,
@@ -57,12 +58,12 @@ describe("createTeam", () => {
 
     // then
     const started = manager.started[0]
-    expect(started?.extensions).toEqual(["/tmp/mock-provider.ts", "/tmp/omo-member.js"])
+    expect(started?.extensions).toEqual(["/tmp/omo-member.js", "/tmp/mock-provider.ts"])
     expect(started?.memberEnv?.["SENPI_TASK_MEMBER"]).toBe(`${created.runtimeState.teamRunId}::alpha`)
     const config = JSON.parse(started?.memberEnv?.["SENPI_TASK_TEAM_CONFIG"] ?? "null")
     expect(config).toMatchObject({
-      stateDir: join(stateDir.project_dir, ".omo", "senpi-task"),
-      base_dir: join(stateDir.project_dir, ".omo", "senpi-task", "teams"),
+      stateDir: resolveStateDir(stateDir),
+      base_dir: join(resolveStateDir(stateDir), "teams"),
       members: ["alpha"],
     })
     expect(started?.memberScopedTools).toBeUndefined()
@@ -176,8 +177,6 @@ describe("createTeam", () => {
     // then
     const [alphaStart, betaStart] = manager.started
     for (const start of [alphaStart, betaStart]) {
-      expect(start?.prompt).toContain("injected messages")
-      expect(start?.prompt).not.toContain("team_wait")
       expect(start?.prompt).toContain("task_send")
     }
     expect(alphaStart?.prompt).toContain("'alpha'")

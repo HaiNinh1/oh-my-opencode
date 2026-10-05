@@ -9,6 +9,8 @@ import { ContextCollector } from "../../features/context-injector"
 import * as sharedModule from "../../shared"
 import { OMO_INTERNAL_INITIATOR_MARKER } from "../../shared/internal-initiator-marker"
 import { createKeywordDetectorHook } from "./index"
+import { detectKeywords } from "./detector"
+import { TEAM_MESSAGE } from "./team"
 
 type ToastOptions = { body: { title: string } }
 type OutputPart = { readonly type?: unknown; readonly text?: unknown }
@@ -66,7 +68,7 @@ describe("keyword-detector message transform", () => {
     return createPluginInputWithToast(async () => {})
   }
 
-  test("should prepend ultrawork message to text part", async () => {
+  test("should append ultrawork message after user text in text part", async () => {
     // given - a fresh ContextCollector and keyword-detector hook
     const collector = new ContextCollector()
     const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
@@ -79,43 +81,74 @@ describe("keyword-detector message transform", () => {
     // when - keyword detection runs
     await hook["chat.message"]({ sessionID }, output)
 
-    // then - message should be prepended to text part with separator and original text
+    // then - original user text comes first, mode instructions appended after separator
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("---")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("do something")
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
   })
 
-  test("should leave search wording as plain user text", async () => {
-    // given - mock getMainSessionID to return our session (isolate from global state)
+  test("should place user text before mode instructions so session title stays task-focused", async () => {
+    // given - ulw trigger with a concrete user task
     const collector = new ContextCollector()
-    const sessionID = "search-test-session"
+    const sessionID = "title-order-test"
     getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
     const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
     const output = {
       message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "search for the bug" }],
+      parts: [{ type: "text", text: "ulw build the reporting dashboard" }],
     }
 
     // when - keyword detection runs
     await hook["chat.message"]({ sessionID }, output)
 
-    // then - search wording should not activate a mode prompt
+    // then - user text must appear before ULW instructions so OpenCode's title model
+    // generates a meaningful title from the task, not from "ULTRAWORK MODE ENABLED!"
     const text = expectTextPartText(output.parts)
-    expect(text).toBe("search for the bug")
+    const userTextPos = text.indexOf("build the reporting dashboard")
+    const ulwInstructionsPos = text.indexOf("<ultrawork-mode>")
+    expect(userTextPos).toBeGreaterThan(-1)
+    expect(ulwInstructionsPos).toBeGreaterThan(-1)
+    expect(userTextPos).toBeLessThan(ulwInstructionsPos)
+  })
+
+  const REMOVED_WORDING_CASES: Array<[label: string, text: string, mainSessionID: string]> = [
+    ["search", "search for the bug", "removed-wording-session"],
+    ["analyze", "investigate the bug", "removed-wording-session"],
+    ["combined search and analyze", "search and analyze the codebase", "removed-wording-session"],
+    ["Korean search in a non-main session", "find this 찾아줘", "main-123"],
+  ]
+
+  test.each(REMOVED_WORDING_CASES)("removed %s wording is never expanded", async (_label, text, mainSessionID) => {
+    // given - search and analyze modes no longer exist, whatever the session
+    setMainSession(mainSessionID)
+    const hook = createKeywordDetectorHook(createMockPluginInput(), new ContextCollector())
+    const output = {
+      message: {} as Record<string, unknown>,
+      parts: [{ type: "text", text }],
+    }
+
+    // when
+    await hook["chat.message"]({ sessionID: "removed-wording-session" }, output)
+
+    // then - the wording stays plain user text
+    expect(expectTextPartText(output.parts)).toBe(text)
   })
 
   test("should not prepend mode messages twice when an injected message is processed again", async () => {
     const cases = [
-      { prompt: "team mode for this refactor", marker: "[team-mode]" },
-      { prompt: "hyperplan the migration", marker: "<hyperplan-mode>" },
-      { prompt: "ultrawork fix the flaky suite", marker: "<ultrawork-mode>" },
+      { id: "team", prompt: "team mode for this refactor" },
+      { id: "hyperplan", prompt: "hyperplan the migration" },
+      { id: "ultrawork", prompt: "ultrawork fix the flaky suite" },
     ]
 
     for (const testCase of cases) {
-      // given - OpenCode can re-submit an already-mutated message after undo/resend
+      // given - OpenCode can re-submit an already-mutated message after undo/resend.
+      // The dedup filter compares against the detector-resolved keyword message,
+      // so key the assertion on that same production value.
+      const injectedMessage = detectKeywords(testCase.prompt)[0]
+      expect(injectedMessage).toBeDefined()
       const collector = new ContextCollector()
-      const sessionID = `idempotent-${testCase.marker}`
+      const sessionID = `idempotent-${testCase.id}`
       getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
       const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
       const output = {
@@ -127,10 +160,10 @@ describe("keyword-detector message transform", () => {
       await hook["chat.message"]({ sessionID }, output)
       await hook["chat.message"]({ sessionID }, output)
 
-      // then - the mode prompt remains idempotent
+      // then - the same mode message must not be injected a second time
       const text = expectTextPartText(output.parts)
-      const markerMatches = text.split(testCase.marker).length - 1
-      expect(markerMatches).toBe(1)
+      const messageOccurrences = text.split(injectedMessage ?? "").length - 1
+      expect(messageOccurrences).toBe(1)
       expect(text).toContain(testCase.prompt)
 
       getMainSessionSpy?.mockRestore()
@@ -199,7 +232,7 @@ describe("keyword-detector message transform", () => {
   })
 
   test("should only fire ultrawork when enabled_expansions is set to [ultrawork]", async () => {
-    // given - allowlist configured to only enable ultrawork
+    // given - allowlist configured to only enable ultrawork, and the prompt asks for ultrawork and team mode
     const collector = new ContextCollector()
     const hook = createKeywordDetectorHook(
       createMockPluginInput(),
@@ -210,38 +243,16 @@ describe("keyword-detector message transform", () => {
     const sessionID = "enabled-expansions-ultrawork-only"
     const output = {
       message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "search for the bug" }],
+      parts: [{ type: "text", text: "ultrawork team mode for the bug" }],
     }
 
     // when - keyword detection runs with enabled_expansions restricting to ultrawork
     await hook["chat.message"]({ sessionID }, output)
 
-    // then - search wording remains plain text
+    // then - the allowlisted ultrawork prompt is injected and the non-allowlisted team prompt is not
     const text = expectTextPartText(output.parts)
-    expect(text).toBe("search for the bug")
-  })
-
-  test("should ignore removed expansions in allowlist", async () => {
-    // given - allowlist configured with no active expansion for analyze wording
-    const collector = new ContextCollector()
-    const hook = createKeywordDetectorHook(
-      createMockPluginInput(),
-      collector,
-      undefined,
-      { enabled_expansions: [] }
-    )
-    const sessionID = "enabled-expansions-analyze-only"
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "investigate the bug" }],
-    }
-
-    // when - keyword detection runs against analyze wording
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - analyze wording should not activate a mode prompt
-    const text = expectTextPartText(output.parts)
-    expect(text).toBe("investigate the bug")
+    expect(text).toContain("<ultrawork-mode>")
+    expect(text).not.toContain(TEAM_MESSAGE)
   })
 
   test("should block all expansions when enabled_expansions is empty array", async () => {
@@ -315,29 +326,6 @@ describe("keyword-detector session filtering", () => {
     })
   }
 
-  test("should leave removed keyword wording plain in non-main session", async () => {
-    // given - main session is set, different session submits removed keyword wording
-    const mainSessionID = "main-123"
-    const subagentSessionID = "subagent-456"
-    setMainSession(mainSessionID)
-
-    const hook = createKeywordDetectorHook(createMockPluginInput())
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "find this 찾아줘" }],
-    }
-
-    // when - non-main session triggers keyword detection
-    await hook["chat.message"](
-      { sessionID: subagentSessionID },
-      output
-    )
-
-    // then - removed keyword wording stays plain
-    expect(output.message.variant).toBeUndefined()
-    expect(output.parts[0]?.text).toBe("find this 찾아줘")
-  })
-
   test("should allow ultrawork keywords in non-main session", async () => {
     // given - main session is set, different session submits ultrawork keyword
     const mainSessionID = "main-123"
@@ -382,7 +370,7 @@ describe("keyword-detector session filtering", () => {
     // then - active keyword should be detected without forcing a runtime variant
     expect(output.message.variant).toBeUndefined()
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
+    expect(text).toContain("<ultrawork-mode>")
   })
 
   test("should allow all keywords when mainSessionID is not set", async () => {
@@ -542,52 +530,29 @@ describe("keyword-detector system-reminder filtering", () => {
     return createPluginInputWithToast(async () => {})
   }
 
-  test("should keep system-reminder search wording plain", async () => {
-    // given - message contains search wording only inside system-reminder tags
-    const collector = new ContextCollector()
-    const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
-    const sessionID = "test-session"
+  test("should ignore active keywords that appear only inside system-reminder tags", async () => {
+    // given - ulw and team mode appear only inside a system-reminder block
+    const toastCalls: string[] = []
+    const hook = createKeywordDetectorHook(
+      createPluginInputWithToast(async (options) => {
+        toastCalls.push(options.body.title)
+      }),
+      new ContextCollector(),
+    )
+    const text = `<system-reminder>
+The system mentions ulw and team mode in passing.
+</system-reminder>`
     const output = {
       message: {} as Record<string, unknown>,
-      parts: [{
-        type: "text",
-        text: `<system-reminder>
-The system will search for the file and find all occurrences.
-Please locate and scan the directory.
-</system-reminder>`
-      }],
+      parts: [{ type: "text", text }],
     }
 
-    // when - keyword detection runs on system-reminder content
-    await hook["chat.message"]({ sessionID }, output)
+    // when
+    await hook["chat.message"]({ sessionID: "test-session" }, output)
 
-    // then - text should remain unchanged
-    const text = expectTextPartText(output.parts)
-    expect(text).toContain("<system-reminder>")
-  })
-
-  test("should keep system-reminder analyze wording plain", async () => {
-    // given - message contains analyze wording only inside system-reminder tags
-    const collector = new ContextCollector()
-    const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
-    const sessionID = "test-session"
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{
-        type: "text",
-        text: `<system-reminder>
-You should investigate and examine the code carefully.
-Research the implementation details.
-</system-reminder>`
-      }],
-    }
-
-    // when - keyword detection runs on system-reminder content
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - text should remain unchanged
-    const text = expectTextPartText(output.parts)
-    expect(text).toContain("<system-reminder>")
+    // then - nothing is injected and no mode is announced
+    expect(expectTextPartText(output.parts)).toBe(text)
+    expect(toastCalls).not.toContain("Ultrawork Mode Activated")
   })
 
   test("should detect active keywords in user text even when system-reminder is present", async () => {
@@ -612,88 +577,8 @@ Please ultrawork the bug in the code.`
 
     // then - should trigger ultrawork from user text only
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("Please ultrawork the bug in the code.")
-  })
-
-  test("should handle multiple system-reminder tags in message", async () => {
-    // given - message contains multiple system-reminder blocks with keywords
-    const collector = new ContextCollector()
-    const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
-    const sessionID = "test-session"
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{
-        type: "text",
-        text: `<system-reminder>
-First reminder with search and find keywords.
-</system-reminder>
-
-User message without keywords.
-
-<system-reminder>
-Second reminder with investigate and examine keywords.
-</system-reminder>`
-      }],
-    }
-
-    // when - keyword detection runs on message with multiple system-reminders
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - should not trigger any mode because only plain user text remains
-    const text = expectTextPartText(output.parts)
-    expect(text).toContain("User message without keywords.")
-  })
-
-  test("should handle case-insensitive system-reminder tags", async () => {
-    // given - message contains system-reminder with different casing
-    const collector = new ContextCollector()
-    const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
-    const sessionID = "test-session"
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{
-        type: "text",
-        text: `<SYSTEM-REMINDER>
-System will search and find files.
-</SYSTEM-REMINDER>`
-      }],
-    }
-
-    // when - keyword detection runs on uppercase system-reminder
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - text should remain unchanged
-    const text = expectTextPartText(output.parts)
-    expect(text).toContain("<SYSTEM-REMINDER>")
-  })
-
-  test("should handle multiline system-reminder content with search wording", async () => {
-    // given - system-reminder with multiline content containing various search words
-    const collector = new ContextCollector()
-    const hook = createKeywordDetectorHook(createMockPluginInput(), collector)
-    const sessionID = "test-session"
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{
-        type: "text",
-        text: `<system-reminder>
-Commands executed:
-- find: searched for pattern
-- grep: located file
-- scan: completed
-
-Please explore the codebase and discover patterns.
-</system-reminder>`
-      }],
-    }
-
-    // when - keyword detection runs on multiline system-reminder
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - text should remain unchanged
-    const text = expectTextPartText(output.parts)
-    expect(text).toContain("Commands executed:")
   })
 })
 
@@ -734,8 +619,6 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
     // then - ultrawork should be skipped for planner agents, text unchanged
     const text = expectTextPartText(output.parts)
     expect(text).toBe("ultrawork plan this feature")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
-    expect(text).not.toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
   })
 
   test("should skip ultrawork injection when agent name contains 'planner'", async () => {
@@ -754,7 +637,6 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
     // then - ultrawork should be skipped, text unchanged
     const text = expectTextPartText(output.parts)
     expect(text).toBe("ulw create a work plan")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
   })
 
   test("should skip ultrawork injection when agent name contains 'plan' token", async () => {
@@ -773,7 +655,6 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
     //#then - ultrawork should be skipped, text unchanged
     const text = expectTextPartText(output.parts)
     expect(text).toBe("ultrawork draft a plan")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
   })
 
   test("should use normal ultrawork message when agent is Sisyphus", async () => {
@@ -791,9 +672,7 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
 
     // then - should use normal ultrawork message with agent utilization instructions
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
-    expect(text).toContain("---")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("implement this feature")
   })
 
@@ -812,9 +691,7 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
 
     // then - should use normal ultrawork message (default behavior)
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
-    expect(text).toContain("---")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("do something")
   })
 
@@ -844,8 +721,7 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
     expect(prometheusText).toBe("ultrawork plan")
 
     const sisyphusText = sisyphusOutput.parts.find(isTextOutputPart)?.text
-    expect(sisyphusText).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
-    expect(sisyphusText).toContain("---")
+    expect(sisyphusText).toContain("<ultrawork-mode>")
     expect(sisyphusText).toContain("implement")
   })
 
@@ -868,9 +744,7 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
 
     // then - should use Sisyphus from session state, NOT prometheus from stale input
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
-    expect(text).toContain("---")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("implement this")
 
     // cleanup
@@ -897,7 +771,6 @@ describe("keyword-detector agent-specific ultrawork messages", () => {
     // then - prometheus fallback from input.agent, ultrawork skipped
     const text = expectTextPartText(output.parts)
     expect(text).toBe("ultrawork plan this")
-    expect(text).not.toContain("YOU ARE A PLANNER, NOT AN IMPLEMENTER")
   })
 })
 
@@ -973,7 +846,7 @@ describe("keyword-detector non-OMO agent skipping", () => {
 
     // then - keywords should be injected normally
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("implement this")
   })
 
@@ -1039,13 +912,11 @@ describe("keyword-detector team mode", () => {
     // when - keyword detection runs
     await hook["chat.message"]({ sessionID }, output)
 
-    // then - team-mode message should be prepended with team_* tool guidance
+    // then - activation injects a runtime-registered team tool token while preserving the task
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("[team-mode]")
+    const detected = detectKeywords("team mode activation-sentinel")
+    expect(detected).toHaveLength(1)
     expect(text).toContain("team_create")
-    expect(text).toContain("team_task_create")
-    expect(text).toContain("team_send_message")
-    expect(text).toContain("NEVER substitute with delegate_task")
     expect(text).toContain("for this task")
   })
 
@@ -1065,7 +936,7 @@ describe("keyword-detector team mode", () => {
 
     // then - team-mode should NOT be triggered
     const text = expectTextPartText(output.parts)
-    expect(text).not.toContain("[team-mode]")
+    expect(text).toBe("join the team and start working")
   })
 
   test("should filter team-mode keyword in non-main session (only ultrawork allowed there)", async () => {
@@ -1086,7 +957,6 @@ describe("keyword-detector team mode", () => {
     // then - team-mode message should NOT be injected in subagent session
     const text = expectTextPartText(output.parts)
     expect(text).toBe("team mode please")
-    expect(text).not.toContain("[team-mode]")
   })
 })
 
@@ -1122,52 +992,6 @@ describe("keyword-detector disabled_keywords config", () => {
     })
   }
 
-  test("should leave search wording plain without a disable flag", async () => {
-    // given - keyword detector with no config
-    const sessionID = "search-disabled-session"
-    getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
-    const hook = createKeywordDetectorHook(
-      createMockPluginInput(),
-      undefined,
-      undefined,
-      undefined,
-    )
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "search for the bug in the code" }],
-    }
-
-    // when - search wording is submitted
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - search wording remains plain text
-    const text = expectTextPartText(output.parts)
-    expect(text).toBe("search for the bug in the code")
-  })
-
-  test("should leave analyze wording plain without a disable flag", async () => {
-    // given - keyword detector with no config
-    const sessionID = "analyze-disabled-session"
-    getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
-    const hook = createKeywordDetectorHook(
-      createMockPluginInput(),
-      undefined,
-      undefined,
-      undefined,
-    )
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "how to do this" }],
-    }
-
-    // when - analyze wording is submitted
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - analyze wording remains plain text
-    const text = expectTextPartText(output.parts)
-    expect(text).toBe("how to do this")
-  })
-
   test("should NOT inject team-mode when disabled_keywords includes 'team'", async () => {
     // given - keyword detector with team disabled
     const sessionID = "team-disabled-session"
@@ -1189,7 +1013,6 @@ describe("keyword-detector disabled_keywords config", () => {
     // then - team-mode injection should be skipped
     const text = expectTextPartText(output.parts)
     expect(text).toBe("let's use team mode for this")
-    expect(text).not.toContain("[team-mode]")
   })
 
   test("should NOT inject ultrawork message AND not show toast when disabled_keywords includes 'ultrawork'", async () => {
@@ -1213,31 +1036,7 @@ describe("keyword-detector disabled_keywords config", () => {
     // then - neither toast nor injection should occur
     const text = expectTextPartText(output.parts)
     expect(text).toBe("ultrawork do this task")
-    expect(text).not.toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
     expect(toastCalls).not.toContain("Ultrawork Mode Activated")
-  })
-
-  test("should leave combined search and analyze wording plain", async () => {
-    // given - keyword detector with no config
-    const sessionID = "multi-disabled-session"
-    getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
-    const hook = createKeywordDetectorHook(
-      createMockPluginInput(),
-      undefined,
-      undefined,
-      undefined,
-    )
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "search and analyze the codebase" }],
-    }
-
-    // when - search and analyze wording is submitted
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - neither wording activates a mode prompt
-    const text = expectTextPartText(output.parts)
-    expect(text).toBe("search and analyze the codebase")
   })
 
   test("should let active keywords through when search and analyze wording is present", async () => {
@@ -1255,53 +1054,7 @@ describe("keyword-detector disabled_keywords config", () => {
 
     // then - ultrawork still injects and removed mode prompts do not
     const text = expectTextPartText(output.parts)
-    expect(text).toContain("YOU MUST LEVERAGE ALL AVAILABLE AGENTS")
+    expect(text).toContain("<ultrawork-mode>")
     expect(text).toContain("search and analyze the codebase")
-  })
-
-  test("should leave search wording plain when config is undefined", async () => {
-    // given - keyword detector with no config
-    const sessionID = "no-config-session"
-    getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
-    const hook = createKeywordDetectorHook(
-      createMockPluginInput(),
-      undefined,
-      undefined,
-      undefined,
-    )
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "search for the answer" }],
-    }
-
-    // when - search wording is submitted with no config
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - search wording remains plain text
-    const text = expectTextPartText(output.parts)
-    expect(text).toBe("search for the answer")
-  })
-
-  test("should leave analyze wording plain when disabled_keywords is an empty array", async () => {
-    // given - keyword detector with empty disable list
-    const sessionID = "empty-disabled-session"
-    getMainSessionSpy = spyOn(sessionState, "getMainSessionID").mockReturnValue(sessionID)
-    const hook = createKeywordDetectorHook(
-      createMockPluginInput(),
-      undefined,
-      undefined,
-      { disabled_keywords: [] },
-    )
-    const output = {
-      message: {} as Record<string, unknown>,
-      parts: [{ type: "text", text: "investigate this issue" }],
-    }
-
-    // when - analyze wording is submitted with empty disable list
-    await hook["chat.message"]({ sessionID }, output)
-
-    // then - analyze wording remains plain text
-    const text = expectTextPartText(output.parts)
-    expect(text).toBe("investigate this issue")
   })
 })

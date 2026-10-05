@@ -1,10 +1,11 @@
 import type { AgentToolResult } from "@code-yeongyu/senpi"
+import type { IsolationDetails } from "../../isolation/details"
 
 import type { TaskManager } from "../../manager"
-import type { ResolvedModelRecord, TaskRunStats, TaskStatus } from "../../state"
+import type { StartQueued, ResolvedModelRecord, ResidencyState, TaskRunStats, TaskStatus } from "../../state"
 import type { CallerSessionResolver } from "../control"
 
-export type OutputManager = Pick<TaskManager, "get" | "list">
+export type OutputManager = Pick<TaskManager, "get" | "list" | "concurrency">
 
 export type TranscriptEntry =
   | { readonly kind: "assistant"; readonly text: string }
@@ -16,6 +17,7 @@ export type TranscriptSource = "event-log" | "session-jsonl" | "none"
 export type TranscriptReadResult = {
   readonly entries: readonly TranscriptEntry[]
   readonly source: TranscriptSource
+  readonly truncated?: boolean
 }
 
 export type TranscriptReader = (input: { readonly taskId: string; readonly stateDir: string }) => TranscriptReadResult
@@ -26,12 +28,23 @@ export type LostBreadcrumbs = {
   readonly pid?: number
 }
 
+export type SuspendedDetails = {
+  readonly explanation: string
+}
+
 export type TaskSnapshot = {
   readonly task_id: string
+  readonly lease?: "held" | "parked"
   readonly name?: string
   readonly description?: string
   readonly task_summary?: string
   readonly status: TaskStatus
+  readonly residency_state: ResidencyState
+  readonly suspended?: SuspendedDetails
+  // A cancel waits for this child's lost connection; it may still be running on its host.
+  readonly stop?: string
+  // The child has not launched yet: its start-time fallback model is waiting for a lane slot.
+  readonly start_queued?: StartQueued
   readonly execution_mode: string
   readonly model: string
   readonly resolved_model?: ResolvedModelRecord
@@ -45,6 +58,7 @@ export type TaskSnapshot = {
   readonly final_response?: string
   readonly error_message?: string
   readonly run_stats?: TaskRunStats
+  readonly isolation?: IsolationDetails
   readonly lost?: LostBreadcrumbs
 }
 
@@ -64,6 +78,10 @@ export type TaskOutputDetails =
 export type TaskOutputDeps = {
   readonly manager: OutputManager
   readonly stateDir: string
+  // Session-level notices about HOW children run - today the shared task daemon's loud, deduped
+  // fallback reasons (`host_unavailable:<reason>`). Read on every status view so the parent learns
+  // why its children are not daemon sessions without digging through logs.
+  readonly notices?: () => readonly string[]
   readonly transcriptReader?: TranscriptReader
   readonly resolveCallerSessionId?: CallerSessionResolver
   readonly now?: () => number

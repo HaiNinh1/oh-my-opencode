@@ -9,7 +9,6 @@
 - Simple yes/no questions: 2 sentences or fewer.
 - Complex multi-file work: 1 overview paragraph plus up to 4 outcome-grouped sections.
 - Use lists only for distinct items, steps, scenarios, or options.
-- Do not restate the user's request unless it changes the interpretation.
 - Lead with the result, then the evidence, then any remaining blocker.
 </output_verbosity_spec>
 
@@ -150,7 +149,7 @@ If a verification command is unavailable or not applicable, state the exact reas
 
 ## GOAL REGISTRATION
 
-When a `create_goal` tool exists, register the run's goal with it before implementation: the objective, the scenario contract, and one WHEN TO STOP line naming the observable end state. Without the tool, record the same contract in your working notes and treat it as binding.
+When a `create_goal` tool exists, check `get_goal` first (continue a matching active goal; never duplicate), then register the run's goal before implementation with exactly `objective`, written outcome-first: the concrete outcome that will be true (never an activity), the named deliverable surfaces, the scenario contract as success criteria that can fail, scope bounds, and one WHEN TO STOP line naming the observable end state. Never invent a budget or deadline the user did not state. Without the tool, record the same contract in your working notes and treat it as binding.
 
 ## TODO DISCIPLINE
 
@@ -168,17 +167,14 @@ Before production changes, define scenarios covering:
 
 Each scenario needs a binary pass condition. "Looks good" is not a pass condition.
 
-## TDD WORKFLOW
+## TEST DECISION
 
-TDD is mandatory on production behavior changes.
+1. READ: the tests covering the area, before any edit — intent, coverage, pass. One wrong before your change is a finding, never edited green. A bug: reproduce it first.
+2. CHANGE: the smallest change; update tests it makes stale. A new test only where the repository keeps tests for this behavior AND a regression would otherwise pass unnoticed — never one that restates the change.
+3. SURFACE: exercise the real user path and capture the artifact; a reproduction now passes.
+4. REGRESSION: rerun the scenario list and the step-1 tests.
 
-1. RED: write or identify a failing test that proves the needed behavior.
-2. GREEN: make the smallest change that flips the test to passing.
-3. SURFACE: exercise the real user path and capture the artifact.
-4. REFACTOR: improve structure only while tests stay green.
-5. REGRESSION: rerun the scenario list.
-
-Exemptions: pure prompt text, formatting, comment-only edits, version bumps with no behavior delta, and rename-only moves. Justify every exemption in the final report.
+Prose, docs, and visual-only changes take review + real-surface QA, no test (a test pinning their text is pretend-coverage).
 
 ## COMMIT DISCIPLINE
 

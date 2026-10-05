@@ -17,7 +17,7 @@ describe("build-omo-schema-document", () => {
     // then
     expect(schema.$schema).toBe(expectedDraft)
     expect(schema.$id).toBe(OMO_SCHEMA_ID)
-    expect(schema.title).toBe("Omo Configuration")
+    expect(schema.title).toBe("OmO Configuration")
     const properties = isRecord(schema.properties) ? schema.properties : {}
     expect(properties.categories).toBeDefined()
     expect(properties.agents).toBeDefined()
@@ -77,10 +77,8 @@ describe("build-omo-schema-document", () => {
           default_concurrency: 3,
         },
       },
-      "[codex]": {
-        codegraph: {
-          daemon: false,
-        },
+      telemetry: {
+        enabled: false,
       },
       profiles: {
         kimi: {
@@ -99,10 +97,8 @@ describe("build-omo-schema-document", () => {
               default_concurrency: 2,
             },
           },
-          "[codex]": {
-            codegraph: {
-              enabled: false,
-            },
+          telemetry: {
+            enabled: false,
           },
         },
       },

@@ -18,17 +18,20 @@ describe("in-process access_terminated_error fallback", () => {
       // then
       expect(harness.calls).toEqual(["dead-primary", "healthy-fallback"])
       expect(harness.session.getLastAssistantText()).toBe("fallback completed")
+      // senpi 2026.9.29 (senpi #2319) tags a switch caused by a usage limit with its scope;
+      // "reached your usage limit for this billing cycle" names no model, so it is account-wide.
       expect(harness.events).toContainEqual({
         type: "retry_fallback_applied",
         from: "runtime-fallback-test/dead-primary",
         to: "runtime-fallback-test/healthy-fallback",
         chainKey: "runtime-fallback-test/dead-primary",
-        reason: "hard-error",
+        reason: "billing",
+        limit: "account",
       })
     } finally {
       harness.dispose()
     }
-  })
+  }, 20_000)
 
   test("#given context overflow is deliberately non-fallback #when the child runs #then it stays terminal on the first candidate", async () => {
     // given

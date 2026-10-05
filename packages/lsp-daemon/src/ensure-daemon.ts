@@ -1,8 +1,8 @@
-import { spawn } from "node:child_process";
-import { closeSync, mkdirSync, openSync } from "node:fs";
+import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, openSync, writeSync } from "node:fs";
 import { Socket } from "node:net";
-import { dirname } from "node:path";
-import { execPath } from "node:process";
+import { dirname, isAbsolute } from "node:path";
+import { argv0, execPath } from "node:process";
 
 import { authEnvelope, readAuthToken } from "./ipc-protocol.js";
 import type { OwnerPing } from "./ownership.js";
@@ -12,9 +12,11 @@ import { createLineDecoder, encodeJsonLine } from "./socket-jsonrpc.js";
 
 export { InvalidRuntimeOverrideError, OMO_LSP_DAEMON_CLI, resolveDaemonRuntime } from "./runtime-contract.js";
 
-const PROBE_TIMEOUT_MS = 500;
+const PROBE_TIMEOUT_MS = 2_000;
 const DEFAULT_READY_TIMEOUT_MS = 5_000;
 const DEFAULT_POLL_INTERVAL_MS = 100;
+const FAILED_SPAWN_COOLDOWN_MS = 5_000;
+const failedSpawnUntil = new Map<string, number>();
 
 export class DaemonUnreachableError extends Error {
 	constructor(socketPath: string) {
@@ -46,10 +48,21 @@ export async function ensureDaemonRunning(
 	const signal = options.signal;
 
 	throwIfAborted(signal);
-	if (await awaitWithSignal(deps.probe(paths, signal), signal)) return;
+	if (await awaitWithSignal(deps.probe(paths, signal), signal)) {
+		failedSpawnUntil.delete(paths.socket);
+		return;
+	}
 	throwIfAborted(signal);
+	const retryAt = failedSpawnUntil.get(paths.socket);
+	if (retryAt !== undefined && deps.now() < retryAt) throw new DaemonUnreachableError(paths.socket);
+	failedSpawnUntil.delete(paths.socket);
 	deps.spawnDaemon(paths);
-	await waitUntilReachable(paths, deps, readyTimeoutMs, pollIntervalMs, signal);
+	try {
+		await waitUntilReachable(paths, deps, readyTimeoutMs, pollIntervalMs, signal);
+	} catch (error) {
+		failedSpawnUntil.set(paths.socket, deps.now() + FAILED_SPAWN_COOLDOWN_MS);
+		throw error;
+	}
 }
 
 async function waitUntilReachable(
@@ -120,18 +133,47 @@ export function pingDaemon(
 	});
 }
 
-export function spawnDaemonProcess(paths: DaemonPaths): void {
+export interface SpawnDaemonProcessDeps {
+	spawn: (executable: string, args: readonly string[], options: SpawnOptions) => ChildProcess;
+	resolveExecutable: () => string;
+}
+
+export function spawnDaemonProcess(paths: DaemonPaths, deps: Partial<SpawnDaemonProcessDeps> = {}): void {
 	mkdirSync(dirname(paths.log), { recursive: true });
 	const logFd = openSync(paths.log, "a");
 	try {
-		const child = spawn(execPath, [paths.cliPath, "daemon"], {
+		const spawnDaemonChild = deps.spawn ?? spawn;
+		const executable = deps.resolveExecutable?.() ?? resolveDaemonNodeExecutable();
+		const child = spawnDaemonChild(executable, [paths.cliPath, "daemon"], {
 			detached: true,
 			stdio: ["ignore", logFd, logFd],
+			windowsHide: true,
+			// Under the packaged runtime execPath is the compiled omo binary, not a
+			// node interpreter; without BUN_BE_BUN it runs its embedded entrypoint, so
+			// the CLI argv boots a billable agent session instead of the daemon
+			// (issue #7914). Inert for node and for the bun interpreter itself.
+			env: { ...process.env, BUN_BE_BUN: "1" },
+		});
+		child.once("spawn", () => closeSync(logFd));
+		child.once("error", (error) => {
+			writeSync(logFd, `[lsp-daemon] failed to spawn daemon: ${error.message}\n`);
+			closeSync(logFd);
 		});
 		child.unref();
-	} finally {
+	} catch (error) {
 		closeSync(logFd);
+		throw error;
 	}
+}
+
+export function resolveDaemonNodeExecutable(
+	cachedExecPath: string = execPath,
+	originalArgv0: string = argv0,
+	pathExists: (path: string) => boolean = existsSync,
+): string {
+	if (pathExists(cachedExecPath)) return cachedExecPath;
+	if (isAbsolute(originalArgv0) && pathExists(originalArgv0)) return originalArgv0;
+	return "node";
 }
 
 export function resolveDaemonCliPath(

@@ -1,15 +1,18 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { isolationDetails, isolationLine } from "../isolation/details"
 import { messageability } from "../state"
 import type { TaskRecord } from "../state"
 import { formatTargetWithModel } from "../status-line"
+import { formatRunDuration } from "../tools/run-stats-format"
 import {
   excerptRendererPromptText,
   joinRendererTokens,
   normalizeRendererText,
   rendererVisibleWidth,
 } from "../tools/task/renderers"
+import { DAG_VERIFICATION_DIRECTIVE } from "./dag-verification-directive"
 import type { CompletionDetails, ParentNotifierMessage } from "./types"
 
 export const FINAL_RESPONSE_TRANSPORT_LIMIT = 32_000
@@ -20,6 +23,7 @@ export type BuildDetailsOptions = {
 }
 
 export function buildCompletionDetails(record: TaskRecord, options: BuildDetailsOptions = {}): CompletionDetails {
+  const isolation = isolationDetails(record)
   const finalResponse = finalResponseForNotification(record, options.stateDir)
   const runStats = record.run_stats
   const tokens = options.tokens ?? runStats?.total_tokens
@@ -42,14 +46,23 @@ export function buildCompletionDetails(record: TaskRecord, options: BuildDetails
     final_response: finalResponse.text,
     ...(finalResponse.file === undefined ? {} : { final_response_file: finalResponse.file }),
     continuation_hint: continuationHint(record),
+    ...(record.resumed_run_epoch !== undefined && record.resumed_run_epoch === record.notification.run_epoch
+      ? { resumed_turn: true as const }
+      : {}),
+    ...(record.owner?.kind === "dag"
+      ? { dag: { run_id: record.owner.runId, node_id: record.owner.nodeId } }
+      : {}),
+    ...(isolation === undefined ? {} : { isolation }),
   }
   return tokens === undefined ? base : { ...base, tokens }
 }
 
 export function buildCompletionMessage(details: readonly CompletionDetails[]): ParentNotifierMessage {
+  const body = completionMessageLines(details).join("\n")
+  const carriesDag = details.some((detail) => detail.dag !== undefined)
   return {
     customType: "senpi-task.completion",
-    content: completionMessageLines(details).join("\n"),
+    content: carriesDag ? `${body}\n\n${DAG_VERIFICATION_DIRECTIVE}` : body,
     display: false,
     details,
   }
@@ -82,14 +95,14 @@ function durationMs(record: TaskRecord): number {
 }
 
 function continuationHint(record: TaskRecord): string {
-  const mode = messageability(record.status, record.residency_state)
+  const mode = messageability(record.status, record.residency_state, record.execution_mode, record.killed)
   if (mode === "not-continuable") return ""
   return `Use task_send({ to: "${record.task_id}", message: "..." }) to continue.`
 }
 
 function completionDetailLines(detail: CompletionDetails, width: number | undefined): readonly string[] {
-  const summary = joinRendererTokens([
-    "task completion",
+  const identity = joinRendererTokens([
+    detail.resumed_turn === true ? "task completion (resumed turn)" : "task completion",
     `name:${normalizeRendererText(detail.name)}`,
     `id:${normalizeRendererText(detail.task_id)}`,
     formatTargetWithModel({
@@ -100,24 +113,30 @@ function completionDetailLines(detail: CompletionDetails, width: number | undefi
     }),
     fallbackToken(detail),
     `status:${normalizeRendererText(detail.status)}`,
+  ])
+  const stats = joinRendererTokens([
     `duration:${formatDuration(detail.duration_ms)}`,
     detail.tokens === undefined ? undefined : `tokens:${detail.tokens}`,
     detail.run_stats?.tool_calls === undefined ? undefined : `tools:${detail.run_stats.tool_calls}`,
     detail.run_stats?.tokens_per_second === undefined ? undefined : `tps:${detail.run_stats.tokens_per_second}`,
   ])
+  const summaryLines = width === undefined
+    ? [joinRendererTokens([identity, stats])]
+    : [excerptRendererPromptText(identity, width), excerptRendererPromptText(stats, width)]
   const response = width === undefined ? detail.final_response : normalizeRendererText(detail.final_response)
   const continuation = width === undefined ? detail.continuation_hint : normalizeRendererText(detail.continuation_hint)
   const resultPrefix = 'result:"'
   const resultFilePrefix = "result_file:"
   const nextPrefix = "next:"
   return [
-    width === undefined ? summary : excerptRendererPromptText(summary, width),
+    ...summaryLines,
     ...(response.length === 0
       ? []
       : [`${resultPrefix}${excerptForWidth(response, width, resultPrefix, '"')}"`]),
     ...(detail.final_response_file === undefined
       ? []
       : [`${resultFilePrefix}${excerptForWidth(detail.final_response_file, width, resultFilePrefix, "")}`]),
+    ...(detail.isolation === undefined ? [] : [isolationLine(detail.isolation)]),
     ...(continuation.length === 0
       ? []
       : [`${nextPrefix}${excerptForWidth(continuation, width, nextPrefix, "")}`]),
@@ -143,6 +162,7 @@ function availableExcerptWidth(width: number | undefined, prefix: string, suffix
 
 function formatDuration(durationMs: number): string {
   if (durationMs < 1_000) return `${durationMs}ms`
+  if (durationMs >= 60_000) return formatRunDuration(durationMs)
   const seconds = (durationMs / 1_000).toFixed(2).replace(/\.00$/u, "").replace(/(\.\d)0$/u, "$1")
   return `${seconds}s`
 }

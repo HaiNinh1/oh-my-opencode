@@ -3,6 +3,7 @@ import type { AgentSessionEvent, RpcCommand, RpcExtensionUIRequest, RpcResponse 
 import { log } from "@oh-my-opencode/utils"
 
 import type { ChildEventListener, RpcEntriesResult, RpcSwitchSessionResult } from "../types"
+import { createChildExtensionEvents } from "../child-extension-events"
 import { RpcCommandError } from "./errors"
 import { tailStderr } from "./exit-mapping"
 import { buildAutoUiResponse } from "./ui-auto-answer"
@@ -30,6 +31,7 @@ type PendingRequest = {
  * survives. This module NEVER sends process signals - see terminate.ts.
  */
 export class RpcProtocolClient {
+  readonly extensionEvents = createChildExtensionEvents()
   private readonly child: ChildProcess
   private readonly onMalformedLine: MalformedLineHandler
   private readonly autoAnswerUi: boolean
@@ -67,13 +69,14 @@ export class RpcProtocolClient {
   }
 
   send(command: RpcCommand): Promise<RpcResponse> {
-    if (this.isExited) {
+    const stdin = this.child.stdin
+    if (this.isExited || stdin === null || stdin === undefined || stdin.writableEnded || stdin.destroyed) {
       return Promise.reject(new Error(`RPC process is not running. Stderr: ${this.stderrTail}`))
     }
     const id = command.id ?? `senpi-task_${++this.nextRequestId}`
     return new Promise<RpcResponse>((resolve, reject) => {
       this.pending.set(id, { resolve, reject })
-      this.child.stdin?.write(`${JSON.stringify({ ...command, id })}\n`, (error) => {
+      stdin.write(`${JSON.stringify({ ...command, id })}\n`, (error) => {
         if (!error) {
           return
         }
@@ -111,6 +114,7 @@ export class RpcProtocolClient {
   }
 
   detach(): void {
+    this.extensionEvents.clear()
     this.eventListeners.clear()
     this.exitListeners.clear()
   }
@@ -122,8 +126,15 @@ export class RpcProtocolClient {
     this.child.stderr?.on("data", (chunk: string) => {
       this.stderrBuffer = (this.stderrBuffer + chunk).slice(-STDERR_BUFFER_CAP)
     })
+    this.child.stdin?.on("error", (error) => {
+      if (isHarmlessRpcShutdownError(error)) {
+        this.finalize()
+        return
+      }
+      this.finalize(error)
+    })
     this.child.once("error", (error) => this.finalize(error))
-    this.child.once("exit", () => this.finalize())
+    this.child.once("close", () => this.finalize())
   }
 
   private ingest(chunk: string): void {
@@ -157,6 +168,7 @@ export class RpcProtocolClient {
       this.answerUi(parsed as RpcExtensionUIRequest)
       return
     }
+    if (this.extensionEvents.ingest(parsed)) return
     for (const listener of this.eventListeners) {
       listener(parsed as AgentSessionEvent)
     }
@@ -198,6 +210,13 @@ export class RpcProtocolClient {
       listener(error)
     }
   }
+}
+
+export function isHarmlessRpcShutdownError(error: unknown): boolean {
+  if (!(error instanceof Error) || !("code" in error)) return false
+  return error.code === "EPIPE"
+    || error.code === "ERR_STREAM_DESTROYED"
+    || error.code === "ERR_STREAM_WRITE_AFTER_END"
 }
 
 function commandError(response: RpcResponse, expectedCommand: string): RpcCommandError {

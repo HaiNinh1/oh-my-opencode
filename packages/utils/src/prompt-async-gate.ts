@@ -27,6 +27,7 @@ import {
   getActiveReservation,
   getPromptReservation,
   reservationSourceMatches,
+  reservedDispatchResult,
 } from "./prompt-async-gate/reservations"
 import { dispatchAfterSessionIdle } from "./prompt-async-gate/session-idle-dispatch"
 import {
@@ -54,8 +55,10 @@ export {
   DEFAULT_PROMPT_DISPATCH_TIMEOUT_MS,
   DEFAULT_PROMPT_GATE_MESSAGES_FETCH_TIMEOUT_MS,
   DEFAULT_PROMPT_QUEUE_RETRY_MS,
+  DEFAULT_PROMPT_REVALIDATION_TIMEOUT_MS,
   DEFAULT_PROMPT_SEMANTIC_DEDUPE_HOLD_MS,
   _setPromptGateMessagesFetchTimeoutMsForTesting,
+  _setPromptGateRevalidationTimeoutMsForTesting,
 } from "./prompt-async-gate/timing"
 
 export type {
@@ -85,7 +88,8 @@ function isObjectPathTypeError(error: unknown): boolean {
   const message = error instanceof Error
     ? error.message
     : typeof error === "string" ? error : ""
-  return message.includes('The "path" property must be of type string') && message.includes("got object")
+  return message.includes('The "path" property must be of type string')
+    && (message.includes("got object") || message.includes("got undefined"))
 }
 
 async function dispatchWithPathCompatibility<TInput>(
@@ -201,7 +205,7 @@ export async function dispatchInternalPrompt<TInput = PromptAsyncInput>(
   if (queueBehavior === "defer") {
     const activeReservation = getActiveReservation(sessionID)
     if (activeReservation) {
-      return { status: "reserved", reservedBy: activeReservation.source }
+      return reservedDispatchResult(activeReservation)
     }
 
     const queuedBy = getQueuedPromptBlocker(sessionID)
@@ -227,6 +231,8 @@ export async function dispatchInternalPrompt<TInput = PromptAsyncInput>(
       dispatchTimeoutMs,
       checkStatus: args.checkStatus !== false,
       checkToolState: args.checkToolState !== false,
+      shouldDispatch: args.shouldDispatch,
+      retryDispatchFailure: args.retryDispatchFailure,
       dispatch: (dispatchInput) => dispatchWithPathCompatibility(dispatch, dispatchInput),
     })
     if (
@@ -261,6 +267,9 @@ export async function dispatchInternalPrompt<TInput = PromptAsyncInput>(
       queueRetryMs,
       checkStatus: args.checkStatus !== false,
       checkToolState: args.checkToolState !== false,
+      durableRetry: args.durableRetry === true,
+      shouldDispatch: args.shouldDispatch,
+      retryDispatchFailure: args.retryDispatchFailure,
       dispatch: async (_dispatchInput: unknown) => dispatchWithPathCompatibility(dispatch, input),
     })
   }
@@ -283,6 +292,8 @@ export async function dispatchInternalPrompt<TInput = PromptAsyncInput>(
     dispatchTimeoutMs,
     checkStatus: args.checkStatus !== false,
     checkToolState: args.checkToolState !== false,
+    shouldDispatch: args.shouldDispatch,
+    retryDispatchFailure: args.retryDispatchFailure,
     dispatch: (dispatchInput) => dispatchWithPathCompatibility(dispatch, dispatchInput),
   })
   if (

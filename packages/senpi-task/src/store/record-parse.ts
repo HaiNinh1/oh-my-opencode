@@ -1,53 +1,121 @@
 import {
+  BACKGROUND_MODES,
   RESIDENCY_STATES,
-  RESOLVED_MODEL_SOURCES,
   TASK_STATUSES,
-  type ResolvedModelRecord,
+  type BackgroundMode,
   type TaskRecord,
-  type TaskRunStats,
 } from "../state"
 import { parseTaskId } from "../state/id"
+import {
+  parseNotification,
+  parseOptionalIsolation,
+  parseOptionalHostSession,
+  parseOptionalOwner,
+  parseOptionalPendingSteering,
+  parseOptionalResolvedModel,
+  parseOptionalResolvedModelArray,
+  parseOptionalSpawnSpec,
+  readOptionalRunnerKind,
+  readOptionalSuspensionReason,
+  validateHostSessionConsistency,
+} from "./record-blocks-parse"
+import {
+  readOptionalTaskStartFailureKind,
+  readOptionalTaskStartFailureReason,
+} from "./start-failure-parse"
+import { parseRunStats } from "./run-stats-parse"
+import {
+  isRecord,
+  readNumber,
+  readOptionalBoolean,
+  readOptionalNumber,
+  readOptionalString,
+  readOptionalStringArray,
+  readString,
+} from "./scalar-read"
 
-export function parseTaskRecord(value: unknown, path: string): TaskRecord {
+const TERMINAL_STATUSES = new Set(["completed", "error", "cancelled", "interrupted", "lost"])
+
+export function parseTaskRecord(value: unknown, path: string, warnings?: string[]): TaskRecord {
   if (!isRecord(value)) throw new Error(`JSON record at ${path} is not an object`)
 
+  const status = readTaskStatus(value)
+  const updatedAt = readString(value, "updated_at")
   const name = readOptionalString(value, "name")
   const taskSummary = readOptionalString(value, "task_summary")
   const description = readOptionalString(value, "description")
   const agentType = readOptionalString(value, "agent_type")
   const category = readOptionalString(value, "category")
+  const teamRunId = readOptionalString(value, "team_run_id")
+  const teamName = readOptionalString(value, "team_name")
+  const teamMemberName = readOptionalString(value, "team_member_name")
+  const teamRole = readOptionalString(value, "team_role")
+  if (teamRole !== undefined && teamRole !== "member") throw new Error("team_role must be member")
   const toolAllow = readOptionalStringArray(value, "tool_allow")
   const toolDeny = readOptionalStringArray(value, "tool_deny")
   const pid = readOptionalNumber(value, "pid")
   const hostPid = readOptionalNumber(value, "host_pid")
   const childSessionId = readOptionalString(value, "child_session_id")
   const finalResponse = readOptionalString(value, "final_response")
+  const isolation = parseOptionalIsolation(value)
   const errorMessage = readOptionalString(value, "error_message")
+  const startedAt = readOptionalString(value, "started_at")
+  const terminalAt = readOptionalString(value, "terminal_at")
   const killed = readOptionalBoolean(value, "killed")
-  const requestedModel = readOptionalResolvedModel(value, "requested_model")
-  const fallbackModels = readOptionalResolvedModelArray(value, "fallback_models")
-  const fallbackAttempts = readOptionalResolvedModelArray(value, "fallback_attempts")
-  const resolvedModel = readOptionalResolvedModel(value, "resolved_model")
-  const spawnSpec = readOptionalSpawnSpec(value)
-  const runStats = readOptionalRunStats(value)
+  // Legacy records predate the field: they never asked for a terminal notification, so false.
+  const notifyOnTerminal = readOptionalBoolean(value, "notify_on_terminal") ?? false
+  const requestedModel = parseOptionalResolvedModel(value, "requested_model")
+  const fallbackModels = parseOptionalResolvedModelArray(value, "fallback_models")
+  const fallbackAttempts = parseOptionalResolvedModelArray(value, "fallback_attempts")
+  const resolvedModel = parseOptionalResolvedModel(value, "resolved_model")
+  const spawnSpec = parseOptionalSpawnSpec(value)
+  const owner = parseOptionalOwner(value)
+  const pendingSteering = parseOptionalPendingSteering(value, path, warnings)
+  const runStats = value["run_stats"] === undefined ? undefined : parseRunStats(value["run_stats"])
+  const taskSeq = readOptionalNumber(value, "task_seq")
+  const configGeneration = readOptionalNumber(value, "config_generation")
+  const backgroundMode = readOptionalBackgroundMode(value)
+  const reviveDeliveryUncertain = parseOptionalReviveDeliveryUncertainty(value)
+  const resumedRunEpoch = readOptionalNumber(value, "resumed_run_epoch")
+  const runStartEpoch = readOptionalNumber(value, "run_start_epoch")
+  const startQueued = parseOptionalStartQueued(value)
+  const runnerKind = readOptionalRunnerKind(value)
+  const suspensionReason = readOptionalSuspensionReason(value)
+  const failureKind = readOptionalTaskStartFailureKind(value)
+  const failureReason = readOptionalTaskStartFailureReason(value)
+  const hostSession = parseOptionalHostSession(value)
+  validateHostSessionConsistency(runnerKind, hostSession)
+  const fallbackHandoffEpoch = readOptionalNumber(value, "fallback_handoff_epoch")
+  const closingChild = parseOptionalClosingChild(value)
+  const residencyClaim = readOptionalString(value, "residency_claim")
+  const cancelRequested = parseOptionalCancelRequest(value)
 
   return {
     task_id: parseTaskId(readString(value, "task_id")),
-    status: readTaskStatus(value),
+    status,
     residency_state: readResidencyState(value),
     parent_session_id: readString(value, "parent_session_id"),
     root_session_id: readString(value, "root_session_id"),
     depth: readNumber(value, "depth"),
     execution_mode: readString(value, "execution_mode"),
     model: readString(value, "model"),
+    notify_on_terminal: notifyOnTerminal,
     created_at: readString(value, "created_at"),
-    updated_at: readString(value, "updated_at"),
-    notification: readNotification(value),
+    updated_at: updatedAt,
+    notification: parseNotification(value),
+    ...(startedAt === undefined ? {} : { started_at: startedAt }),
+    ...(terminalAt === undefined && !TERMINAL_STATUSES.has(status)
+      ? {}
+      : { terminal_at: terminalAt ?? updatedAt }),
     ...(name === undefined ? {} : { name }),
     ...(taskSummary === undefined ? {} : { task_summary: taskSummary }),
     ...(description === undefined ? {} : { description }),
     ...(agentType === undefined ? {} : { agent_type: agentType }),
     ...(category === undefined ? {} : { category }),
+    ...(teamRunId === undefined ? {} : { team_run_id: teamRunId }),
+    ...(teamName === undefined ? {} : { team_name: teamName }),
+    ...(teamMemberName === undefined ? {} : { team_member_name: teamMemberName }),
+    ...(teamRole === undefined ? {} : { team_role: teamRole }),
     ...(toolAllow === undefined ? {} : { tool_allow: toolAllow }),
     ...(toolDeny === undefined ? {} : { tool_deny: toolDeny }),
     ...(requestedModel === undefined ? {} : { requested_model: requestedModel }),
@@ -55,90 +123,83 @@ export function parseTaskRecord(value: unknown, path: string): TaskRecord {
     ...(fallbackAttempts === undefined ? {} : { fallback_attempts: fallbackAttempts }),
     ...(resolvedModel === undefined ? {} : { resolved_model: resolvedModel }),
     ...(spawnSpec === undefined ? {} : { spawn_spec: spawnSpec }),
+    ...(owner === undefined ? {} : { owner }),
+    ...(pendingSteering !== undefined && pendingSteering.length > 0 ? { pending_steering: pendingSteering } : {}),
     ...(pid === undefined ? {} : { pid }),
     ...(hostPid === undefined ? {} : { host_pid: hostPid }),
     ...(childSessionId === undefined ? {} : { child_session_id: childSessionId }),
     ...(finalResponse === undefined ? {} : { final_response: finalResponse }),
+    ...(isolation === undefined ? {} : { isolation }),
     ...(errorMessage === undefined ? {} : { error_message: errorMessage }),
+    ...(failureKind === undefined ? {} : { failure_kind: failureKind }),
+    ...(failureReason === undefined ? {} : { failure_reason: failureReason }),
     ...(killed === undefined ? {} : { killed }),
     ...(runStats === undefined ? {} : { run_stats: runStats }),
+    ...(taskSeq === undefined ? {} : { task_seq: taskSeq }),
+    ...(configGeneration === undefined ? {} : { config_generation: configGeneration }),
+    ...(backgroundMode === undefined ? {} : { background_mode: backgroundMode }),
+    ...(reviveDeliveryUncertain === undefined ? {} : { revive_delivery_uncertain: reviveDeliveryUncertain }),
+    ...(resumedRunEpoch === undefined ? {} : { resumed_run_epoch: resumedRunEpoch }),
+    ...(runStartEpoch === undefined ? {} : { run_start_epoch: runStartEpoch }),
+    ...(startQueued === undefined ? {} : { start_queued: startQueued }),
+    ...(suspensionReason === undefined ? {} : { suspension_reason: suspensionReason }),
+    ...(runnerKind === undefined ? {} : { runner_kind: runnerKind }),
+    ...(hostSession === undefined ? {} : { host_session: hostSession }),
+    ...(fallbackHandoffEpoch === undefined ? {} : { fallback_handoff_epoch: fallbackHandoffEpoch }),
+    ...(closingChild === undefined ? {} : { fallback_closing_child: closingChild }),
+    ...(residencyClaim === undefined ? {} : { residency_claim: residencyClaim }),
+    ...(cancelRequested === undefined ? {} : { cancel_requested: cancelRequested }),
   }
 }
 
-function readOptionalRunStats(record: Record<string, unknown>): TaskRunStats | undefined {
-  const value = record["run_stats"]
+function parseOptionalCancelRequest(record: Record<string, unknown>): TaskRecord["cancel_requested"] {
+  const value = record["cancel_requested"]
   if (value === undefined) return undefined
-  if (!isRecord(value)) throw new Error("run_stats is not an object")
-  const outputTokens = readOptionalNumber(value, "output_tokens")
-  const totalTokens = readOptionalNumber(value, "total_tokens")
-  const generationMs = readOptionalNumber(value, "generation_ms")
-  const tokensPerSecond = readOptionalNumber(value, "tokens_per_second")
+  if (!isRecord(value)) throw new Error("cancel_requested is not an object")
+  const reason = readOptionalString(value, "reason")
+  return { requested_at: readString(value, "requested_at"), ...(reason === undefined ? {} : { reason }) }
+}
+
+function parseOptionalClosingChild(record: Record<string, unknown>): TaskRecord["fallback_closing_child"] {
+  const value = record["fallback_closing_child"]
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Error("fallback_closing_child is not an object")
+  const pid = readOptionalNumber(value, "pid")
+  const hostSession = parseOptionalHostSession(value)
+  return { ...(pid === undefined ? {} : { pid }), ...(hostSession === undefined ? {} : { host_session: hostSession }) }
+}
+
+function parseOptionalStartQueued(record: Record<string, unknown>): TaskRecord["start_queued"] {
+  const value = record["start_queued"]
+  if (value === undefined) return undefined
+  if (!isRecord(value)) throw new Error("start_queued is not an object")
   return {
-    runtime_ms: readNumber(value, "runtime_ms"),
-    turns: readNumber(value, "turns"),
-    tool_calls: readNumber(value, "tool_calls"),
-    ...(outputTokens === undefined ? {} : { output_tokens: outputTokens }),
-    ...(totalTokens === undefined ? {} : { total_tokens: totalTokens }),
-    ...(generationMs === undefined ? {} : { generation_ms: generationMs }),
-    ...(tokensPerSecond === undefined ? {} : { tokens_per_second: tokensPerSecond }),
+    model: readString(value, "model"),
+    queued_at: readString(value, "queued_at"),
+    queue_position: readNumber(value, "queue_position"),
   }
 }
 
-function readOptionalSpawnSpec(record: Record<string, unknown>): TaskRecord["spawn_spec"] {
-  const value = record["spawn_spec"]
+function parseOptionalReviveDeliveryUncertainty(record: Record<string, unknown>): TaskRecord["revive_delivery_uncertain"] {
+  const value = record["revive_delivery_uncertain"]
   if (value === undefined) return undefined
-  if (!isRecord(value)) throw new Error("spawn_spec is not an object")
-  return { cwd: readString(value, "cwd") }
-}
-
-function readOptionalResolvedModel(
-  record: Record<string, unknown>,
-  key: "requested_model" | "resolved_model" = "resolved_model",
-): ResolvedModelRecord | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (!isRecord(value)) throw new Error(`${key} is not an object`)
-  return readResolvedModel(value)
-}
-
-function readOptionalResolvedModelArray(
-  record: Record<string, unknown>,
-  key: "fallback_models" | "fallback_attempts",
-): readonly ResolvedModelRecord[] | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (!Array.isArray(value)) throw new Error(`${key} is not an array`)
-  return value.map((candidate, index) => {
-    if (!isRecord(candidate)) throw new Error(`${key}[${index}] is not an object`)
-    return readResolvedModel(candidate)
-  })
-}
-
-function readResolvedModel(value: Record<string, unknown>): ResolvedModelRecord {
-  const variant = readOptionalString(value, "variant")
-  const legacyReasoningEffort = readOptionalString(value, "reasoning_effort")
-  const reasoning = readOptionalString(value, "reasoning")
+  if (!isRecord(value)) throw new Error("revive_delivery_uncertain is not an object")
   return {
-    provider: readString(value, "provider"),
-    model_id: readString(value, "model_id"),
-    display: readString(value, "display"),
-    source: readResolvedModelSource(value),
-    ...(variant === undefined ? {} : { variant }),
-    ...(legacyReasoningEffort === undefined ? {} : { reasoning_effort: legacyReasoningEffort }),
-    ...(reasoning === undefined ? {} : { reasoning }),
+    run_epoch: readNumber(value, "run_epoch"),
+    message_sha256: readString(value, "message_sha256"),
   }
 }
 
-function readNotification(record: Record<string, unknown>): TaskRecord["notification"] {
-  const notification = record["notification"]
-  if (!isRecord(notification)) throw new Error("notification is not an object")
-  const failedEpoch = readOptionalNumber(notification, "notification_failed_epoch")
-  const livenessNotifiedEpoch = readOptionalNumber(notification, "liveness_notified_epoch")
-  return {
-    run_epoch: readNumber(notification, "run_epoch"),
-    notified_epoch: readNumber(notification, "notified_epoch"),
-    ...(failedEpoch === undefined ? {} : { notification_failed_epoch: failedEpoch }),
-    ...(livenessNotifiedEpoch === undefined ? {} : { liveness_notified_epoch: livenessNotifiedEpoch }),
+function readOptionalBackgroundMode(record: Record<string, unknown>): BackgroundMode | undefined {
+  const mode = readOptionalString(record, "background_mode")
+  if (mode === undefined) return undefined
+  switch (mode) {
+    case "foreground":
+    case "background":
+    case "promoted":
+      return mode
+    default:
+      throw new Error(`background_mode must be one of ${BACKGROUND_MODES.join(", ")}`)
   }
 }
 
@@ -158,18 +219,6 @@ function readTaskStatus(record: Record<string, unknown>): TaskRecord["status"] {
   }
 }
 
-function readResolvedModelSource(record: Record<string, unknown>): ResolvedModelRecord["source"] {
-  const source = readString(record, "source")
-  switch (source) {
-    case "category":
-    case "explicit":
-    case "agent":
-      return source
-    default:
-      throw new Error(`resolved_model.source must be ${RESOLVED_MODEL_SOURCES.join(" or ")}`)
-  }
-}
-
 function readResidencyState(record: Record<string, unknown>): TaskRecord["residency_state"] {
   const residencyState = readString(record, "residency_state")
   switch (residencyState) {
@@ -182,51 +231,4 @@ function readResidencyState(record: Record<string, unknown>): TaskRecord["reside
     default:
       throw new Error(`Invalid residency state [REDACTED]; expected one of ${RESIDENCY_STATES.join(", ")}`)
   }
-}
-
-function readString(record: Record<string, unknown>, key: string): string {
-  const value = record[key]
-  if (typeof value !== "string") throw new Error(`${key} is not a string`)
-  return value
-}
-
-function readNumber(record: Record<string, unknown>, key: string): number {
-  const value = record[key]
-  if (typeof value !== "number") throw new Error(`${key} is not a number`)
-  return value
-}
-
-function readOptionalString(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (typeof value !== "string") throw new Error(`${key} is not a string`)
-  return value
-}
-
-function readOptionalNumber(record: Record<string, unknown>, key: string): number | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (typeof value !== "number") throw new Error(`${key} is not a number`)
-  return value
-}
-
-function readOptionalBoolean(record: Record<string, unknown>, key: string): boolean | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (typeof value !== "boolean") throw new Error(`${key} is not a boolean`)
-  return value
-}
-
-function readOptionalStringArray(record: Record<string, unknown>, key: string): readonly string[] | undefined {
-  const value = record[key]
-  if (value === undefined) return undefined
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === "string")) {
-    throw new Error(`${key} is not a string array`)
-  }
-  return value
-}
-
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
 }

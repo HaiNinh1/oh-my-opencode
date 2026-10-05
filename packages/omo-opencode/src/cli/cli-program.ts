@@ -7,7 +7,11 @@ import { doctor, resolveDoctorTarget } from "./doctor"
 import { createMcpOAuthCommand } from "./mcp-oauth"
 import { configureRuntimeCommands } from "./runtime-commands"
 import { runConfigMigrate } from "./config-migrate"
-import { availableInstallPlatforms, isSenpiPlatformEnabled, SENPI_PLATFORM_ENV_FLAG } from "./senpi-platform-flag"
+import {
+  availableInstallPlatforms,
+  isNativeDevPlatformEnabled,
+  NATIVE_DEV_PLATFORM_ENV_FLAG,
+} from "./native-dev-platform-flag"
 import type { InstallArgs } from "./types"
 import type { RunOptions } from "./run"
 import type { GetLocalVersionOptions } from "./get-local-version/types"
@@ -57,11 +61,12 @@ export function resolveInstallArgs(
   options: InstallCommandOptions,
   invocationName: string | undefined = process.env.OMO_INVOCATION_NAME,
 ): InstallArgs {
-  const defaultPlatform = invocationName === "lazycodex" || invocationName === "lazycodex-ai" ? "codex" : undefined
+  const defaultPlatform =
+    process.env.OMO_EDITION === "codex" || invocationName === "lazycodex" || invocationName === "lazycodex-ai" ? "codex" : undefined
   const platform = options.platform ?? defaultPlatform
-  if (platform === "senpi" && !isSenpiPlatformEnabled()) {
+  if (platform === "native-dev" && !isNativeDevPlatformEnabled()) {
     throw new Error(
-      `The senpi install platform is not available in this release. Set ${SENPI_PLATFORM_ENV_FLAG}=1 to enable it from a source checkout.`,
+      `The native-dev install platform is not available in this release. Set ${NATIVE_DEV_PLATFORM_ENV_FLAG}=1 to enable it from a source checkout.`,
     )
   }
 
@@ -121,7 +126,7 @@ Examples:
   $ bunx oh-my-opencode install
   $ npx lazycodex-ai install --no-tui
   $ bunx oh-my-opencode install --no-tui --platform=both --claude=max20 --openai=yes --gemini=yes --copilot=no
-  $ omo install --platform=codex --codex-autonomous
+  $ omo-agent-toolkit install --platform=codex --codex-autonomous
   $ bunx oh-my-opencode install --no-tui --claude=no --gemini=no --copilot=yes --opencode-zen=yes
 
 Model Providers (Priority: Native > Copilot > OpenCode Zen > Z.ai > Kimi > Bailian > MiniMax > Vercel):
@@ -247,7 +252,7 @@ Examples:
   $ bunx oh-my-opencode doctor --status   # Compact dashboard
   $ bunx oh-my-opencode doctor --verbose  # Deep diagnostics
   $ bunx oh-my-opencode doctor --json     # JSON output
-  $ omo doctor --platform=codex           # Codex/LazyCodex diagnostics only
+  $ omo-agent-toolkit doctor --platform=codex   # Codex/LazyCodex diagnostics only
 `)
   .action(async (options: DoctorCommandOptions) => {
     const rootOptions = program.opts<RootCommandOptions>()

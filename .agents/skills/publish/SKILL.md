@@ -1,6 +1,6 @@
 ---
 name: publish
-description: "Publish oh-my-opencode to npm by triggering the GitHub Actions publish workflow and verifying its artifacts. Ship-only: never runs pre-publish-review or re-reviews merged code unless the user explicitly asks. Argument: <patch|minor|major>. Triggers: publish, release, deploy, npm publish."
+description: "Publish oh-my-opencode to npm by triggering the GitHub Actions publish workflow and verifying its artifacts. Ship-only: never runs pre-publish-review or re-reviews merged code unless the user explicitly asks. Argument: <patch|minor|major|explicit-semver>. Triggers: publish, release, deploy, npm publish."
 ---
 
 You are the release manager for oh-my-opencode. Execute the FULL publish workflow from start to finish.
@@ -53,15 +53,16 @@ This contract applies to the slash-command copies (`.agents/command/publish.md`,
 
 ## CRITICAL: ARGUMENT REQUIREMENT
 
-**You MUST receive a version bump type from the user.** Valid options:
+**You MUST receive one release selector from the user.** Valid options:
 - `patch`: Bug fixes, backward-compatible (1.1.7 → 1.1.8)
 - `minor`: New features, backward-compatible (1.1.7 → 1.2.0)
 - `major`: Breaking changes (1.1.7 → 2.0.0)
+- An explicit valid semantic version, including a prerelease such as `5.0.0-beta.9`
 
-**If the user did not provide a bump type argument, STOP IMMEDIATELY and ask:**
-> "To proceed with deployment, please specify a version bump type: `patch`, `minor`, or `major`"
+**If the user did not provide a release selector, STOP IMMEDIATELY and ask:**
+> "To proceed with deployment, specify `patch`, `minor`, `major`, or an explicit semantic version such as `5.0.0-beta.9`."
 
-**DO NOT PROCEED without explicit user confirmation of bump type.**
+Reject any other value. Do not infer or repair malformed versions.
 
 ---
 
@@ -71,7 +72,7 @@ This contract applies to the slash-command copies (`.agents/command/publish.md`,
 
 ```
 [
-  { "id": "confirm-bump", "content": "Confirm version bump type with user (patch/minor/major)", "status": "in_progress", "priority": "high" },
+  { "id": "confirm-release-input", "content": "Confirm release selector with user (patch/minor/major or explicit semver)", "status": "in_progress", "priority": "high" },
   { "id": "check-uncommitted", "content": "Check for uncommitted changes and commit if needed", "status": "pending", "priority": "high" },
   { "id": "sync-remote", "content": "Sync with remote (pull --rebase && push if unpushed commits)", "status": "pending", "priority": "high" },
   { "id": "run-workflow", "content": "Trigger GitHub Actions publish workflow", "status": "pending", "priority": "high" },
@@ -91,9 +92,23 @@ This contract applies to the slash-command copies (`.agents/command/publish.md`,
 
 ---
 
-## STEP 1: CONFIRM BUMP TYPE
+## STEP 1: CONFIRM AND CLASSIFY THE RELEASE SELECTOR
 
-If the user already named a bump type (argument or message), that IS the confirmation — state it and continue immediately. Only ask and wait when no bump type was given.
+If the user already supplied the selector in the command argument or message, that IS the confirmation. Parse it exactly once:
+
+```bash
+RELEASE_INPUT="${ARGUMENTS}"
+if [[ "$RELEASE_INPUT" =~ ^(patch|minor|major)$ ]]; then
+  RELEASE_KIND=bump
+elif [[ "$RELEASE_INPUT" =~ ^([0-9]+\.){2}[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+  RELEASE_KIND=version
+else
+  echo "Invalid release selector: $RELEASE_INPUT" >&2
+  exit 1
+fi
+```
+
+Only ask and wait when no selector was provided.
 
 ---
 
@@ -124,15 +139,28 @@ This ensures the GitHub Actions workflow runs on the latest code including all l
 
 ## STEP 3: TRIGGER GITHUB ACTIONS WORKFLOW
 
-Run the publish workflow:
+Dispatch from `dev`, pass bump selectors through `bump`, and pass exact versions through `version`. The required `bump` input remains `patch` for explicit-version dispatches but is ignored by the workflow because `version` takes precedence.
+
 ```bash
-gh workflow run publish -f bump={bump_type}
+if [ "$RELEASE_KIND" = bump ]; then
+  RUN_URL="$(gh workflow run publish.yml --ref dev -f "bump=${RELEASE_INPUT}")"
+else
+  RUN_URL="$(gh workflow run publish.yml --ref dev -f bump=patch -f "version=${RELEASE_INPUT}")"
+fi
+
+if ! [[ "$RUN_URL" =~ ^https://github.com/code-yeongyu/oh-my-openagent/actions/runs/[0-9]+$ ]]; then
+  echo "Publish dispatch did not return an exact workflow run URL: $RUN_URL" >&2
+  exit 1
+fi
+RUN_ID="${RUN_URL##*/}"
+if ! [[ "$RUN_ID" =~ ^[0-9]+$ ]]; then
+  echo "Publish dispatch returned an invalid run ID: $RUN_ID" >&2
+  exit 1
+fi
+gh run view "${RUN_ID}" --json databaseId,status,url --jq '{databaseId,status,url}'
 ```
 
-Wait 3 seconds, then get the run ID:
-```bash
-gh run list --workflow=publish --limit=1 --json databaseId,status --jq '.[0]'
-```
+The returned run ID owns this release attempt. Never replace it with a latest-run lookup.
 
 ---
 
@@ -149,14 +177,14 @@ The publish run is a single workflow with sequential stages. Expected timeline (
 
 Poll job-level status every 30 seconds and report stage transitions to the user:
 ```bash
-gh run view {run_id} --json status,conclusion,jobs --jq '{status, conclusion, stage: ([.jobs[] | select(.status=="in_progress") | .name] | join(", "))}'
+gh run view "${RUN_ID}" --json status,conclusion,jobs --jq '{status, conclusion, stage: ([.jobs[] | select(.status=="in_progress") | .name] | join(", "))}'
 ```
 
 **IMPORTANT: Use polling loop, NOT sleep commands.** Use the waiting time to draft the enhanced release summary (Step 6) — do not sit idle, and do not start any review activity.
 
 If conclusion is `failure`, show error and stop:
 ```bash
-gh run view {run_id} --log-failed
+gh run view "${RUN_ID}" --log-failed
 ```
 
 ---
@@ -174,22 +202,30 @@ NEW_VERSION=$(node -p "require('./package.json').version")
 gh release view "v${NEW_VERSION}" --json tagName,url --jq '{tag: .tagName, url: .url}'
 ```
 
-**After verifying, generate a local preview of the auto-generated content:**
+**Release notes are written BEFORE the release, not after.**
+
+The release body is extracted from the `CHANGELOG.md` section for this version. Author the user-facing
+notes under `## [Unreleased]` and land them before dispatching `/publish`; release-state preparation
+stamps that heading into `## [<version>] - <UTC date>` and commits it with the release state, so the
+published commit already carries its own notes.
+
+Preview exactly what the release body will be:
 
 ```bash
-bun run script/generate-changelog.ts
+bun run script/generate-changelog.ts > /tmp/contributors.md
+bun run script/print-release-notes.ts "${NEW_VERSION}" /tmp/contributors.md
 ```
 
 <agent-instruction>
 After running the preview, present the output to the user and say:
 
-> **The following content is ALREADY included in the release automatically:**
-> - Commit changelog (grouped by feat/fix/refactor)
-> - Contributor thank-you messages (for non-team contributors)
+> **This is the exact body the release will publish:** the notes you authored under `[Unreleased]`,
+> then contributor thank-yous for non-team contributors, then the install footer.
 >
-> You do NOT need to write any of this. It's handled.
+> Both steps are fail-closed: an absent, empty, or duplicated section aborts the release instead of
+> publishing blank notes, and re-stamping a version that already has a section is refused.
 >
-> **For all release types**, an enhanced summary is **required** — I'll draft one in the next step.
+> If the `[Unreleased]` section is empty, STOP and write the notes first — the release cannot proceed.
 
 **APPROVAL GATE (single, binary):** The user's initial publish request with a named bump type IS the only approval this workflow requires. Do NOT wait for a separate acknowledgement here. Present the preview, then IMMEDIATELY proceed to Step 6. The only exception: if the user explicitly said "let me review the changelog before you continue" (or equivalent), stop and wait. Otherwise continue without ending the turn.
 </agent-instruction>
@@ -208,6 +244,12 @@ After running the preview, present the output to the user and say:
 
 </decision-gate>
 
+### LAST RELEASE BEFORE THE OMO NATIVE CLI PUBLIC RELEASE
+
+When the user identifies this as the final release before the OmO Native CLI public release, the GitHub summary MUST begin with this dedicated heading and the Discord announcement MUST repeat it as a dedicated heading immediately after `@here`:
+
+`## LAST RELEASE BEFORE THE OMO NATIVE CLI PUBLIC RELEASE`
+
 ### What You're Writing (and What You're NOT)
 
 You are writing the **headline layer** — a product announcement that sits ABOVE the auto-generated commit log. Think "release blog post", not "git log".
@@ -218,6 +260,7 @@ You are writing the **headline layer** — a product announcement that sits ABOV
 - ALWAYS focus on USER IMPACT: what can users DO now that they couldn't before?
 - ALWAYS group by THEME or CAPABILITY, not by commit type (feat/fix/refactor).
 - ALWAYS use concrete language: "You can now do X" not "Added X feature".
+- NEVER include internal adapter changes matching `senpi`, `omo-senpi`, `senpi-task`, `pi-goal`, or `pi-webfetch` in either release-note variant.
 </rules>
 
 <examples>

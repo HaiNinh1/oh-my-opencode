@@ -1,8 +1,8 @@
 ---
 name: autopilot
-description: "Full autonomous execution from a brief idea to working, verified code. Orchestrates OMO's existing primitives end to end: clarify/plan (ulw-plan / prometheus / metis) -> execute (ralph-loop persistence + parallel_tasks waves) -> QA (the ultraqa skill) -> final multi-perspective review (momus / review-work). MUST USE when the user wants hands-off, idea-to-working-code execution across multiple phases. Triggers: autopilot, auto pilot, full auto, autonomous, build me, create me, make me, handle it all end to end, take it from idea to working code, I want a/an ..."
+description: "Full autonomous execution from a brief idea to working, verified code. Orchestrates OMO's existing primitives end to end: clarify/plan (ulw-plan / prometheus / metis) -> execute (Goal persistence + parallel_tasks waves) -> QA (the ultraqa skill) -> final multi-perspective review (momus / review-work). MUST USE when the user wants hands-off, idea-to-working-code execution across multiple phases. Triggers: autopilot, auto pilot, full auto, autonomous, build me, create me, make me, handle it all end to end, take it from idea to working code, I want a/an ..."
 metadata:
-  short-description: Idea-to-working-code pipeline composing OMO's plan / ralph-loop / ultraqa / review primitives
+  short-description: Idea-to-working-code pipeline composing OMO's plan / goal / ultraqa / review primitives
 ---
 
 # autopilot
@@ -13,14 +13,14 @@ You are running **autopilot** - an idea-to-working-code pipeline. You take a bri
 
 - USE when the user wants end-to-end autonomous execution from an idea to working code and is willing to let it run to completion.
 - USE when the task spans multiple phases: plan, code, test, validate.
-- DO NOT use to brainstorm or compare options - that is `ulw-plan`. DO NOT use for a single focused change - delegate to a worker or use `ralph-loop`. DO NOT use to review an existing plan - that is `ulw-plan` review. DO NOT use for a quick bug fix.
+- DO NOT use to brainstorm or compare options - that is `ulw-plan`. DO NOT use for a single focused change - delegate to a worker or set a `/goal`. DO NOT use to review an existing plan - that is `ulw-plan` review. DO NOT use for a quick bug fix.
 
 ## The primitives this composes (do not reinvent them)
 
 | Phase | OMO primitive | Role |
 | --- | --- | --- |
 | Clarify + plan | `ulw-plan` skill (Prometheus), `metis` | turn the idea into ONE decision-complete plan under `.omo/plans/` |
-| Execute | `ralph-loop` persistence + `parallel_tasks` / `task` workers (`sisyphus`, `hephaestus`) | implement the plan in parallel waves until done |
+| Execute | Goal (`/goal`) persistence + `parallel_tasks` / `task` workers (`sisyphus`, `hephaestus`) | implement the plan in parallel waves until done |
 | QA | `ultraqa` skill | bounded test/diagnose/fix cycling per checkbox or globally |
 | Review | `momus`, `review-work` skill, `oracle` | adversarial multi-perspective validation |
 
@@ -28,7 +28,7 @@ You are running **autopilot** - an idea-to-working-code pipeline. You take a bri
 
 ### Phase 0 - Clarify the idea
 
-- **If a decision-complete plan already exists** under `.omo/plans/*.md` (e.g. a Prometheus plan from `ulw-plan`/`start-work`, with waves + checkboxes + acceptance criteria): SKIP Phase 0 and Phase 1, jump to Phase 2. The plan is already validated.
+- **If a decision-complete plan already exists** under `.omo/plans/*.md` (e.g. a Prometheus plan from `ulw-plan`/`ulw-execute`, with waves + checkboxes + acceptance criteria): SKIP Phase 0 and Phase 1, jump to Phase 2. The plan is already validated.
 - **If the idea is vague** (no concrete anchors - no files, behaviors, or success criteria): do not silently invent scope. Either run `ulw-plan` in its UNCLEAR mode (it researches best-practice defaults and announces them) or ask ONE focused question. Prefer one sharp question over a wrong assumption.
 - **Otherwise**: proceed - the idea is concrete enough for planning.
 
@@ -38,9 +38,9 @@ Invoke the `ulw-plan` skill (Prometheus) to produce ONE decision-complete work p
 
 For an adversarial plan check before execution, dispatch `momus` (read-only) on the drafted plan and fold blocking findings back into the plan via `ulw-plan` before Phase 2.
 
-### Phase 2 - Execute (ralph-loop + parallel waves)
+### Phase 2 - Execute (goal + parallel waves)
 
-Drive execution with OMO's **ralph-loop** persistence so the loop re-injects continuation until the plan's checkboxes are complete - do NOT rebuild a loop by hand. Within each wave, fan out independent checkboxes concurrently:
+Drive execution with a thread **Goal** (`/goal <objective>`) so idle continuations are re-injected until the plan's checkboxes are complete - do NOT rebuild a loop by hand. Mark it done with `update_goal({ status: "complete" })` only after Phase 5 passes. Within each wave, fan out independent checkboxes concurrently:
 
 ```
 parallel_tasks(tasks=[
@@ -48,6 +48,8 @@ parallel_tasks(tasks=[
   { category="unspecified-low", description="<checkbox B>", prompt="TASK: implement <B>. ..." }
 ])
 ```
+
+> **Harness note:** `parallel_tasks` exists only in the OpenCode edition. In Codex (lazycodex), spawn the same workers as parallel subagents in ONE turn instead; the wave rules (disjoint files, dependencies sequential) are unchanged.
 
 - Mechanical checkboxes -> `sisyphus`-class / `quick` workers. Reasoning-heavy checkboxes -> `hephaestus` / `unspecified-high`.
 - Serialize only named dependencies (same-file writes, shared state); everything else runs in parallel.
@@ -74,7 +76,7 @@ Run the **`review-work`** skill (5 parallel reviewers: goal/constraint, hands-on
 When every plan checkbox is complete, all QA gates are green, and all reviewers approve:
 
 1. Run the plan's final verification commands once more and capture fresh passing output.
-2. Clear autopilot/loop state (and `ralph-loop` state if this session owns it).
+2. Clear autopilot/loop state (and `/goal clear` if this session set the goal).
 3. Report to the user: what was built, the plan path, the passing evidence (commands + exit 0 + artifacts), and any accepted non-blocking suggestions.
 
 ## Execution policy
@@ -85,7 +87,7 @@ When every plan checkbox is complete, all QA gates are green, and all reviewers 
 
 ## Hard rules
 
-1. **COMPOSE, DON'T REINVENT.** Use `ulw-plan`, `ralph-loop`, `parallel_tasks`, `ultraqa`, `review-work`/`momus` - never hand-roll planning, the persistence loop, or review.
+1. **COMPOSE, DON'T REINVENT.** Use `ulw-plan`, `/goal`, `parallel_tasks`, `ultraqa`, `review-work`/`momus` - never hand-roll planning, the persistence loop, or review.
 2. **ORCHESTRATE, DON'T IMPLEMENT.** The autopilot root never edits product files or runs implementation commands itself - it dispatches workers and records verdicts.
 3. **PLAN IS THE SOURCE OF TRUTH.** Drive off the `.omo/plans/` plan and its checkboxes; do not execute from stale memory.
 4. **REAL EVIDENCE BEFORE DONE.** No completion claim without fresh passing command output and, where a surface exists, a captured manual/visual artifact. No `--dry-run` as evidence.

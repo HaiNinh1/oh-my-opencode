@@ -45,6 +45,9 @@ function createFactories(createSkillTool: (options: SkillLoadOptions) => typeof 
     createTeamTaskUpdateTool: () => fakeTool,
     createTeamStatusTool: () => fakeTool,
     createTeamListTool: () => fakeTool,
+    createWikiTools: () => ({}),
+    createProjectMemoryTools: () => ({}),
+    createParallelTasksTool: () => fakeTool,
   }
 }
 

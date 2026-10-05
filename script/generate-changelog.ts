@@ -1,20 +1,60 @@
 #!/usr/bin/env bun
 
 import { $ } from "bun"
+import { RELEASE_VERSION_PATTERN } from "./release-latest-flag"
 
-const TEAM = ["actions-user", "github-actions[bot]", "code-yeongyu"]
+const TEAM = ["actions-user", "github-actions[bot]", "code-yeongyu", "sisyphus-dev-ai"]
+
+// Release automation opens and merges the release-state pull request, so its commits land in every
+// release range. Crediting it as a community contributor misreports who wrote the release.
+export function isCommunityContributor(login: string): boolean {
+  return !TEAM.includes(login) && !login.endsWith("[bot]")
+}
 
 const EXCLUDED_PREFIX_PATTERN = /^(ignore:|test:|chore:|ci:|release:)/i
-const CONTAINED_SURFACE_PATTERN = /\bsenpi\b|\bpi-goal\b|\bpi-webfetch\b/i
+const CONTAINED_SURFACE_PATTERN = /\bsenpi\b/i
 
 export function isExcludedReleaseNoteSubject(subject: string): boolean {
   return EXCLUDED_PREFIX_PATTERN.test(subject) || CONTAINED_SURFACE_PATTERN.test(subject)
 }
 
-async function getLatestReleasedTag(): Promise<string | null> {
+function releaseChannel(version: string): string | null {
+  const prerelease = version.replace(/^v/, "").split("-", 2)[1]
+  return prerelease?.split(".", 1)[0] ?? null
+}
+
+function versionCore(version: string): string {
+  return version.split("-", 1)[0] ?? version
+}
+
+/**
+ * A prerelease target measures from its own channel. A stable target measures from the last release
+ * users could run before it: the previous stable, or one of its own prereleases (5.0.0-beta.90 for
+ * 5.0.0). Measuring a first stable from the previous stable spans the whole prerelease line (#8894).
+ */
+function isComparableRelease(version: string, target: string, targetChannel: string | null): boolean {
+  const channel = releaseChannel(version)
+  if (channel === targetChannel) return true
+  return targetChannel === null && versionCore(version) === versionCore(target)
+}
+
+export function selectPreviousReleaseTag(currentVersion: string, tags: readonly string[]): string | null {
+  const target = currentVersion.replace(/^v/, "")
+  const targetChannel = releaseChannel(target)
+  const candidates = tags.flatMap((tag) => {
+    const version = tag.replace(/^v/, "")
+    if (!RELEASE_VERSION_PATTERN.test(version) || !isComparableRelease(version, target, targetChannel) ||
+      Bun.semver.order(version, target) >= 0) return []
+    return [{ tag, version }]
+  })
+  candidates.sort((left, right) => Bun.semver.order(right.version, left.version))
+  return candidates[0]?.tag ?? null
+}
+
+async function getLatestReleasedTag(currentVersion: string): Promise<string | null> {
   try {
-    const tag = await $`gh release list --exclude-drafts --exclude-pre-releases --limit 1 --json tagName --jq '.[0].tagName // empty'`.text()
-    return tag.trim() || null
+    const output = await $`gh release list --exclude-drafts --limit 100 --json tagName --jq '.[].tagName'`.text()
+    return selectPreviousReleaseTag(currentVersion, output.split("\n").filter(Boolean))
   } catch {
     return null
   }
@@ -54,7 +94,7 @@ async function getContributors(previousTag: string): Promise<string[]> {
       const title = message.split("\n")[0] ?? ""
       if (isExcludedReleaseNoteSubject(title)) continue
 
-      if (login && !TEAM.includes(login)) {
+      if (login && isCommunityContributor(login)) {
         if (!contributors.has(login)) contributors.set(login, [])
         contributors.get(login)?.push(title)
       }
@@ -78,7 +118,12 @@ async function getContributors(previousTag: string): Promise<string[]> {
 }
 
 async function main() {
-  const previousTag = await getLatestReleasedTag()
+  const packageJson: unknown = await Bun.file(new URL("../package.json", import.meta.url)).json()
+  if (typeof packageJson !== "object" || packageJson === null || !("version" in packageJson) ||
+    typeof packageJson.version !== "string") {
+    throw new TypeError("package.json must contain a string version")
+  }
+  const previousTag = await getLatestReleasedTag(packageJson.version)
 
   if (!previousTag) {
     console.log("Initial release")

@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { subagentSessions } from "../features/claude-code-session-state/state"
 import {
-  LIVE_ROUTE_DISPATCH_LOG,
-  LIVE_ROUTE_UNAVAILABLE_LOG,
   _setLiveClientForTesting,
   _setFetchImplementationForTesting,
   initLiveServerRoute,
@@ -255,14 +253,14 @@ describe("live-server-route", () => {
       expect(isPreSendConnectionFailure(err)).toBe(true)
     })
 
-    test("#given TypeError with 'fetch failed' message #when isPreSendConnectionFailure called #then returns true", () => {
+    test("#given ambiguous 'fetch failed' without a connection code #when classified #then returns false", () => {
       const err = new TypeError("fetch failed")
-      expect(isPreSendConnectionFailure(err)).toBe(true)
+      expect(isPreSendConnectionFailure(err)).toBe(false)
     })
 
-    test("#given TypeError with 'Unable to connect' message #when isPreSendConnectionFailure called #then returns true", () => {
+    test("#given ambiguous 'Unable to connect' without a connection code #when classified #then returns false", () => {
       const err = new TypeError("Unable to connect to 127.0.0.1:1")
-      expect(isPreSendConnectionFailure(err)).toBe(true)
+      expect(isPreSendConnectionFailure(err)).toBe(false)
     })
 
     test("#given ENOTFOUND error #when isPreSendConnectionFailure called #then returns true", () => {
@@ -273,6 +271,22 @@ describe("live-server-route", () => {
     test("#given EAI_AGAIN error #when isPreSendConnectionFailure called #then returns true", () => {
       const err = Object.assign(new Error("getaddrinfo EAI_AGAIN host"), { code: "EAI_AGAIN" })
       expect(isPreSendConnectionFailure(err)).toBe(true)
+    })
+
+    test("#given definite connect-phase network errors #when isPreSendConnectionFailure called #then each returns true", () => {
+      const connectionCodes = [
+        "ENETUNREACH",
+        "EHOSTUNREACH",
+        "ENETDOWN",
+        "EHOSTDOWN",
+        "EADDRNOTAVAIL",
+        "UND_ERR_CONNECT_TIMEOUT",
+      ]
+
+      for (const code of connectionCodes) {
+        const err = Object.assign(new Error(`connect ${code}`), { code })
+        expect(isPreSendConnectionFailure(err)).toBe(true)
+      }
     })
 
     test("#given AbortError #when isPreSendConnectionFailure called #then returns false", () => {
@@ -396,18 +410,6 @@ describe("live-server-route", () => {
       const after = await resolveDispatchClient(fakeInProcessClient, "ses_after")
       expect(after.route).toBe("in-process")
       expect(callCount2()).toBe(0)
-    })
-  })
-
-  describe("provenance log constants exported", () => {
-    test("#given module exports #when constants checked #then LIVE_ROUTE_DISPATCH_LOG and LIVE_ROUTE_UNAVAILABLE_LOG are non-empty strings", () => {
-      expect(typeof LIVE_ROUTE_DISPATCH_LOG).toBe("string")
-      expect(LIVE_ROUTE_DISPATCH_LOG.length).toBeGreaterThan(0)
-      expect(LIVE_ROUTE_DISPATCH_LOG).toContain("[live-server-route]")
-
-      expect(typeof LIVE_ROUTE_UNAVAILABLE_LOG).toBe("string")
-      expect(LIVE_ROUTE_UNAVAILABLE_LOG.length).toBeGreaterThan(0)
-      expect(LIVE_ROUTE_UNAVAILABLE_LOG).toContain("[live-server-route]")
     })
   })
 

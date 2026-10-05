@@ -1,23 +1,46 @@
-import { describe, test, expect, beforeEach, mock } from "bun:test"
+import { afterAll, describe, test, expect, beforeEach } from "bun:test"
 import { createHermesPromptHardenerHook } from "./hook"
 import { HermesProxyState } from "../../shared/hermes-proxy-state"
+import { clearSessionAgent, setSessionAgent } from "../../features/claude-code-session-state"
 
 // Separator-agnostic path normalization for cross-platform assertions.
 // The directive embeds paths via JSON.stringify, so Windows backslashes appear
 // double-escaped ("\\\\"); collapse any run of slashes/backslashes to a single "/".
 const norm = (s: string | undefined): string => (s ?? "").replace(/[\\/]+/g, "/")
 
-// mock session state to control isHermesAgent check
-mock.module("../../features/claude-code-session-state", () => ({
-  getSessionAgent: (sessionID: string) => {
-    if (sessionID.startsWith("hermes_")) return "Hermes \u2624 (Task Router)"
-    return "Sisyphus (Ultraworker)"
-  },
-}))
+// Seed real session state (no mock.module: Bun cannot undo module mocks, which leaked into other hook tests).
+const HERMES_SESSION_IDS = [
+  "hermes_at_mention",
+  "hermes_file_mention",
+  "hermes_files",
+  "hermes_format",
+  "hermes_image",
+  "hermes_image_replace",
+  "hermes_inline_files",
+  "hermes_literal_backslash_n",
+  "hermes_mixed_files",
+  "hermes_multiline",
+  "hermes_name_fallback",
+  "hermes_no_files",
+  "hermes_no_target",
+  "hermes_no_text",
+  "hermes_pinned",
+  "hermes_preserve",
+  "hermes_quotes",
+  "hermes_synthetic",
+  "hermes_synthetic_file",
+  "hermes_turn1",
+]
+
+afterAll(() => {
+  for (const id of [...HERMES_SESSION_IDS, "other_session"]) clearSessionAgent(id)
+})
 
 describe("hermes-prompt-hardener", () => {
   beforeEach(() => {
     HermesProxyState.clearAll()
+    for (const id of HERMES_SESSION_IDS) setSessionAgent(id, "Hermes ☤ (Task Router)")
+    setSessionAgent("other_session", "Sisyphus (Ultraworker)")
   })
 
   const hook = createHermesPromptHardenerHook()

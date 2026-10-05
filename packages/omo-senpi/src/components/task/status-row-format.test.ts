@@ -1,8 +1,8 @@
 import { describe, expect, it } from "bun:test"
 
-import { rendererVisibleWidth, type TaskRecord, type TaskStatus } from "@oh-my-opencode/senpi-task"
+import { composeStatusLine, rendererVisibleWidth, type TaskRecord, type TaskStatus } from "@oh-my-opencode/senpi-task"
 
-import { buildWidgetRows, formatTaskRow } from "./status-row-format"
+import { backgroundWidgetRows, buildWidgetRows, formatTaskRow } from "./status-row-format"
 
 function record(overrides: Partial<TaskRecord> & { task_id: string; status: TaskStatus }): TaskRecord {
   return {
@@ -15,6 +15,7 @@ function record(overrides: Partial<TaskRecord> & { task_id: string; status: Task
     created_at: "2026-07-07T00:00:00.000Z",
     updated_at: "2026-07-07T00:00:01.000Z",
     notification: { run_epoch: 0, notified_epoch: -1 },
+    notify_on_terminal: false,
     ...overrides,
   }
 }
@@ -37,15 +38,18 @@ function longActiveRecord(): TaskRecord {
 }
 
 describe("buildWidgetRows", () => {
-  it("#given more than five active tasks #when building rows #then it caps at five and adds a +N more row", () => {
-    const records = Array.from({ length: 7 }, (_value, index) => record({ task_id: `st_${index}`, status: "running" }))
-    const rows = buildWidgetRows(records)
-    expect(rows).toHaveLength(6)
-    expect(rows[5]).toBe("+2 more")
-  })
-
-  it("#given only terminal tasks #when building rows #then no rows render", () => {
-    expect(buildWidgetRows([record({ task_id: "st_done", status: "completed" })])).toHaveLength(0)
+  it("#given active and completed records #when selecting rows #then only resident team members follow active rows before the cap", () => {
+    const alpha = record({ task_id: "st_alpha", name: "team:12345678-1234-1234-1234-123456789abc:alpha", task_summary: "settled alpha", status: "completed" })
+    const beta = record({ task_id: "st_beta", name: "team:12345678-1234-1234-1234-123456789abc:beta", task_summary: "settled beta", status: "completed" })
+    const ordinary = record({ task_id: "st_ordinary", task_summary: "ordinary task", status: "completed" })
+    const stale = record({ task_id: "st_stale", name: "team:12345678-1234-1234-1234-123456789abc:stale", task_summary: "stale member", status: "completed" })
+    const active = Array.from({ length: 4 }, (_value, index) => record({ task_id: `st_${index}`, status: "running" }))
+    const rows = buildWidgetRows([alpha, ordinary, stale, ...active, beta], new Set([alpha.task_id, beta.task_id, ordinary.task_id]))
+    expect(rows.slice(0, 4).every((row) => row.includes("running"))).toBe(true)
+    expect(rows[4]).toContain("settled alpha")
+    expect(rows[4]).toContain("completed")
+    expect(rows[5]).toBe("+1 more")
+    expect(rows.join("\n")).not.toMatch(/ordinary task|stale member/u)
   })
 
   it("#given an active task #when building a row #then useful identity and execution context remain", () => {
@@ -85,6 +89,102 @@ describe("task_summary identity", () => {
   it("#given a record with a task_summary #when formatting the full row #then the summary is the identity", () => {
     const row = formatTaskRow(record({ task_id: "st_sum", name: "finder", task_summary: "Audit auth session flow", status: "running" }))
     expect(row.startsWith("Audit auth session flow")).toBe(true)
+  })
+})
+
+describe("backgroundWidgetRows", () => {
+  const now = Date.parse("2026-07-07T00:01:00.000Z")
+  const stats = {
+    turns: 2,
+    tool_calls: 4,
+    runtime_ms: 60_000,
+    cost_usd: 0.1303,
+    cache_hit_rate_last: 0.89,
+    tokens_per_second: 97,
+  }
+
+  it("#given a wide terminal #when a live task row renders #then the longer summary and adjacent metadata remain visible", () => {
+    const row = backgroundWidgetRows([
+      record({
+        task_id: "st_wide",
+        task_summary: "Plan the complete Spider-Man media library migration",
+        status: "running",
+        category: "unspecified-high",
+        resolved_model: {
+          provider: "anthropic",
+          model_id: "claude-opus-5-5",
+          display: "anthropic/claude-opus-5-5",
+          reasoning_effort: "xhigh",
+          source: "category",
+        },
+      }),
+    ], new Map([["st_wide", "running read src/library.ts"]]), now, () => stats, 220)[0] ?? ""
+
+    expect(row).toContain("Plan the complete Spider-Man media library migration")
+    expect(row).toContain("category:unspecified-high(anthropic/claude-opus-5-5:xhigh)")
+    expect(row).toContain("turn 2 (4 tools)")
+    expect(row).toContain("$0.1303")
+    expect(row).not.toContain("CH:")
+    expect(row).toContain("97 tok/s")
+    expect(row).toContain("running read src/library.ts")
+    expect(row).toEndWith("1m 0s")
+    expect(rendererVisibleWidth(row)).toBeLessThanOrEqual(220)
+  })
+
+  it("#given a narrow terminal #when a live task row renders #then it stays on one bounded physical line", () => {
+    const row = backgroundWidgetRows([
+      record({
+        task_id: "st_narrow",
+        task_summary: "Plan the complete Spider-Man media library migration",
+        status: "running",
+        category: "unspecified-high",
+      }),
+    ], new Map([["st_narrow", "running"]]), now, () => stats, 90)[0] ?? ""
+
+    expect(row).not.toContain("\n")
+    expect(rendererVisibleWidth(row)).toBeLessThanOrEqual(90)
+    expect(row).toContain("Plan")
+    expect(row).toContain("category:unspec")
+    expect(row).toContain("running")
+    expect(row).toEndWith("1m 0s")
+  })
+})
+
+describe("suspended residency labeling", () => {
+  it("#given a persisted_only record #when formatting a full row #then the status shows suspended", () => {
+    const row = formatTaskRow(record({ task_id: "st_susp", status: "running", residency_state: "persisted_only" }))
+    expect(row).toContain("suspended")
+    expect(row).not.toContain("status:running")
+  })
+
+  it("#given an rpc_detached record #when formatting a full row #then the status shows suspended", () => {
+    const row = formatTaskRow(record({ task_id: "st_susp", status: "running", residency_state: "rpc_detached" }))
+    expect(row).toContain("suspended")
+    expect(row).not.toContain("status:running")
+  })
+
+  it("#given a resident record #when formatting a full row #then the status label is unchanged (regression pin)", () => {
+    const row = formatTaskRow(record({ task_id: "st_live", status: "running", residency_state: "resident" }))
+    expect(row).toContain("status:running")
+    expect(row).not.toContain("suspended")
+  })
+
+  it("#given a persisted_only record #when building a widget row #then it contains suspended", () => {
+    const row = buildWidgetRows([record({ task_id: "st_susp", status: "running", residency_state: "persisted_only" })])
+    expect(row.length).toBeGreaterThan(0)
+    expect(row[0]).toContain("suspended")
+  })
+
+  it("#given an rpc_detached record #when building a widget row #then it contains suspended", () => {
+    const row = buildWidgetRows([record({ task_id: "st_susp", status: "running", residency_state: "rpc_detached" })])
+    expect(row.length).toBeGreaterThan(0)
+    expect(row[0]).toContain("suspended")
+  })
+
+  it("#given a persisted_only record #when building a background widget row #then it contains suspended", () => {
+    const now = Date.parse("2026-07-07T00:01:00.000Z")
+    const row = backgroundWidgetRows([record({ task_id: "st_susp", status: "running", residency_state: "persisted_only" })], new Map([]), now, () => undefined, 220)[0] ?? ""
+    expect(row).toContain("suspended")
   })
 })
 
@@ -170,5 +270,76 @@ describe("formatTaskRow", () => {
     expect(progress).toContain("...")
     expect(progress).not.toContain("tail")
     expect(rendererVisibleWidth(progress)).toBeLessThanOrEqual(60)
+  })
+})
+
+describe("backgroundWidgetRows not-yet-started grammar", () => {
+  const now = Date.parse("2026-07-07T00:01:00.000Z")
+
+  it("#given a freshly spawned child with zero stats #when the live row renders #then it reads starting with no turn or cost token", () => {
+    const row = backgroundWidgetRows([
+      record({ task_id: "st_fresh", task_summary: "Not yet started child", status: "running", category: "quick" }),
+    ], new Map([]), now, () => ({ runtime_ms: 2_000, turns: 0, tool_calls: 0, failed_turns: 0 }), 220)[0] ?? ""
+
+    expect(row).toContain("starting")
+    expect(row).not.toContain("turn ")
+    expect(row).not.toContain("$")
+  })
+
+  it("#given failed provider attempts #when the live row renders #then the failed counter replaces the turn token and the verb reads retrying", () => {
+    const row = backgroundWidgetRows([
+      record({ task_id: "st_retry", task_summary: "Retrying child", status: "running", category: "deep-low" }),
+    ], new Map([]), now, () => ({
+      runtime_ms: 41_000,
+      turns: 0,
+      tool_calls: 0,
+      failed_turns: 2,
+      token_status: "unavailable",
+      cost_status: "unavailable",
+    }), 220)[0] ?? ""
+
+    expect(row).toContain("failed 2")
+    expect(row).toContain("retrying")
+    expect(row).not.toContain("turn ")
+    expect(row).not.toContain("$")
+  })
+
+  it("#given an ordinary successful run #when the live row renders #then the turn and cost tokens stay exactly as before", () => {
+    const row = backgroundWidgetRows([
+      record({ task_id: "st_ok", task_summary: "Ordinary child", status: "running", category: "quick" }),
+    ], new Map([]), now, () => ({ runtime_ms: 65_000, turns: 3, tool_calls: 5, cost_usd: 0.12, tokens_per_second: 42 }), 220)[0] ?? ""
+
+    expect(row).toContain("turn 3 (5 tools)")
+    expect(row).toContain("$0.1200")
+    expect(row).toContain("42 tok/s")
+  })
+
+  it("#given a child with no stats at all #when the live row renders #then the legacy running default holds", () => {
+    const row = backgroundWidgetRows([
+      record({ task_id: "st_legacy", task_summary: "Legacy child", status: "running", category: "quick" }),
+    ], new Map([]), now, () => undefined, 220)[0] ?? ""
+
+    expect(row).toContain("running")
+    expect(row).not.toContain("starting")
+  })
+
+  it("#given the same stats #when both renderers draw them #then composeStatusLine and the live row emit the same stats tokens", () => {
+    const ordinary = { runtime_ms: 65_000, turns: 3, tool_calls: 5, cost_usd: 0.12, tokens_per_second: 42 }
+    const failedOnly = { runtime_ms: 41_000, turns: 0, tool_calls: 0, failed_turns: 2 }
+    for (const stats of [ordinary, failedOnly]) {
+      const composed = composeStatusLine({ identity: "Ordinary child", target: "category:quick", stats, verb: "running" })
+      const row = backgroundWidgetRows([
+        record({ task_id: "st_agree", task_summary: "Ordinary child", status: "running", category: "quick" }),
+      ], new Map([]), now, () => stats, 220)[0] ?? ""
+
+      const composedTokens = composed.split(" · ").slice(2).filter((token) => token !== "running")
+      const rowTokens = row.split(" · ").slice(2).slice(0, -2)
+      expect(composedTokens).toEqual(rowTokens)
+    }
+
+    // the ordinary shape keeps its turn and cost tokens; the failed-only shape replaces them
+    expect(composeStatusLine({ identity: "t", stats: ordinary, verb: "running" })).toContain("turn 3 (5 tools)")
+    expect(composeStatusLine({ identity: "t", stats: ordinary, verb: "running" })).toContain("$0.1200")
+    expect(composeStatusLine({ identity: "t", stats: failedOnly, verb: "retrying" })).toBe("t · failed 2 · retrying")
   })
 })

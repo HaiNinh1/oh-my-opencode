@@ -35,6 +35,7 @@ function baseRecord(taskId: string, name = taskId): TaskRecord {
     model: "test/model",
     created_at: "2026-07-20T00:00:00.000Z",
     updated_at: "2026-07-20T00:00:00.000Z",
+    notify_on_terminal: false,
     notification: { run_epoch: 0, notified_epoch: -1 },
   }
 }
@@ -145,7 +146,7 @@ describe("claimTaskRecord", () => {
 
   test("#given a claimed record in an isolated process #when a new id is created #then the id floor follows the claim", async () => {
     // given
-    const child = Bun.spawn([process.execPath, claimFloorChildFixturePath], { stdout: "pipe", stderr: "pipe" })
+    const child = Bun.spawn([process.execPath, claimFloorChildFixturePath], { stdout: "pipe", stderr: "pipe", env: { ...process.env } })
 
     // when
     const [exitCode, stdout, stderr] = await Promise.all([

@@ -16,7 +16,6 @@ export const HookNameSchema = z.enum([
   "rules-injector",
   "background-notification",
   "auto-update-checker",
-  "codegraph-bootstrap",
   "ast-grep-sg-provision",
   "startup-toast",
   "keyword-detector",
@@ -42,7 +41,7 @@ export const HookNameSchema = z.enum([
   "no-sisyphus-gpt",
   "no-hephaestus-non-gpt",
   "hephaestus-agents-md-injector",
-  "start-work",
+  "ulw-execute",
   "atlas",
   "unstable-agent-babysitter",
   "task-resume-info",
@@ -61,6 +60,7 @@ export const HookNameSchema = z.enum([
   "legacy-plugin-toast",
   "hermes-routing-guard",
   "hermes-prompt-hardener",
+  "native-edition-nudge",
 ])
 
 export type HookName = z.infer<typeof HookNameSchema>

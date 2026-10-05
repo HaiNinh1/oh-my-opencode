@@ -1,5 +1,6 @@
 import type { AvailableCategory, AvailableSkill } from "../../agents/dynamic-agent-prompt-builder"
 import { mergeCategories } from "../../shared/merge-categories"
+import { CATEGORY_CALLER_GUIDANCE } from "./builtin-categories"
 import { CATEGORY_DESCRIPTIONS } from "./constants"
 import type { DelegateTaskToolOptions } from "./types"
 
@@ -10,13 +11,19 @@ export interface DelegateTaskPresentation {
   description: string
 }
 
-export function createDelegateTaskPresentation(options: DelegateTaskToolOptions): DelegateTaskPresentation {
+type DelegateTaskPresentationOptions = Pick<
+  DelegateTaskToolOptions,
+  "availableCategories" | "availableSkills" | "userCategories"
+>
+
+export function createDelegateTaskPresentation(options: DelegateTaskPresentationOptions): DelegateTaskPresentation {
   const { userCategories } = options
   const allCategories = mergeCategories(userCategories)
   const categoryEntries = Object.entries(allCategories).map(([name, categoryConfig]) => ({
     name,
     categoryConfig,
     description: userCategories?.[name]?.description || CATEGORY_DESCRIPTIONS[name],
+    callerGuidance: CATEGORY_CALLER_GUIDANCE[name],
   }))
   const categoryNames = categoryEntries.map(({ name }) => name)
   const categoryExamples = categoryNames.join(", ")
@@ -32,8 +39,10 @@ export function createDelegateTaskPresentation(options: DelegateTaskToolOptions)
 
   const availableSkills: AvailableSkill[] = options.availableSkills ?? []
 
-  const categoryList = categoryEntries.map(({ name, description }) => {
-    return description ? `  - ${name}: ${description}` : `  - ${name}`
+  const categoryList = categoryEntries.map(({ name, description, callerGuidance }) => {
+    const categoryLine = description ? `  - ${name}: ${description}` : `  - ${name}`
+    const indentedGuidance = callerGuidance?.replaceAll("\n", "\n    ")
+    return indentedGuidance ? `${categoryLine}\n    ${indentedGuidance}` : categoryLine
   }).join("\n")
 
   const description = `Spawn agent task with category-based or direct agent selection.
@@ -66,8 +75,7 @@ export function createDelegateTaskPresentation(options: DelegateTaskToolOptions)
     Available categories:
   ${categoryList}
   - subagent_type: Use specific agent directly (explore, librarian, oracle, metis, momus)
-  - run_in_background: Optional. Defaults to false (sync, waits). Set true=async (returns a background task ID like \`bg_...\` for \`background_output\`) ONLY for parallel exploration with 5+ independent queries.
-    Sync waits use a 30-minute inactivity window: OpenCode busy/retry/running status resets the window, so this is not a total wall-clock limit.
+  - run_in_background: true is the standard spawn: returns a background task ID like \`bg_...\` at once and the completion notification delivers the result. false blocks this response until the child finishes (a 30-minute inactivity window, reset by OpenCode busy/retry/running status, not a total wall-clock limit); use it only for a short child whose result gates your very next call. Omitted counts as false.
   - task_id: Continuation session id (\`ses_...\`) from task metadata. Continues the same subagent session with FULL CONTEXT PRESERVED; not the background task id (\`bg_...\`).
   - command: The command that triggered this task (optional, for slash command tracking).
 

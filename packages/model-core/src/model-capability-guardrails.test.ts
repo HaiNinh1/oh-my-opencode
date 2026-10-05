@@ -9,16 +9,15 @@ import {
 } from "./model-capability-guardrails"
 
 describe("model-capability-guardrails", () => {
-  test("keeps the current alias registry and built-in requirements aligned with the bundled snapshot", () => {
+  test.each(["gpt-5.6-luna-fast", "gpt-6-luna-fast", "gpt-6-sol-fast", "gpt-6.1-sol", "gpt-6.1-sol-fast"])("keeps %s aligned with its bundled canonical model", (modelID) => {
     const issues = collectModelCapabilityGuardrailIssues({
       snapshot: getBundledModelCapabilitiesSnapshot(bundledModelCapabilitiesSnapshotJson),
     })
 
-    expect(issues).toContainEqual(
+    expect(issues).not.toContainEqual(
       expect.objectContaining({
         kind: "built-in-model-missing-from-snapshot",
-        modelID: "gpt-5.6-luna-fast",
-        canonicalModelID: "gpt-5.6-luna-fast",
+        modelID,
       }),
     )
   })
@@ -28,7 +27,7 @@ describe("model-capability-guardrails", () => {
 
     expect(modelIDs).toEqual([...modelIDs].sort())
     expect(new Set(modelIDs).size).toBe(modelIDs.length)
-    expect(modelIDs).toContain("claude-opus-5")
+    expect(modelIDs).toContain("claude-opus-5-5")
     expect(modelIDs).not.toContain("gpt-5.5")
     expect(modelIDs).toContain("gpt-5.6-sol")
     expect(modelIDs).toContain("kimi-k3")

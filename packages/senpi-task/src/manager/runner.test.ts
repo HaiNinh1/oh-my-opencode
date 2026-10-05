@@ -4,6 +4,7 @@ import type { CreateAgentSessionOptions } from "@code-yeongyu/senpi"
 import type { ChildHandle as InProcessChildHandle, RunnerOutcome } from "../runners/in-process/child-handle"
 import type { ChildSpec } from "../runners/in-process"
 import type { RpcChildHandle, RpcRunnerSpec } from "../runners/types"
+import { resolveChildSessionDir } from "../runners/rpc/spawn"
 import { createInProcessManagedRunner, createRpcManagedRunner, type InProcessRunnerLike, type RpcRunnerLike } from "./runner"
 import type { ManagedStartSpec } from "./types"
 
@@ -61,7 +62,7 @@ describe("createInProcessManagedRunner", () => {
       CreateAgentSessionOptions["modelRuntime"]
     >
     const runner: InProcessRunnerLike = {
-      start: (spec) => {
+      start: async (spec) => {
         captured = spec
         return Promise.resolve(fakeInProcessHandle({ status: "completed", finalResponse: "ok" }))
       },
@@ -80,6 +81,7 @@ describe("createInProcessManagedRunner", () => {
     expect(captured?.agentDir).toBe("/home/user/.senpi/agent")
     expect(captured?.modelRuntime).toBe(modelRuntime)
     expect(captured?.parentSessionId).toBe("parent-1")
+    expect(captured?.sessionDir).toBe(resolveChildSessionDir(managedSpec().stateDir, "st_00000001"))
     expect(outcome).toEqual({ status: "completed", finalResponse: "ok" })
   })
 
@@ -96,14 +98,14 @@ describe("createInProcessManagedRunner", () => {
     const fallbackModels = [
       {
         source: "category",
-        provider: "quotio-openai",
-        model_id: "gpt-5.4-mini-fast",
-        display: "quotio-openai/gpt-5.4-mini-fast",
+        provider: "chatgpt-subscription",
+        model_id: "gpt-5.6-luna-fast",
+        display: "chatgpt-subscription/gpt-5.6-luna-fast",
         reasoning_effort: "minimal",
       },
     ] as const
     const runner: InProcessRunnerLike = {
-      start: (spec) => {
+      start: async (spec) => {
         captured = spec
         return Promise.resolve(fakeInProcessHandle({ status: "completed", finalResponse: "ok" }))
       },
@@ -121,6 +123,41 @@ describe("createInProcessManagedRunner", () => {
     // then
     expect(captured).toMatchObject({ requestedModel, fallbackModels })
   })
+
+  test("#given a managed resume spec #when resumed #then it maps every persisted tool and model fact to ChildSpec", async () => {
+    // given
+    let captured: ChildSpec | undefined
+    let capturedPath: string | undefined
+    const runner: InProcessRunnerLike = {
+      start: () => Promise.resolve(fakeInProcessHandle({ status: "completed", finalResponse: "ok" })),
+      resume: (spec, sessionPath) => {
+        captured = spec
+        capturedPath = sessionPath
+        return Promise.resolve(fakeInProcessHandle({ status: "completed", finalResponse: "ok" }))
+      },
+    }
+    const managed = createInProcessManagedRunner(runner)
+    const resolvedModel = {
+      source: "agent",
+      provider: "anthropic",
+      model_id: "claude",
+      display: "Claude",
+    } as const
+
+    // when
+    await managed.resume?.({
+      ...managedSpec(),
+      resolvedModel,
+      toolDenylist: ["write"],
+      memberScopedToolNames: ["team_ping"],
+    }, "/tmp/session.jsonl")
+
+    // then
+    expect(capturedPath).toBe("/tmp/session.jsonl")
+    expect(captured?.resolvedModel).toEqual(resolvedModel)
+    expect(captured?.toolDenylist).toEqual(["write"])
+    expect(captured?.memberScopedToolNames).toEqual(["team_ping"])
+  })
 })
 
 describe("createRpcManagedRunner", () => {
@@ -128,7 +165,7 @@ describe("createRpcManagedRunner", () => {
     // given
     let captured: RpcRunnerSpec | undefined
     const runner: RpcRunnerLike = {
-      start: (spec) => {
+      start: async (spec) => {
         captured = spec
         return fakeRpcHandle()
       },
@@ -148,7 +185,7 @@ describe("createRpcManagedRunner", () => {
     // given
     let captured: RpcRunnerSpec | undefined
     const runner: RpcRunnerLike = {
-      start: (spec) => {
+      start: async (spec) => {
         captured = spec
         return fakeRpcHandle()
       },
@@ -161,6 +198,30 @@ describe("createRpcManagedRunner", () => {
     // then: a separate OS process cannot share the parent's registry, so the model rides the spec
     expect(captured?.model).toBe("anthropic/claude")
   })
+
+  test("#given a managed spec with fallback models #when started #then the rpc spec carries them as selectors in order, thinking included", async () => {
+    // given
+    let captured: RpcRunnerSpec | undefined
+    const runner: RpcRunnerLike = {
+      start: async (spec) => {
+        captured = spec
+        return fakeRpcHandle()
+      },
+    }
+    const managed = createRpcManagedRunner(runner)
+
+    // when
+    await managed.start({
+      ...managedSpec(),
+      fallbackModels: [
+        { source: "category", provider: "openai", model_id: "gpt-5.6-sol", display: "GPT", reasoning: "high" },
+        { source: "category", provider: "zai", model_id: "glm-5.3", display: "GLM" },
+      ],
+    })
+
+    // then
+    expect(captured?.fallbackModels).toEqual(["openai/gpt-5.6-sol:high", "zai/glm-5.3"])
+  })
 })
 
 describe("variant threading", () => {
@@ -168,7 +229,7 @@ describe("variant threading", () => {
     // given
     let captured: RpcRunnerSpec | undefined
     const runner: RpcRunnerLike = {
-      start: (spec) => {
+      start: async (spec) => {
         captured = spec
         return fakeRpcHandle()
       },
@@ -186,7 +247,7 @@ describe("variant threading", () => {
     // given
     let captured: RpcRunnerSpec | undefined
     const runner: RpcRunnerLike = {
-      start: (spec) => {
+      start: async (spec) => {
         captured = spec
         return fakeRpcHandle()
       },

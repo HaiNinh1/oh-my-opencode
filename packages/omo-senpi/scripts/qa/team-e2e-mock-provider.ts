@@ -5,6 +5,8 @@
 // thread so a static script can address the run team-core minted, and writes observation files so the
 // driver can assert cross-session delivery (lead->member envelope, member->lead custom message) without
 // scraping a background child's transcript.
+import { resolveProjectStateDirectory } from "../../../senpi-task/src/store/project-state-directory.ts"
+
 declare const process: {
   argv: string[]
   cwd(): string
@@ -41,6 +43,7 @@ type MockStep =
   | { type: "text"; text: string }
   | { type: "tool_call"; name: string; arguments: Record<string, unknown>; id?: string }
   | { type: "hang" }
+  | { type: "wait_for_liveness" }
 
 type MockScript = Record<string, MockStep[]>
 
@@ -184,10 +187,11 @@ function extractLine(text: string, needle: string): string {
 // message into its own live inbox, standing in for a prior live delivery that failed and released its
 // message back to unread. The lead's later live send then drives the revive-unread-injection path,
 // which must drain this backlog to zero. The inbox is located from OUR run's runtime tree so the seed
-// lands in the exact inbox team-core minted (never a guessed path).
+// lands in the exact inbox team-core minted (never a guessed path). This runs inside the member, whose
+// engine resolved the task state dir from this same process env.
 function seedDuraBacklog(cwd: string): void {
   const obsDir = process.env.OMO_TEAM_E2E_OBS
-  const runtimeRoot = join(cwd, ".omo", "senpi-task", "teams", "runtime")
+  const runtimeRoot = join(resolveProjectStateDirectory(cwd, "senpi-task", { env: process.env }), "teams", "runtime")
   if (!existsSync(runtimeRoot)) return
   for (const runId of readdirSync(runtimeRoot)) {
     const inboxDir = join(runtimeRoot, runId, "inboxes", "dura")
@@ -205,7 +209,10 @@ function seedDuraBacklog(cwd: string): void {
 
 const roleCallCounts = new Map<string, number>()
 
-function stepToAssistantMessage(step: Exclude<MockStep, { type: "hang" }>, callCount: number): AssistantMessage {
+function stepToAssistantMessage(
+  step: Exclude<MockStep, { type: "hang" } | { type: "wait_for_liveness" }>,
+  callCount: number,
+): AssistantMessage {
   const content: AssistantContent[] = step.type === "text"
     ? [{ type: "text", text: step.text }]
     : [{ type: "toolCall", id: step.id ?? `omo-mock-tool-${callCount}`, name: step.name, arguments: step.arguments }]
@@ -234,7 +241,7 @@ function streamMockResponse(_model: Model<Api>, context: Context, options?: Simp
   if (role === "dura" && index === 0) seedDuraBacklog(cwd)
   const step = resolvePlaceholders(steps[Math.min(index, steps.length - 1)], text)
   if (step.type === "hang") return streamHangingResponse(index + 1, options)
-  const message = stepToAssistantMessage(step, index + 1)
+  const message = stepToAssistantMessage(resolveEventWait(step, text), index + 1)
 
   queueMicrotask(() => {
     if (options?.signal?.aborted) {
@@ -260,6 +267,22 @@ function streamMockResponse(_model: Model<Api>, context: Context, options?: Simp
   })
 
   return stream
+}
+
+function resolveEventWait(
+  step: Exclude<MockStep, { type: "hang" }>,
+  text: string,
+): Exclude<MockStep, { type: "hang" } | { type: "wait_for_liveness" }> {
+  if (step.type !== "wait_for_liveness") return step
+  if (text.includes("senpi-task.team-member-liveness") || text.includes("Team member liveness:")) {
+    return { type: "text", text: "structured member liveness observed" }
+  }
+  const boundary = resolvePlaceholders(
+    { type: "tool_call", name: "task_list", arguments: { team_run_id: "__TEAM_RUN_ID__" } },
+    text,
+  )
+  if (boundary.type !== "tool_call") throw new Error("liveness boundary did not resolve to a tool call")
+  return boundary
 }
 
 function streamHangingResponse(callCount: number, options?: SimpleStreamOptions) {
@@ -370,6 +393,15 @@ if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.a
       "Created task 7.",
     )
     if (withTask.type !== "tool_call" || withTask.arguments.task_id !== "7") throw new Error("task id resolution failed")
+    const waiting = resolveEventWait(
+      { type: "wait_for_liveness" },
+      "Created team 'crashteam' (run-xyz).",
+    )
+    if (waiting.type !== "tool_call" || waiting.arguments.team_run_id !== "run-xyz") {
+      throw new Error("liveness wait should create a real tool boundary")
+    }
+    const observed = resolveEventWait({ type: "wait_for_liveness" }, "senpi-task.team-member-liveness")
+    if (observed.type !== "text") throw new Error("liveness wait should settle after the structured message")
     console.log("SELF-TEST OK")
   }
 }

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 
 import type { Theme, ThemeColor } from "@code-yeongyu/senpi"
 
+import "./residency-unlimited.test"
 import { createTaskLifecycle } from "../lifecycle"
 import type { ResidentHandle, ResidencyRegistry } from "../lifecycle"
 import type { ResolvedModelRecord } from "../state"
@@ -25,6 +26,7 @@ import {
 } from "./__fixtures__/manager-fakes"
 import { createTaskManager } from "./manager"
 import type { ChildPlanner, ManagedRunner, SpawnAdmission, TaskManager } from "./types"
+import { NO_HOST_ENDPOINT } from "../lifecycle/host-session"
 
 const RENDERER_THEME = {
   fg: (_color: ThemeColor, text: string) => text,
@@ -64,7 +66,7 @@ function makeLifecycleManager(runner: ManagedRunner, config = settings({ default
     forget: (taskId) => getManager().forget(taskId),
     hasPendingSends: () => false,
   }
-  const lifecycle = createTaskLifecycle({ store, registry, config })
+  const lifecycle = createTaskLifecycle({ hostEndpoint: NO_HOST_ENDPOINT, store, registry, config })
   const manager = createTaskManager({
     store,
     runners: { "in-process": runner, process: runner },
@@ -172,7 +174,7 @@ describe("TaskManager.start", () => {
     expect(result.kind).toBe("start_failed")
     if (result.kind !== "start_failed") throw new Error("expected start_failed")
     expect(store.load(result.task_id)?.status).toBe("error")
-    const jsonl = readFileSync(join(project, ".omo", "senpi-task", "logs", `${result.task_id}.jsonl`), "utf8")
+    const jsonl = readFileSync(join(store.stateDir, "logs", `${result.task_id}.jsonl`), "utf8")
     expect(jsonl).toContain("error")
 
     // and the slot drained: a healthy runner can now start
@@ -246,8 +248,9 @@ describe("TaskManager.start", () => {
 
     const rawRecord = readFileSync(join(store.stateDir, "tasks", `${result.task_id}.json`), "utf8")
     expect(rawRecord).toContain('"resolved_model"')
-    expect(rawRecord).not.toContain("private prompt payload")
-    expect(rawRecord).not.toContain('"prompt"')
+    // The spawn_spec v1 persisted at spawn deliberately carries the effective prompt for respawn
+    // rebuilds; message transcripts still never land on the record.
+    expect(rawRecord).toContain("private prompt payload")
     expect(rawRecord).not.toContain('"messages"')
   })
 

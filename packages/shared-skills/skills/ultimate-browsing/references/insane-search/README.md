@@ -16,7 +16,8 @@
 1. WebFetch, 즉흥 curl, 수동 헤더 조합 **시도 금지**
 2. 즉시 다음을 실행:
    ```bash
-   python3 -m engine "<URL>" [--selector "<CSS>"] [--device auto|desktop|mobile] [--trace]
+   python3 -m engine "<URL>" [--selector "<CSS>"] [--device auto|desktop|mobile] [--trace] \
+                              [--no-retry] [--no-extract]
    ```
 3. 종료코드 0(ok) 또는 1(fail) 받은 뒤 판단. trace를 먼저 읽고 재시도 결정.
 4. 실패 시에만 `--trace --json`으로 재호출해서 원인 진단 후 `--device` 또는 `user_hint` 조정.
@@ -71,9 +72,9 @@
 |------------|------|
 | URL 제공 (`https://...`) | → Phase 0 검사 후 없으면 Phase 1 (generic fetch chain) |
 | 핸들 제공 (`@username`) | → Phase 0 syndication/API |
-| 키워드만 ("X에서 AI 검색") | → WebSearch(`site:{domain} {keyword}`) 먼저 → URL 확보 후 재진입 |
+| 키워드만 ("X에서 AI 검색") | → 웹 검색 도구(`site:{domain} {keyword}`) 먼저 → URL 확보 후 재진입 |
 
-> **한국어 신규 콘텐츠 한계**: 네이버/다음/한국 커뮤니티의 키워드 검색은 WebSearch 경유가 유일하며, 신규 콘텐츠 인덱싱이 지연될 수 있다.
+> **한국어 신규 콘텐츠 한계**: 네이버/다음/한국 커뮤니티의 키워드 검색은 웹 검색 도구 경유가 유일하며, 신규 콘텐츠 인덱싱이 지연될 수 있다.
 
 ## Phase 0 — 플랫폼 공식 API 인덱스
 
@@ -83,7 +84,7 @@
 
 | 플랫폼 | 방법 | 상세 |
 |--------|------|------|
-| X/Twitter | syndication (타임라인) + oEmbed (개별 트윗) + 키워드 검색: WebSearch → oEmbed | [twitter.md](twitter.md) |
+| X/Twitter | syndication (타임라인) + oEmbed (개별 트윗) + 키워드 검색: 웹 검색 도구 → oEmbed | [twitter.md](twitter.md) |
 | Reddit | URL + `.json` + Mobile UA | [json-api.md](json-api.md) |
 | Bluesky | AT Protocol (`public.api.bsky.app/xrpc/...`) | [public-api.md](public-api.md) |
 | Mastodon | 인스턴스별 공개 API | [public-api.md](public-api.md) |
@@ -135,7 +136,13 @@ result = fetch(
 
 if result.ok:
     print(result.verdict)     # strong_ok | weak_ok
-    html = result.content
+    html = result.content     # raw body — 단, content-rescue가 발동한 경우 구조 텍스트
+    # v0.10.0 content-rescue: PDF 응답은 pypdf 추출 텍스트, visible text가 얇은
+    # SPA 셸은 JSON-LD articleBody / 렌더된 innerText로 대체될 수 있다.
+    # result.extraction_source로 판별: "raw"(원문 그대로) | pdf | json_ld | *+inner_text.
+    # 일반 HTML 성공은 항상 raw. 끄기: enable_extraction=False / --no-extract.
+    # 429/502/503/504는 probe에서 백오프 재시도(Retry-After 반영, 총 10초 캡);
+    # 끄기: enable_retry=False / --no-retry.
 else:
     # Phase 3 수동 개입 (Playwright MCP) 필요 — result.trace로 원인 진단
     pass
@@ -216,11 +223,11 @@ result = fetch(
 python3 -c "import curl_cffi, bs4, yaml" 2>/dev/null || pip install curl_cffi beautifulsoup4 pyyaml -q
 ```
 
-Playwright 로컬 경로 사용 시 Node가 필요:
-```bash
-npm i -g playwright playwright-extra puppeteer-extra-plugin-stealth
-npx playwright install chrome
-```
+브라우저를 직접 제어할 때는 js eval에서 omowright를 쓴다(`browser` 스킬에 스테이징됨):
+직접 띄우는 브라우저는 `connectPipe` / 스텔스는 `connectCloakProfile`(CloakBrowser),
+사용자가 로그인해 둔 브라우저는 `connectBrowserSkill`. 이 엔진의 Playwright 템플릿은
+Tier 1 추출 폴백 전용이며 에이전트가 직접 브라우저를 다루는 경로가 아니다.
+인증이 필요한 페이지는 사용자 프로필을 복제하지 말고 attached 엔진으로 간다.
 
 ## 빠른 참조 — Phase 0 명령어
 
@@ -301,7 +308,7 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "en,ko" --skip-download -o "/tmp/
 |------|-------------|-----------------|
 | [`json-api.md`](json-api.md) | Reddit/Wikipedia/HN/npm/PyPI 등 **URL 변형만으로** JSON을 주는 사이트 | Reddit `/json` suffix + Mobile UA, HN Firebase, Algolia Search, Wikipedia REST, npm/PyPI Registry API |
 | [`public-api.md`](public-api.md) | Bluesky/Mastodon/arXiv/Stack Overflow/CrossRef/GitHub/OpenLibrary/Wayback 공식 API 사용 시 | 인증 없이 쓰는 공식 공개 REST/AT/Atom API 엔드포인트, 요청 형식, 공통 파라미터 |
-| [`twitter.md`](twitter.md) | X/Twitter 접근 — 프로필 타임라인, 특정 트윗, 키워드 검색 | `syndication.twitter.com` 타임라인, oEmbed 개별 트윗, 검색은 WebSearch로 URL 확보 후 oEmbed |
+| [`twitter.md`](twitter.md) | X/Twitter 접근 — 프로필 타임라인, 특정 트윗, 키워드 검색 | `syndication.twitter.com` 타임라인, oEmbed 개별 트윗, 검색은 웹 검색 도구로 URL 확보 후 oEmbed |
 | [`naver.md`](naver.md) | 네이버 블로그·뉴스·증권·검색 접근 | 서비스별 우회(블로그는 `m.blog.naver.com` 변환, 증권은 비공식 JSON, 검색은 `search.naver.com`), 한글 검색 쿼리 패턴 |
 | [`media.md`](media.md) | YouTube/Vimeo/Twitch/TikTok/SoundCloud 등 미디어 메타·자막·오디오 필요 시 | `yt-dlp --dump-json` 기반 1,858개 사이트 커버, 자막 다운로드(`--write-sub`), 포맷 선택, 라이브/팟캐스트 |
 

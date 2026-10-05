@@ -1,7 +1,11 @@
 import type { CreateAgentSessionOptions } from "@code-yeongyu/senpi"
 
 import { asSenpiThinkingLevel } from "../senpi/thinking-level"
-import type { InProcessSessionContext, InProcessSessionContextProvider } from "./runner"
+import type {
+  InProcessSessionContext,
+  InProcessSessionContextProvider,
+  ResumeSessionContextResult,
+} from "./runner"
 import type { ManagedStartSpec } from "./types"
 
 // The concrete senpi ModelRegistry the parent session owns. `createAgentSession` needs this exact
@@ -13,6 +17,9 @@ export type ChildModelRegistry = NonNullable<CreateAgentSessionOptions["modelReg
 // undefined before the first live context (headless / early unit runs) so the child falls back to
 // senpi's own default resolution rather than spawning against a half-built registry.
 export type ParentModelRegistryResolver = () => ChildModelRegistry | undefined
+
+// Returns the parent session's project-trust decision, or undefined before the first live context.
+export type ParentProjectTrustResolver = () => boolean | undefined
 
 // The minimal read surface `findModelReference` needs: a `find(provider, modelId)` lookup. The concrete
 // ModelRegistry satisfies it structurally, and a test fake satisfies it without constructing the class.
@@ -29,14 +36,20 @@ type ModelFinder<TModel> = {
  */
 export function createParentRegistrySessionContext(
   resolveRegistry: ParentModelRegistryResolver,
+  resolveProjectTrust: ParentProjectTrustResolver = () => undefined,
 ): InProcessSessionContextProvider {
-  return (spec: ManagedStartSpec): InProcessSessionContext => {
+  const trust = (): Pick<InProcessSessionContext, "projectTrusted"> => {
+    const projectTrusted = resolveProjectTrust()
+    return projectTrusted === undefined ? {} : { projectTrusted }
+  }
+  const provide = (spec: ManagedStartSpec): InProcessSessionContext => {
     const registry = resolveRegistry()
-    if (registry === undefined) return {}
+    if (registry === undefined) return trust()
     const model = spec.model === undefined ? undefined : findModelReference(registry, spec.model)
     const modelRuntime = registry.modelRuntime
     const thinkingLevel = asSenpiThinkingLevel(spec.variant)
     return {
+      ...trust(),
       modelRegistry: registry,
       authStorage: registry.authStorage,
       ...(modelRuntime !== undefined && { modelRuntime }),
@@ -44,6 +57,12 @@ export function createParentRegistrySessionContext(
       ...(thinkingLevel !== undefined && { thinkingLevel }),
     }
   }
+  return Object.assign(provide, {
+    resolveResumeContext: (spec: ManagedStartSpec): ResumeContextResult => {
+      const resolved = resolveResumeContext(resolveRegistry, spec)
+      return resolved.ok ? { ok: true, context: { ...trust(), ...resolved.context } } : resolved
+    },
+  })
 }
 
 /**
@@ -56,3 +75,49 @@ export function findModelReference<TModel>(registry: ModelFinder<TModel>, modelR
   if (slash <= 0 || slash === modelReference.length - 1) return undefined
   return registry.find(modelReference.slice(0, slash), modelReference.slice(slash + 1))
 }
+
+/**
+ * Resume-time model resolution that FAILS CLOSED: the exact persisted provider+model_id must
+ * resolve in the live registry, else `{ok: false, code: "model_unavailable"}`. Resume NEVER
+ * silently drifts to senpi's default model, and the caller must surface the failure as a retryable
+ * `deferred` outcome. The resolver keys on `resolved_model.provider` + `resolved_model.model_id`
+ * (threaded onto ManagedStartSpec by todo 5) and never on `resolved_model.display`, which is a
+ * human string that can differ from the registry id. Does NOT mutate the record.
+ */
+export function resolveResumeContext(
+  resolveRegistry: ParentModelRegistryResolver,
+  spec: ManagedStartSpec,
+): ResumeContextResult {
+  const registry = resolveRegistry()
+  if (registry === undefined) {
+    return { ok: false, code: "model_unavailable", reason: "no live parent model registry available" }
+  }
+
+  const resolvedModel = spec.resolvedModel
+  if (resolvedModel === undefined) {
+    return { ok: false, code: "model_unavailable", reason: "spec carries no resolved_model to match against" }
+  }
+
+  // Key on the canonical provider+model_id pair, NOT on the display string.
+  const model = registry.find(resolvedModel.provider, resolvedModel.model_id)
+  if (model === undefined) {
+    return {
+      ok: false,
+      code: "model_unavailable",
+      reason: `provider "${resolvedModel.provider}" model "${resolvedModel.model_id}" not found in the live registry`,
+    }
+  }
+
+  const modelRuntime = registry.modelRuntime
+  const thinkingLevel = asSenpiThinkingLevel(spec.variant)
+  const context: InProcessSessionContext = {
+    modelRegistry: registry,
+    authStorage: registry.authStorage,
+    ...(modelRuntime !== undefined && { modelRuntime }),
+    model,
+    ...(thinkingLevel !== undefined && { thinkingLevel }),
+  }
+  return { ok: true, context }
+}
+
+export type ResumeContextResult = ResumeSessionContextResult

@@ -11,10 +11,54 @@ function pendingRecord(): TaskRecord {
     depth: 0,
     execution_mode: "direct",
     model: "gpt-5.2",
+    notify_on_terminal: false,
   })
 }
 
 describe("transitionTaskRecord lifecycle graph", () => {
+  test("#given a pending task without launch facts #when start commits and later transitions or reconciliation lose it #then started_at is stamped and preserved", () => {
+    // given - launch evidence must exist even without pid or child_session_id.
+    const pending = pendingRecord()
+    const startedAt = "2026-07-06T00:00:00.000Z"
+    expect(pending).not.toHaveProperty("started_at")
+
+    // when
+    const started = transitionTaskRecord(pending, { type: "start", timestamp: startedAt })
+
+    // then
+    expect(started.applied).toBe(true)
+    expect(started.record).toMatchObject({ status: "running", started_at: startedAt })
+    const timestamp = "2026-07-06T00:00:01.000Z"
+    const later: readonly TaskTransition[] = [
+      { type: "complete", timestamp, final_response: "done" },
+      { type: "fail", timestamp, error_message: "failed" },
+      { type: "cancel", timestamp },
+      { type: "interrupt", timestamp },
+      { type: "evict", timestamp },
+      { type: "dispose", timestamp },
+      { type: "persist_only", timestamp },
+      { type: "detach_rpc", timestamp },
+      { type: "mark_resident", timestamp },
+    ]
+    for (const transition of later) {
+      const result = transitionTaskRecord(started.record, transition)
+      expect(result.applied).toBe(true)
+      expect(result.record).toHaveProperty("started_at", startedAt)
+    }
+    // Ordinary lose is intentionally rejected; only reconciliation may mark a task lost.
+    const rejected = transitionTaskRecord(started.record, { type: "lose", timestamp, error_message: "lost" })
+    expect(rejected.applied).toBe(false)
+    expect(rejected.record).toHaveProperty("started_at", startedAt)
+    const lost = markRecordLostForReconciliation(started.record, { timestamp, error_message: "owner died" })
+    expect(lost.applied).toBe(true)
+    expect(lost.record).toMatchObject({ status: "lost", started_at: startedAt })
+    const refreshed = markRecordLostForReconciliation(lost.record, { timestamp, error_message: "still lost", updateReason: true })
+    expect(refreshed.applied).toBe(true)
+    expect(refreshed.record).toHaveProperty("started_at", startedAt)
+    expect(markRecordLostForReconciliation(pending, { timestamp, error_message: "queued owner died" }).record)
+      .not.toHaveProperty("started_at")
+  })
+
   test("#given pending task #when running-only terminals (complete/fail/interrupt) arrive before start #then they are rejected", () => {
     // given
     // cancel-from-pending is legal (see the w2trans suite below); complete/fail/interrupt stay running-only.
@@ -343,5 +387,124 @@ describe("transitionTaskRecord cancel-from-pending", () => {
     expect(result.applied).toBe(true)
     expect(result.record.status).toBe("cancelled")
     expect(result.record.error_message).toBe("cancelled while queued")
+  })
+})
+
+describe("transitionTaskRecord suspension residency", () => {
+  test("#given a running record with host and child pids #when persist_only arrives #then status and run epoch survive while both pids clear", () => {
+    // given
+    const started = transitionTaskRecord(pendingRecord(), {
+      type: "start",
+      timestamp: "2026-07-06T00:00:00.000Z",
+      pid: 4321,
+    }).record
+    const running: TaskRecord = {
+      ...started,
+      host_pid: 777,
+      child_session_id: "01a0815e-child-session",
+      notification: { run_epoch: 3, notified_epoch: 1 },
+    }
+
+    // when
+    const result = transitionTaskRecord(running, {
+      type: "persist_only",
+      timestamp: "2026-07-06T00:00:01.000Z",
+    })
+
+    // then
+    expect(result.applied).toBe(true)
+    expect(result.record.status).toBe("running")
+    expect(result.record.residency_state).toBe("persisted_only")
+    expect(result.record.host_pid).toBeUndefined()
+    expect("host_pid" in result.record).toBe(false)
+    expect(result.record.pid).toBeUndefined()
+    expect("pid" in result.record).toBe(false)
+    expect(result.record.child_session_id).toBe("01a0815e-child-session")
+    expect(result.record.notification).toEqual({ run_epoch: 3, notified_epoch: 1 })
+  })
+
+  test("#given a running rpc record #when detach_rpc arrives #then the last pid is retained for orphan detection while host ownership clears", () => {
+    // given
+    const started = transitionTaskRecord(pendingRecord(), {
+      type: "start",
+      timestamp: "2026-07-06T00:00:00.000Z",
+      pid: 4321,
+    }).record
+    const running: TaskRecord = { ...started, host_pid: 777 }
+
+    // when
+    const result = transitionTaskRecord(running, {
+      type: "detach_rpc",
+      timestamp: "2026-07-06T00:00:01.000Z",
+    })
+
+    // then
+    expect(result.applied).toBe(true)
+    expect(result.record.status).toBe("running")
+    expect(result.record.residency_state).toBe("rpc_detached")
+    expect(result.record.host_pid).toBeUndefined()
+    expect("host_pid" in result.record).toBe(false)
+    expect(result.record.pid).toBe(4321)
+  })
+
+  test("#given a completed record with terminal fields and run stats #when persist_only arrives #then every terminal fact survives", () => {
+    // given
+    const runStats = { runtime_ms: 1200, turns: 2, tool_calls: 3, output_tokens: 10 }
+    const running = transitionTaskRecord(pendingRecord(), {
+      type: "start",
+      timestamp: "2026-07-06T00:00:00.000Z",
+      pid: 4321,
+    }).record
+    const completed: TaskRecord = {
+      ...transitionTaskRecord(running, {
+        type: "complete",
+        timestamp: "2026-07-06T00:00:01.000Z",
+        final_response: "shipped",
+        run_stats: runStats,
+      }).record,
+      host_pid: 777,
+    }
+
+    // when
+    const result = transitionTaskRecord(completed, {
+      type: "persist_only",
+      timestamp: "2026-07-06T00:00:02.000Z",
+    })
+
+    // then
+    expect(result.applied).toBe(true)
+    expect(result.record.status).toBe("completed")
+    expect(result.record.residency_state).toBe("persisted_only")
+    expect(result.record.final_response).toBe("shipped")
+    expect(result.record.run_stats).toEqual(runStats)
+    expect(result.record.host_pid).toBeUndefined()
+  })
+
+  test("#given a suspended running record #when a late complete arrives #then terminal fields still land and residency stays suspended", () => {
+    // given
+    const running = transitionTaskRecord(pendingRecord(), {
+      type: "start",
+      timestamp: "2026-07-06T00:00:00.000Z",
+      pid: 4321,
+    }).record
+    const suspended = transitionTaskRecord(
+      { ...running, host_pid: 777 },
+      { type: "persist_only", timestamp: "2026-07-06T00:00:01.000Z" },
+    ).record
+
+    // when
+    const lateComplete = transitionTaskRecord(suspended, {
+      type: "complete",
+      timestamp: "2026-07-06T00:00:02.000Z",
+      final_response: "finished while suspended",
+      run_stats: { runtime_ms: 50, turns: 1, tool_calls: 0 },
+    })
+
+    // then
+    expect(lateComplete.applied).toBe(true)
+    expect(lateComplete.record.status).toBe("completed")
+    expect(lateComplete.record.residency_state).toBe("persisted_only")
+    expect(lateComplete.record.final_response).toBe("finished while suspended")
+    expect(lateComplete.record.run_stats).toEqual({ runtime_ms: 50, turns: 1, tool_calls: 0 })
   })
 })

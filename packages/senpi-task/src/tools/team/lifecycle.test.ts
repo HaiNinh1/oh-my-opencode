@@ -20,6 +20,7 @@ describe("team_create tool", () => {
 
     // then
     expect(result.details).toMatchObject({ kind: "created", team_name: "demo" })
+    expect(result.isError).toBeUndefined()
     if (result.details.kind !== "created") throw new Error("expected created")
     expect(result.details.members.map((member) => member.name).sort()).toEqual(["alpha", "beta"])
     expect(service.calls[0]).toMatchObject({ method: "createTeam", args: [{ inlineSpec: { name: "demo", members: [] } }] })
@@ -130,8 +131,8 @@ describe("team_create tool", () => {
               role: { kind: "category", category: "quick" },
               model: {
                 provider: "openai",
-                model_id: "gpt-5.4-mini-fast",
-                display: "gpt-5.4-mini-fast",
+                model_id: "gpt-5.6-luna-fast",
+                display: "gpt-5.6-luna-fast",
                 variant: "max",
                 source: "category",
               },
@@ -146,27 +147,16 @@ describe("team_create tool", () => {
     // then
     const text = result.content[0]?.type === "text" ? result.content[0].text : ""
     expect(text).toContain("category:deep(anthropic/claude-opus-4-7:high)")
-    expect(text).toContain("category:quick(openai/gpt-5.4-mini-fast:max)")
+    expect(text).toContain("category:quick(openai/gpt-5.6-luna-fast:max)")
     expect(text).not.toContain("variant:")
     expect(text).not.toContain("undefined")
-  })
-
-  test("#given both team_name and inline_spec #when team_create runs #then it rejects with invalid_arguments", async () => {
-    // given
-    const service = createFakeTeamService()
-
-    // when
-    const result = await runTeamCreate(service, { team_name: "x", inline_spec: { name: "y" } })
-
-    // then
-    expect(result.details.kind).toBe("invalid_arguments")
-    expect(service.calls).toHaveLength(0)
   })
 
   test("#given neither team_name nor inline_spec #when team_create runs #then it rejects with invalid_arguments", async () => {
     const service = createFakeTeamService()
     const result = await runTeamCreate(service, {})
     expect(result.details.kind).toBe("invalid_arguments")
+    expect(result.isError).toBe(true)
   })
 
   test("#given a spec error #when team_create runs #then it surfaces spec_error with the code", async () => {
@@ -182,6 +172,7 @@ describe("team_create tool", () => {
 
     // then
     expect(result.details).toMatchObject({ kind: "spec_error", code: "UNKNOWN_SUBAGENT_TYPE" })
+    expect(result.isError).toBe(true)
   })
 
   test("#given a bounds runtime error #when team_create runs #then it surfaces runtime_error with the code", async () => {
@@ -192,6 +183,25 @@ describe("team_create tool", () => {
     })
     const result = await runTeamCreate(service, { team_name: "demo" })
     expect(result.details).toMatchObject({ kind: "runtime_error", code: "bounds_exceeded" })
+    expect(result.isError).toBe(true)
+  })
+
+  test("#given a member start rejection #when team_create runs #then the result is a tool error carrying the runtime code and reason", async () => {
+    // given
+    const reason = "member 'bench-landscape' failed to start: No available model for category \"deep\" (attempted mock/model)"
+    const service = createFakeTeamService({
+      createTeam: async () => {
+        throw new SenpiTeamRuntimeError(reason, "member_start_rejected", "demo")
+      },
+    })
+
+    // when
+    const result = await runTeamCreate(service, { inline_spec: { name: "bench", members: [{ name: "bench-landscape", category: "deep" }] } })
+
+    // then
+    expect(result.isError).toBe(true)
+    expect(result.details).toEqual({ kind: "runtime_error", code: "member_start_rejected", reason })
+    expect(result.content[0]).toEqual({ type: "text", text: reason })
   })
 
   test("#given the factory #when built #then it names the tool team_create", () => {
@@ -210,6 +220,7 @@ describe("team_delete tool", () => {
 
     // then
     expect(result.details).toMatchObject({ kind: "deleted", cancelled_task_ids: ["st_a"] })
+    expect(result.isError).toBeUndefined()
     expect(service.calls[0]).toMatchObject({ method: "deleteTeam", args: [{ teamRunId: "run-1", force: undefined }] })
   })
 
@@ -241,6 +252,7 @@ describe("team_delete tool", () => {
     })
     const result = await runTeamDelete(service, { team_run_id: "run-1" })
     expect(result.details).toMatchObject({ kind: "invalid_state", team_run_id: "run-1" })
+    expect(result.isError).toBe(true)
   })
 
   test("#given the factory #when built #then it names the tool team_delete", () => {

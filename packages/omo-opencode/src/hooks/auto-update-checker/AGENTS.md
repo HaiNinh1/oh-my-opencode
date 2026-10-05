@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-27 files. Session Tier hook on `session.created`. Checks the npm registry for newer plugin versions, compares against the installed version, and surfaces update availability via startup toasts. Caches results to avoid repeated registry fetches. Throttled per channel (`latest`, `next`, `beta`). Skips CLI run mode and subagent sessions.
+~41 code files. Session Tier hook on `session.created`. Checks the npm registry for newer plugin versions, compares against the installed version, and surfaces update availability via startup toasts. Caches results to avoid repeated registry fetches. Throttled per channel (`latest`, `next`, `beta`). Skips CLI run mode and subagent sessions.
 
 ## FILE CATALOG
 
@@ -40,9 +40,8 @@ Registered in `create-session-hooks.ts` as `autoUpdateChecker`. Part of the Sess
 
 ## RELATED
 
-Three `zauc-mocks-*` directories in `src/hooks/` exist specifically to test this hook with mocked dependencies:
+Two `zauc-mocks-*` directories in `src/hooks/` exist specifically to test this hook with mocked dependencies (hook orchestration, including CLI run mode, is covered by `hook.test.ts` here):
 - `zauc-mocks-cache/` -- tests cache invalidation paths
-- `zauc-mocks-hook/` -- tests hook orchestration with mocked submodules
 - `zauc-mocks-bg/` -- tests background check scheduling
 
 ## CROSS-REFERENCES

@@ -1,20 +1,25 @@
 import { randomUUID } from "node:crypto"
 
-import { defineTool, type AgentToolResult, type ToolDefinition } from "@code-yeongyu/senpi"
+import type { AgentToolResult, ToolDefinition } from "@code-yeongyu/senpi"
 import type { TeamModeConfig } from "@oh-my-opencode/team-core/config"
 import { sendMessage } from "@oh-my-opencode/team-core/team-mailbox"
-import { Type, type Static } from "typebox"
+import type { Static, TSchema } from "typebox"
 
 import type { PersistedTaskEvent } from "../../store"
 import { toolResult } from "../../tools/control/tool-result"
 import { buildTeamMessage } from "../messaging/message"
 import { TEAM_LEAD_SENTINEL } from "../normalize"
 
-export const MemberTaskSendParams = Type.Object({
-  to: Type.String({ description: "Recipient member name or lead." }),
-  message: Type.String({ description: "Message body." }),
-  summary: Type.Optional(Type.String({ description: "Optional short summary." })),
-})
+// Static JSON Schema keeps a second schema-builder runtime off every cold RPC member boot.
+export const MemberTaskSendParams = {
+  type: "object",
+  required: ["to", "message"],
+  properties: {
+    to: { type: "string", description: "Recipient member name or lead." },
+    message: { type: "string", description: "Message body." },
+    summary: { type: "string", description: "Optional short summary." },
+  },
+} as const satisfies TSchema
 
 export type MemberTaskSendInput = Static<typeof MemberTaskSendParams>
 
@@ -82,11 +87,14 @@ export async function runMemberTaskSend(
 export function createMemberTaskSendTool(
   deps: MemberTaskSendDeps,
 ): ToolDefinition<typeof MemberTaskSendParams, MemberTaskSendDetails> {
-  return defineTool({
+  // Returned as a plain literal: senpi's defineTool is an identity helper for type inference
+  // (pinned by the senpi API tripwire), so wrapping here would only statically bind this module
+  // to the engine barrel.
+  return {
     name: "task_send",
     label: "Task Send",
     description: "Send a durable message to another team member or the team lead.",
     parameters: MemberTaskSendParams,
     execute: (_toolCallId, params) => runMemberTaskSend(deps, params),
-  })
+  }
 }

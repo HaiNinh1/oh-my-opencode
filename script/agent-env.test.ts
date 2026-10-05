@@ -19,20 +19,27 @@ describe("agent dev-environment scripts", () => {
       expect(body).toContain("set -euo pipefail")
     })
 
-    test("#given the bootstrap #when it runs #then it verifies tools, installs, and conditionally builds", () => {
-      const body = readFileSync(setup, "utf8")
+    test("#given the CI-pinned Bun version #when setup.sh, the devcontainer image, and CI are compared #then all three pin the same version", () => {
+      // given
+      const setupPin = readFileSync(setup, "utf8").match(/expected_bun="([^"]+)"/)?.[1]
+      const dockerfilePin = readFileSync(join(REPO_ROOT, ".devcontainer", "Dockerfile"), "utf8").match(
+        /bash -s "bun-v([^"]+)"/,
+      )?.[1]
+      const ciPins = [
+        ...readFileSync(join(REPO_ROOT, ".github", "workflows", "ci.yml"), "utf8").matchAll(
+          /bun-version:\s*"([^"]+)"/g,
+        ),
+      ].map((match) => match[1])
 
-      expect(body).toContain("command -v") // tool presence check
-      expect(body).toContain("bun node git") // required toolchain verified
-      expect(body).toContain("tmux") // non-fatal warning path
-      expect(body).toContain("bun install")
-      expect(body).toContain("bun run build")
-      expect(body).toContain("OMO_AGENT_FORCE_BUILD") // idempotent skip-build guard
-      expect(body).toContain(".env") // credential sourcing
-      expect(body).toContain("--ignore-scripts")
-      expect(body).toContain("1.3.12")
-      expect(body).toContain("submodule update --init") // provenance submodules
-      expect(body).toContain("materialize-frontend-refs") // frontend ref materialize
+      // then
+      expect(setupPin, "setup.sh must declare expected_bun").toBeDefined()
+      expect(dockerfilePin, ".devcontainer/Dockerfile must pin an explicit bun-v<version>").toBeDefined()
+      expect(ciPins.length, "ci.yml must pin bun-version").toBeGreaterThan(0)
+      // The devcontainer image and the setup.sh drift warning must both track CI.
+      for (const ciPin of new Set(ciPins)) {
+        expect(ciPin, "every ci.yml bun-version must match the devcontainer pin").toBe(dockerfilePin as string)
+      }
+      expect(setupPin).toBe(dockerfilePin as string)
     })
   })
 

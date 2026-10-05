@@ -8,6 +8,8 @@ export type ChildExitInput = {
   readonly error?: Error
   readonly pid?: number
   readonly stderr: string
+  /** Set when the runner itself asked the child to stop (`terminate()`): the only source of a signal-less kill. */
+  readonly terminatedByRunner?: boolean
 }
 
 /** Keep only the last `cap` characters of a stderr buffer (default 4KB). */
@@ -17,8 +19,8 @@ export function tailStderr(stderr: string, cap: number = STDERR_TAIL_CAP): strin
 
 /**
  * Classify how a child process ended into a discriminated exit outcome. A
- * spawn error dominates; then exit-by-signal is `killed`; a zero code is
- * `clean`; any other code is `crashed`.
+ * spawn error dominates; then a runner-issued termination or an exit by signal
+ * is `killed`; a zero code is `clean`; any other code is `crashed`.
  */
 export function classifyChildExit(input: ChildExitInput): ChildExitOutcome {
   const facts: ChildExitFacts = {
@@ -30,7 +32,10 @@ export function classifyChildExit(input: ChildExitInput): ChildExitOutcome {
   if (input.error) {
     return { kind: "spawn_error", message: input.error.message, facts }
   }
-  if (input.signal !== null) {
+  // A kill is either one the runner issued or one that carries its signal (POSIX). A signal-less exit the
+  // runner did not ask for (on Windows, TerminateProcess from outside) cannot be told from a crash, and
+  // stderr is never read to guess: teardown can write diagnostics into it (#9471).
+  if (input.terminatedByRunner === true || input.signal !== null) {
     return { kind: "killed", facts }
   }
   if (input.code === 0) {
@@ -58,14 +63,21 @@ export function mapExitOutcomeToError(
       return {
         status: "error",
         killed: true,
-        error_message: `RPC child killed by signal ${exit.signal} (pid=${exit.pid ?? "unknown"})`,
+        error_message:
+          exit.signal === null
+            ? `RPC child was terminated by its runner (exit code ${exit.code}, pid=${exit.pid ?? "unknown"})`
+            : `RPC child killed by signal ${exit.signal} (pid=${exit.pid ?? "unknown"})`,
         exit,
       }
     case "crashed":
       return {
         status: "error",
         killed: false,
-        error_message: exit.stderrTail.trim() || `RPC child exited with code ${exit.code}`,
+        // A process exit (an exit code) gets the unexpected-exit lead line; a daemon session has no exit
+        // code and carries the host's own reason in the tail, which stays the whole message.
+        error_message: exit.code === null
+          ? exit.stderrTail.trim() || "RPC child ended unexpectedly"
+          : [`RPC child exited unexpectedly (exit code ${exit.code})`, exit.stderrTail.trim()].filter(Boolean).join("\n"),
         exit,
       }
     case "spawn_error":

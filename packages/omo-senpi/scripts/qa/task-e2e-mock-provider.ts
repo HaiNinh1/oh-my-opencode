@@ -12,6 +12,7 @@ declare const process: {
 interface FsModule {
   existsSync(path: string): boolean
   readFileSync(path: string, encoding: string): string
+  appendFileSync(path: string, data: string): void
 }
 
 interface PathModule {
@@ -22,7 +23,8 @@ interface UrlModule {
   pathToFileURL(path: string): { href: string }
 }
 
-const { existsSync, readFileSync } = process.getBuiltinModule<FsModule>("fs")
+const { existsSync, readFileSync, appendFileSync } = process.getBuiltinModule<FsModule>("fs")
+const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {}
 const { join } = process.getBuiltinModule<PathModule>("path")
 const { pathToFileURL } = process.getBuiltinModule<UrlModule>("url")
 
@@ -34,11 +36,15 @@ interface MockStepUsage {
   input?: number
   output?: number
   totalTokens?: number
+  cacheRead?: number
+  cacheWrite?: number
+  // Senpi reports cost either as a plain number or as a per-bucket breakdown carrying `.total`.
+  cost?: number | { input?: number; output?: number; total: number }
 }
 
 type MockStep =
-  | { type: "text"; text: string; usage?: MockStepUsage }
-  | { type: "tool_call"; name: string; arguments: Record<string, unknown>; id?: string; usage?: MockStepUsage }
+  | { type: "text"; text: string; usage?: MockStepUsage; delayMs?: number }
+  | { type: "tool_call"; name: string; arguments: Record<string, unknown>; id?: string; usage?: MockStepUsage; delayMs?: number }
 
 interface MockScript {
   parentSteps: MockStep[]
@@ -68,6 +74,7 @@ interface Message {
 interface Context {
   cwd?: string
   messages?: Message[]
+  tools?: Array<{ name?: string; description?: string }>
 }
 
 interface SimpleStreamOptions {
@@ -84,7 +91,14 @@ interface AssistantMessage {
   api: Api
   provider: "omo-mock"
   model: string
-  usage: { input: number; output: number; cacheRead: number; cacheWrite: number; totalTokens: number; cost: number }
+  usage: {
+    input: number
+    output: number
+    cacheRead: number
+    cacheWrite: number
+    totalTokens: number
+    cost: number | { input?: number; output?: number; total: number }
+  }
   stopReason: StopReason
   errorMessage?: string
   timestamp: number
@@ -162,6 +176,10 @@ export default function registerMockProvider(pi: ExtensionAPI): void {
 }
 
 export function loadMockScript(cwd: string): MockScript {
+  const override = env.MOCK_SCRIPT_PATH
+  if (typeof override === "string" && override.length > 0 && existsSync(override)) {
+    return JSON.parse(readFileSync(override, "utf8")) as MockScript
+  }
   const scriptPath = join(cwd, "mock-script.json")
   if (!existsSync(scriptPath)) {
     return { parentSteps: [{ type: "text", text: "no script" }], childSteps: [{ type: "text", text: "child done" }] }
@@ -235,6 +253,20 @@ function streamMockResponse(streamModel: Model<Api>, context: Context, options?:
     })
     return stream
   }
+  const dumpTarget = env.MOCK_DUMP_SYSTEM
+  if (typeof dumpTarget === "string" && dumpTarget.length > 0) {
+    const systemPrompt = (context as { systemPrompt?: unknown }).systemPrompt
+    const rendered = typeof systemPrompt === "string" ? systemPrompt : JSON.stringify(systemPrompt ?? null)
+    appendFileSync(dumpTarget, `\n=== model=${streamModel.id} cwd=${context.cwd ?? process.cwd()} ===\n${rendered}\n`)
+  }
+  // Tool descriptions exist only on the model request, so a driver that asserts on wording
+  // (plan-gated-agents-e2e.mjs `description` scenario) reads them from this dump: one JSON array
+  // of {name, description} per parent turn.
+  const toolsDumpTarget = env.MOCK_DUMP_TOOLS
+  if (typeof toolsDumpTarget === "string" && toolsDumpTarget.length > 0 && !isChild) {
+    const tools = (context.tools ?? []).map((tool) => ({ name: tool.name, description: tool.description }))
+    appendFileSync(toolsDumpTarget, `${JSON.stringify(tools)}\n`)
+  }
   const steps = isChild ? script.childSteps : script.parentSteps
   const index = isChild ? childCallCount : parentCallCount
   const step = steps[Math.min(index, steps.length - 1)]
@@ -242,7 +274,11 @@ function streamMockResponse(streamModel: Model<Api>, context: Context, options?:
   else parentCallCount += 1
   const message = stepToAssistantMessage(step, index + 1, streamModel.id)
 
-  queueMicrotask(() => {
+  // A step may hold the turn open for a while before answering, the way a real model call
+  // does: it is how a child stays BUSY without depending on any tool existing in the child.
+  // The wait is abort-aware so a parent's teardown still ends the child promptly.
+  const delayMs = typeof step.delayMs === "number" && step.delayMs > 0 ? step.delayMs : 0
+  const emit = () => {
     if (options?.signal?.aborted) {
       const aborted = { ...message, stopReason: "aborted" as const }
       stream.push({ type: "error", reason: "aborted", error: aborted })
@@ -263,7 +299,12 @@ function streamMockResponse(streamModel: Model<Api>, context: Context, options?:
     }
     stream.push({ type: "done", reason: message.stopReason, message })
     stream.end(message)
-  })
+  }
+  if (delayMs === 0) queueMicrotask(emit)
+  else {
+    const timer = setTimeout(emit, delayMs)
+    options?.signal?.addEventListener("abort", () => { clearTimeout(timer); emit() }, { once: true })
+  }
 
   return stream
 }

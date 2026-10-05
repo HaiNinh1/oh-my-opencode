@@ -37,7 +37,7 @@ describe("handleAtlasSessionIdle completion nudge", () => {
     releaseAllPromptAsyncReservationsForTesting()
   })
 
-  it("injects BOULDER COMPLETE prompt once per work with substituted elapsed and task breakdown", async () => {
+  it("sends one completion nudge per work with substituted elapsed time and task breakdown", async () => {
     // given
     const planPath = join(testDirectory, "plan.md")
     writeFileSync(planPath, "## TODOs\n- [x] 1. Parse input\n- [x] 2. Save output\n")
@@ -137,10 +137,12 @@ describe("handleAtlasSessionIdle completion nudge", () => {
     expect(promptAsyncMock).toHaveBeenCalledTimes(1)
 
     const promptText = promptRequests[0]?.body?.parts?.[0]?.text ?? ""
-    expect(promptText).toContain("BOULDER COMPLETE")
-    expect(promptText).toContain("Total elapsed: 1m 5s")
-    expect(promptText).toContain("- 1 Parse input: 1m 1s")
-    expect(promptText).toContain("- 2 Save output: 4s")
+    expect(promptText).toContain(work.plan_name)
+    expect(promptText).not.toContain("{PLAN_NAME}")
+    expect(promptText).toContain("1m 5s")
+    expect(promptText).toContain("1m 1s")
+    expect(promptText).toContain("4s")
+    expect(promptText.indexOf("Parse input")).toBeLessThan(promptText.indexOf("Save output"))
     expect(promptText).not.toContain("{ELAPSED_HUMAN}")
     expect(promptRequests[0]?.body?.noReply).toBeUndefined()
     expect(promptRequests[0]?.body?.parts?.[0]?.synthetic).toBe(true)
@@ -393,6 +395,44 @@ describe("handleAtlasSessionIdle completion nudge", () => {
     expect(promptAsyncMock).not.toHaveBeenCalled()
     expect(nextBoulder?.works?.["work-session"]?.status).toBe("completed")
     expect(nextBoulder?.works?.["work-other"]?.status).toBe("active")
+  })
+
+  it("#given the active plan has no countable tasks #when the session idles repeatedly #then no continuation is injected", async () => {
+    // given
+    const planPath = join(testDirectory, "plan.md")
+    writeFileSync(planPath, "# Plan\n## Tasks\n### 1. [x] Completed task\n")
+
+    const boulder = createBoulderState(planPath, SESSION_ID, "atlas")
+    writeBoulderState(testDirectory, boulder)
+
+    const promptAsyncMock = mock(async () => ({ data: {} }))
+    const ctx = unsafeTestValue<PluginInput>({
+      directory: testDirectory,
+      client: {
+        session: {
+          promptAsync: promptAsyncMock,
+          messages: async () => ({ data: [] }),
+        },
+      },
+    })
+    const sessionStateById = new Map<string, SessionState>()
+    const getState = (sessionId: string): SessionState => {
+      let state = sessionStateById.get(sessionId)
+      if (!state) {
+        state = { promptFailureCount: 0 }
+        sessionStateById.set(sessionId, state)
+      }
+      return state
+    }
+
+    // when
+    await handleAtlasSessionIdle({ ctx, sessionID: SESSION_ID, getState })
+    await handleAtlasSessionIdle({ ctx, sessionID: SESSION_ID, getState })
+
+    // then
+    expect(promptAsyncMock).not.toHaveBeenCalled()
+    expect(getState(SESSION_ID).pendingRetryTimer).toBeUndefined()
+    expect(readBoulderState(testDirectory)?.status).toBe("active")
   })
 
   it("#given pending background task #when session idles #then continuation waits for retry instead of prompting", async () => {

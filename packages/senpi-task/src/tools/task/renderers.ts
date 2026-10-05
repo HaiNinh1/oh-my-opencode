@@ -1,6 +1,6 @@
 import type { Theme, ThemeColor } from "@code-yeongyu/senpi"
-import { truncateToWidth } from "@earendil-works/pi-tui"
 
+import { piTui } from "../../lazy/pi-tui"
 import type { TaskToolDetails, TaskToolItemDetail } from "./types"
 import {
   formatTaskMode,
@@ -16,7 +16,7 @@ import {
   optionalRendererText,
   rendererVisibleWidth,
 } from "../../renderer-text"
-import { runStatsResultTokens } from "../run-stats-format"
+import { runStatsCardSummary } from "../run-stats-format"
 
 const TASK_REASON_EXCERPT_WIDTH = 40
 
@@ -59,6 +59,7 @@ export function renderTaskResultLines(details: TaskToolDetails, theme: RendererT
 }
 
 export function renderTaskResultComponent(details: TaskToolDetails, theme: RendererTheme): LinesComponent {
+  const { truncateToWidth } = piTui()
   return {
     render: (width: number): string[] => {
       if (width <= 0) return [""]
@@ -75,6 +76,7 @@ export function renderTaskResultComponent(details: TaskToolDetails, theme: Rende
 }
 
 export function linesComponent(lines: readonly string[] | WidthAwareLines): LinesComponent {
+  const { truncateToWidth } = piTui()
   return {
     render: (width: number): string[] => {
       const widthAware = typeof lines === "function"
@@ -110,6 +112,7 @@ function fallbackCountToken(details: Pick<TaskToolDetails, "fallback_attempts">)
 function taskResultLine(details: TaskToolDetails, mode: string | undefined): string {
   const taskId = optionalRendererText(details.task_id)
   const reason = optionalRendererText(details.reason)
+  const summary = runStatsCardSummary(details.run_stats)
   return joinRendererTokens([
     "task",
     taskTargetToken(details),
@@ -117,10 +120,9 @@ function taskResultLine(details: TaskToolDetails, mode: string | undefined): str
     mode,
     formatTaskStatus(details.status),
     taskId === undefined ? undefined : `id:${taskId}`,
-    ...runStatsResultTokens(details.run_stats),
     details.queue_position === undefined ? undefined : `queue:${details.queue_position}`,
     reason === undefined ? undefined : `reason:${excerptRendererText(reason, TASK_REASON_EXCERPT_WIDTH)}`,
-  ])
+  ]) + summary
 }
 
 function taskItemResultLine(item: TaskToolItemDetail): string {
@@ -163,6 +165,10 @@ function taskResultLineForWidth(details: TaskToolDetails, mode: string | undefin
     const candidate = `${line} ${token}`
     if (rendererVisibleWidth(candidate) > width) break
     line = candidate
+  }
+  const summary = runStatsCardSummary(details.run_stats)
+  if (summary.length > 0 && rendererVisibleWidth(`${line}${summary}`) <= width) {
+    line = `${line}${summary}`
   }
   return line
 }

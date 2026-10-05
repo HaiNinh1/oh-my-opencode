@@ -1,13 +1,14 @@
 import type { OmoConfig } from "@oh-my-opencode/omo-config-core"
 
 import { PLAN_GATED_AGENT_NAMES, type AgentDefinition } from "../../agents"
+import { CATEGORY_CALLER_GUIDANCE } from "../../category"
 import { listTaskAgents, listTaskCategories } from "./categories"
-import type { TaskAgentInfo, TaskCategoryInfo } from "./types"
+import type { TaskCategoryInfo } from "./types"
 
 export const TASK_PROMPT_SNIPPET = "Spawn one child or fan out a batch; use task_send to continue an existing child."
 
 export const TASK_PROMPT_GUIDELINES: readonly string[] = [
-  "Use run_in_background=true only for parallel independent work; the default waits and returns the result.",
+  "Spawn children with run_in_background=true.",
   "NEVER pass model together with category: category-routed tasks take their model from omo.json (categories.<name>.models).",
   "Continue an existing child with task_send(to=\"st_...\", message=\"...\"); task always spawns.",
   "Use task_output for one midpoint status or transcript peek; use task_cancel to end a child.",
@@ -19,9 +20,13 @@ type DescriptionInput = {
   readonly agents: Readonly<Record<string, AgentDefinition>>
 }
 
-function renderList(entries: readonly (TaskCategoryInfo | TaskAgentInfo)[]): string {
+function renderCategoryList(entries: readonly TaskCategoryInfo[]): string {
   if (entries.length === 0) return "  (none configured)"
-  return entries.map((entry) => (entry.description ? `  - ${entry.name}: ${entry.description}` : `  - ${entry.name}`)).join("\n")
+  return entries.map((entry) => {
+    const categoryLine = entry.description ? `  - ${entry.name}: ${entry.description}` : `  - ${entry.name}`
+    const callerGuidance = CATEGORY_CALLER_GUIDANCE[entry.name]?.replaceAll("\n", "\n    ")
+    return callerGuidance ? `${categoryLine}\n    ${callerGuidance}` : categoryLine
+  }).join("\n")
 }
 
 export function buildTaskToolDescription(input: DescriptionInput): string {
@@ -33,7 +38,11 @@ export function buildTaskToolDescription(input: DescriptionInput): string {
   const gatedLine =
     gatedAgents.length === 0
       ? ""
-      : `\n  Plan-gated agents (spawnable only in a session where the ulw-plan skill was invoked and start-work was never invoked): ${gatedAgents.map((agent) => agent.name).join(", ")}`
+      : `\n  Plan-gated agents (spawnable only after the user explicitly requests the ulw-plan workflow, a .omo/plans/*.md plan artifact was touched in this session, and ulw-execute was never invoked): ${gatedAgents.map((agent) => agent.name).join(", ")}`
+  const planReviewerNotice =
+    gatedAgents.length === 0
+      ? ""
+      : "\n  plan-reviewer is one-shot: spawn it, read task_output, optionally task_cancel; task_send is always refused. The harness replaces the plan-reviewer spawn prompt with the canonical plan-review contract (one .omo/plans/*.md path only) - any other prompt content is discarded, so pass the plan path and nothing else."
   return `Spawn one child task or fan out a batch.
 
 Choose exactly one input form:
@@ -42,16 +51,17 @@ Choose exactly one input form:
 
 Each spawn MUST provide EITHER category OR subagent_type after inheritance. DO NOT provide both.
 
-- category routes through Sisyphus-Junior. Available categories:
-${renderList(categories)}
-- subagent_type invokes a loaded agent directly. Available agents: ${agentNames}${gatedLine}
+- category routes to the category worker. Available categories:
+${renderCategoryList(categories)}
+- subagent_type invokes a loaded agent directly. Available agents: ${agentNames}${gatedLine}${planReviewerNotice}
+  A subagent_type that names no loaded agent fails with unknown_target; a category name belongs in category, never in subagent_type.
 
 Blank provider padding is normalized automatically; do not add filler values.
-load_skills prepends named skills. run_in_background=true returns task ids for parallel work; false waits for results.
+load_skills prepends named skills. run_in_background=true returns the task id at once and the child's result arrives later as a message; false blocks this turn until the child finishes.
+run_in_background is batch-wide: set it once at the top level. An item-level copy must agree with the top-level value and every other item, or the call fails with invalid_arguments.
 name is an optional stable handle. model is an explicit override for subagent_type spawns ONLY.
+isolated runs a child in a checkout clone; it defaults to task.isolation.enabled. apply controls merge-back; false retains artifacts only. merge selects patch or branch. Batch items inherit these three options unless overridden. apply and merge require isolation to be enabled.
 NEVER combine model with category: a category-routed task always takes its model from omo.json (categories.<name>.models), so passing both fails with invalid_arguments.
-  CORRECT: task(subagent_type="momus", model="openai/gpt-5.6-sol", prompt="...")
-  INCORRECT: task(category="architect", model="quotio-openai/gpt-5.4-mini-fast", prompt="...")
 task_send continues an existing child; task always spawns.
 Prompts MUST be in English.`
 }

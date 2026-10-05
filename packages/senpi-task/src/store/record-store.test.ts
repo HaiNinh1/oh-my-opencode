@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, test } from "bun:test"
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
+import * as fs from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -10,6 +11,7 @@ import { resolveStateDir } from "./state-dir"
 const cleanupRoots: string[] = []
 
 afterEach(() => {
+  mock.restore()
   for (const root of cleanupRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
@@ -27,6 +29,7 @@ function baseRecord(taskId: string) {
       depth: 0,
       execution_mode: "direct",
       model: "gpt-5.2",
+      notify_on_terminal: false,
     }),
     task_id: taskId,
   }
@@ -40,8 +43,8 @@ describe("createTaskRecordStore caching", () => {
     const resolvedModel = {
       source: "agent" as const,
       provider: "openai",
-      model_id: "gpt-5.4-mini-fast",
-      display: "openai/gpt-5.4-mini-fast",
+      model_id: "gpt-5.6-luna-fast",
+      display: "openai/gpt-5.6-luna-fast",
     }
     writer.save({ ...baseRecord("st_00000007"), resolved_model: resolvedModel })
     const reader = createTaskRecordStore({ project_dir: project })
@@ -203,5 +206,250 @@ describe("createTaskRecordStore event append", () => {
     const raw = readFileSync(join(stateDir, "tasks", "st_00000006.json"), "utf8")
     expect(raw).not.toContain("\n  ")
     expect(JSON.parse(raw).task_id).toBe("st_00000006")
+  })
+})
+
+describe("createTaskRecordStore rename contention", () => {
+  function renameRefusal(code: string): () => never {
+    return () => {
+      throw Object.assign(new Error(`${code}: operation not permitted, rename`), { code, syscall: "rename" })
+    }
+  }
+
+  function tempFiles(project: string): string[] {
+    const tasksDir = join(resolveStateDir({ project_dir: project }), "tasks")
+    return readdirSync(tasksDir).filter((entry) => entry.endsWith(".tmp"))
+  }
+
+  test("#given a win32 store replacing a record #when renameSync is refused with EPERM twice #then the terminal status persists and no temp file remains", () => {
+    // given
+    const project = tempProject()
+    const store = createTaskRecordStore({ project_dir: project }, { platform: "win32" })
+    const record = baseRecord("st_00000011")
+    store.save(record)
+    const rename = spyOn(fs, "renameSync")
+      .mockImplementationOnce(renameRefusal("EPERM"))
+      .mockImplementationOnce(renameRefusal("EPERM"))
+
+    // when
+    store.replace({ ...record, status: "completed" })
+
+    // then
+    expect(rename).toHaveBeenCalledTimes(3)
+    expect(createTaskRecordStore({ project_dir: project }).load(record.task_id)?.status).toBe("completed")
+    expect(tempFiles(project)).toEqual([])
+  })
+
+  test("#given a POSIX store replacing a record #when renameSync is refused with EPERM once #then the error rethrows unchanged after one attempt and no temp file remains", () => {
+    // given
+    const project = tempProject()
+    const store = createTaskRecordStore({ project_dir: project }, { platform: "darwin" })
+    const record = baseRecord("st_00000012")
+    store.save(record)
+    const rename = spyOn(fs, "renameSync").mockImplementationOnce(renameRefusal("EPERM"))
+
+    // when
+    const replace = () => store.replace({ ...record, status: "completed" })
+
+    // then
+    expect(replace).toThrow("EPERM: operation not permitted, rename")
+    expect(rename).toHaveBeenCalledTimes(1)
+    expect(store.load(record.task_id)?.status).toBe("pending")
+    expect(tempFiles(project)).toEqual([])
+  })
+})
+
+describe("createTaskRecordStore remove artifacts", () => {
+  const TASK_ID = "st_00000010"
+
+  function seedFullArtifactSet(project: string): string {
+    const store = createTaskRecordStore({ project_dir: project })
+    store.save(baseRecord(TASK_ID))
+    store.appendEvent(TASK_ID, { type: "created", payload: {} })
+
+    const stateDir = resolveStateDir({ project_dir: project })
+
+    // children/<taskId>/sessions/<taskId>/x.jsonl
+    const childDir = join(stateDir, "children", TASK_ID, "sessions", TASK_ID)
+    mkdirSync(childDir, { recursive: true })
+    writeFileSync(join(childDir, "x.jsonl"), "{\"role\":\"user\",\"content\":\"hi\"}\n", "utf8")
+
+    // completion-results/<taskId>.txt
+    const spillDir = join(stateDir, "completion-results")
+    mkdirSync(spillDir, { recursive: true })
+    writeFileSync(join(spillDir, `${TASK_ID}.txt`), "spilled final response", "utf8")
+
+    return stateDir
+  }
+
+  test("#given a record + event log + children dir + spill file #when remove is called #then ALL FOUR artifacts are deleted", () => {
+    // given
+    const project = tempProject()
+    const stateDir = seedFullArtifactSet(project)
+    const store = createTaskRecordStore({ project_dir: project })
+
+    const recordPath = join(stateDir, "tasks", `${TASK_ID}.json`)
+    const logPath = join(stateDir, "logs", `${TASK_ID}.jsonl`)
+    const childDir = join(stateDir, "children", TASK_ID)
+    const spillPath = join(stateDir, "completion-results", `${TASK_ID}.txt`)
+
+    expect(existsSync(recordPath)).toBe(true)
+    expect(existsSync(logPath)).toBe(true)
+    expect(existsSync(childDir)).toBe(true)
+    expect(existsSync(spillPath)).toBe(true)
+
+    // when
+    store.remove(TASK_ID)
+
+    // then
+    expect(existsSync(recordPath)).toBe(false)
+    expect(existsSync(logPath)).toBe(false)
+    expect(existsSync(childDir)).toBe(false)
+    expect(existsSync(spillPath)).toBe(false)
+  })
+
+  test("#given a partially-cleaned task (children dir already gone) #when remove is called #then it still deletes log + record without throwing", () => {
+    // given
+    const project = tempProject()
+    const stateDir = seedFullArtifactSet(project)
+    // simulate a partial cleanup: children dir already removed
+    rmSync(join(stateDir, "children", TASK_ID), { recursive: true, force: true })
+
+    const store = createTaskRecordStore({ project_dir: project })
+    const recordPath = join(stateDir, "tasks", `${TASK_ID}.json`)
+    const logPath = join(stateDir, "logs", `${TASK_ID}.jsonl`)
+    const spillPath = join(stateDir, "completion-results", `${TASK_ID}.txt`)
+
+    expect(existsSync(recordPath)).toBe(true)
+    expect(existsSync(logPath)).toBe(true)
+    expect(existsSync(spillPath)).toBe(true)
+
+    // when
+    store.remove(TASK_ID)
+
+    // then
+    expect(existsSync(recordPath)).toBe(false)
+    expect(existsSync(logPath)).toBe(false)
+    expect(existsSync(spillPath)).toBe(false)
+  })
+
+  test("#given a fully removed task #when remove is called again #then it is a no-op without throwing", () => {
+    // given
+    const project = tempProject()
+    const stateDir = seedFullArtifactSet(project)
+    const store = createTaskRecordStore({ project_dir: project })
+    store.remove(TASK_ID)
+
+    const recordPath = join(stateDir, "tasks", `${TASK_ID}.json`)
+    const logPath = join(stateDir, "logs", `${TASK_ID}.jsonl`)
+    const childDir = join(stateDir, "children", TASK_ID)
+    const spillPath = join(stateDir, "completion-results", `${TASK_ID}.txt`)
+
+    expect(existsSync(recordPath)).toBe(false)
+    expect(existsSync(logPath)).toBe(false)
+    expect(existsSync(childDir)).toBe(false)
+    expect(existsSync(spillPath)).toBe(false)
+
+    // when
+    expect(() => store.remove(TASK_ID)).not.toThrow()
+
+    // then - everything still gone
+    expect(existsSync(recordPath)).toBe(false)
+    expect(existsSync(logPath)).toBe(false)
+    expect(existsSync(childDir)).toBe(false)
+    expect(existsSync(spillPath)).toBe(false)
+  })
+})
+
+describe("createTaskRecordStore tombstone expunge", () => {
+  const TASK_ID = "st_00000030"
+
+  function seedTombstoneCandidate(project: string): { store: ReturnType<typeof createTaskRecordStore>; stateDir: string } {
+    const store = createTaskRecordStore({ project_dir: project })
+    store.save(baseRecord(TASK_ID))
+    store.appendEvent(TASK_ID, { type: "created", payload: {} })
+    const stateDir = resolveStateDir({ project_dir: project })
+    mkdirSync(join(stateDir, "children", TASK_ID), { recursive: true })
+    const spillDir = join(stateDir, "completion-results")
+    mkdirSync(spillDir, { recursive: true })
+    writeFileSync(join(spillDir, `${TASK_ID}.txt`), "spilled final response", "utf8")
+    return { store, stateDir }
+  }
+
+  test("#given the retention predicate rejects the record #when tombstoneIfExpired runs #then the record is renamed to a tombstone invisible to load, list, and mutate", () => {
+    // given
+    const project = tempProject()
+    const { store, stateDir } = seedTombstoneCandidate(project)
+    const taskRecordPath = join(stateDir, "tasks", `${TASK_ID}.json`)
+    const tombstonePath = `${taskRecordPath}.expunging`
+    // a stray non-task tombstone name must never enter the expunge pipeline
+    writeFileSync(join(stateDir, "tasks", "not-a-task.json.expunging"), "{}", "utf8")
+
+    // when
+    const result = store.tombstoneIfExpired(TASK_ID, () => false)
+
+    // then the atomic rename commits the record to deletion and no claim can take it
+    if (result.kind !== "tombstoned") throw new Error("expected tombstoned")
+    expect(result.record.task_id).toBe(TASK_ID)
+    expect(existsSync(taskRecordPath)).toBe(false)
+    expect(existsSync(tombstonePath)).toBe(true)
+    expect(store.load(TASK_ID)).toBeNull()
+    expect(store.list().records).toHaveLength(0)
+    expect(store.mutate(TASK_ID, (record) => record)).toBeNull()
+    expect(store.listExpunging()).toEqual([TASK_ID])
+  })
+
+  test("#given the retention predicate keeps the record #when tombstoneIfExpired runs #then the record is untouched", () => {
+    // given
+    const project = tempProject()
+    const { store, stateDir } = seedTombstoneCandidate(project)
+    const taskRecordPath = join(stateDir, "tasks", `${TASK_ID}.json`)
+
+    // when
+    const result = store.tombstoneIfExpired(TASK_ID, () => true)
+
+    // then
+    expect(result.kind).toBe("retained")
+    expect(existsSync(taskRecordPath)).toBe(true)
+    expect(existsSync(`${taskRecordPath}.expunging`)).toBe(false)
+    expect(store.load(TASK_ID)?.task_id).toBe(TASK_ID)
+  })
+
+  test("#given a missing record #when tombstoneIfExpired runs #then it reports missing without writing anything", () => {
+    // given
+    const project = tempProject()
+    const store = createTaskRecordStore({ project_dir: project })
+
+    // when
+    const result = store.tombstoneIfExpired(TASK_ID, () => false)
+
+    // then
+    expect(result.kind).toBe("missing")
+    expect(store.listExpunging()).toEqual([])
+  })
+
+  test("#given a tombstoned record with leftover artifacts #when completeExpunge runs #then children dir, spill, log, and tombstone are gone and a re-run is a no-op", () => {
+    // given
+    const project = tempProject()
+    const { store, stateDir } = seedTombstoneCandidate(project)
+    store.tombstoneIfExpired(TASK_ID, () => false)
+    const tombstonePath = join(stateDir, "tasks", `${TASK_ID}.json.expunging`)
+    expect(existsSync(tombstonePath)).toBe(true)
+
+    // when
+    store.completeExpunge(TASK_ID)
+
+    // then
+    expect(existsSync(tombstonePath)).toBe(false)
+    expect(existsSync(join(stateDir, "children", TASK_ID))).toBe(false)
+    expect(existsSync(join(stateDir, "completion-results", `${TASK_ID}.txt`))).toBe(false)
+    expect(existsSync(join(stateDir, "logs", `${TASK_ID}.jsonl`))).toBe(false)
+    expect(store.listExpunging()).toEqual([])
+
+    // when run again (crash-recovery idempotence)
+    expect(() => store.completeExpunge(TASK_ID)).not.toThrow()
+
+    // then everything is still gone
+    expect(existsSync(tombstonePath)).toBe(false)
   })
 })

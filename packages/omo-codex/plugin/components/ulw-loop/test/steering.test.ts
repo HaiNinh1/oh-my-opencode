@@ -250,7 +250,10 @@ describe("steerUlwLoop", () => {
 		const repoRoot = await repoWithPlan(seed);
 		const result = await steerUlwLoop(repoRoot, steering({ kind: "annotate_ledger" }));
 		expect(result.plan.goals).toEqual(seed.goals);
-		expect(await readFile(ulwLoopGoalsPath(repoRoot), "utf8")).toBe(`${JSON.stringify(seed, null, 2)}\n`);
+		expect(JSON.parse(await readFile(ulwLoopGoalsPath(repoRoot), "utf8"))).toEqual({
+			...seed,
+			revision: (seed.revision ?? 0) + 1,
+		});
 	});
 
 	it("mark_blocked_superseded with children: supersede + replace", async () => {
@@ -422,11 +425,14 @@ describe("steerUlwLoop", () => {
 });
 
 describe("parseUlwLoopSteeringDirective", () => {
-	it.each(["OMO_ULW_LOOP_STEER", "omo.ulw-loop.steer", "omo ulw-loop steer"])("parses %s pattern", (marker) => {
-		expect(parseUlwLoopSteeringDirective(`${marker}: ${JSON.stringify(steering())}`)).toMatchObject({
-			kind: "add_subgoal",
-		});
-	});
+	it.each(["OMO_ULW_LOOP_STEER", "omo.ulw-loop.steer", "omo ulw-loop steer", "omo-agent-toolkit ulw-loop steer"])(
+		"parses %s pattern",
+		(marker) => {
+			expect(parseUlwLoopSteeringDirective(`${marker}: ${JSON.stringify(steering())}`)).toMatchObject({
+				kind: "add_subgoal",
+			});
+		},
+	);
 
 	it("returns null when no marker", () => {
 		expect(parseUlwLoopSteeringDirective(JSON.stringify(steering()))).toBeNull();

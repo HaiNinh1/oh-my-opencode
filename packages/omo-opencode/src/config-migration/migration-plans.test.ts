@@ -31,7 +31,7 @@ describe("legacy config migration plans", () => {
     writeFileSync(rootPath, JSON.stringify({ agents: { oracle: { model: "reverted-old-model" } } }))
     writeFileSync(sidecarPath, JSON.stringify({ appliedMigrations: ["model-version:reverted-old-model->new-model"] }))
     writeFileSync(profilePath, JSON.stringify({ agents: { oracle: { model: "kimi-model" } } }))
-    writeFileSync(configJsoncPath, JSON.stringify({ codegraph: { excluded_roots: ["/generated"] } }))
+    writeFileSync(configJsoncPath, JSON.stringify({ "[codex]": { telemetry: { enabled: false } } }))
     writeFileSync(configSidecarPath, JSON.stringify({ appliedMigrations: ["legacy-config-jsonc"] }))
     writeFileSync(projectPath, JSON.stringify({ agents: { oracle: { model: "project-model" } } }))
     writeFileSync(`${rootPath}.bak.unrelated`, "keep")
@@ -72,7 +72,7 @@ describe("legacy config migration plans", () => {
         CONFIG_JSONC_MIGRATION_ID,
         OPENCODE_CONFIG_MIGRATION_ID,
       ])
-      expect(userDocument["[opencode]"]).toEqual({ agents: { oracle: { model: "reverted-old-model" } } })
+      expect(userDocument["[opencode]"]).toBeUndefined()
       expect(userDocument.legacy_migrations).toMatchObject({
         [canonicalRootPath]: ["model-version:reverted-old-model->new-model"],
         [canonicalConfigJsoncPath]: ["legacy-config-jsonc"],
@@ -125,8 +125,8 @@ describe("legacy config migration plans", () => {
       const migrated = executeLegacyConfigMigrationPlan(plan, { env: { HOME: homeDir } })
 
       // then
-      expect(dryRun.diagnostics).toContain("conflict: [senpi] legacy [omo] kept [senpi]")
-      expect(migrated.diagnostics).toContain("conflict: [senpi] legacy [omo] kept [senpi]")
+      expect(dryRun.diagnostics).toContain("conflict: [native] legacy [omo] kept [native]")
+      expect(migrated.diagnostics).toContain("conflict: [native] legacy [omo] kept [native]")
     } finally {
       rmSync(fixtureRoot, { force: true, recursive: true })
     }

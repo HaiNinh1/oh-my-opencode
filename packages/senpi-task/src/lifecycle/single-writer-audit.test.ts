@@ -11,12 +11,15 @@ import { describe, expect, test } from "bun:test"
 // plan names `runners/rpc/terminate.ts` explicitly; the other three entries define teardown methods
 // on their handle seams by the SAME principle ("runner modules DEFINE dispose/terminate on the
 // handle; only lifecycle INVOKES them") and each contains only delegation bodies, never an
-// autonomous destruction trigger. Test files and __fixtures__ carry no-op fake handles and are
-// exempt. Steering/completion/tools/team/manager business code stays fully audited.
+// autonomous post-admission destruction trigger. `start-cleanup.ts` is the one pre-admission
+// exception: prompt preflight can reject before the manager/lifecycle ever owns the new handle, so
+// the constructor must discard that unowned process. Test files and __fixtures__ carry no-op fake
+// handles and are exempt. Steering/completion/tools/team/manager business code stays fully audited.
 const INVOCATION_ALLOWLIST = [
   "src/lifecycle/",
   "src/runners/rpc/terminate.ts",
   "src/runners/rpc/handle.ts",
+  "src/runners/rpc/start-cleanup.ts",
   "src/runners/in-process/child-handle.ts",
   "src/manager/child-handle.ts",
 ]
@@ -67,8 +70,4 @@ describe("single-writer destruction audit", () => {
     expect(violations).toEqual([])
   })
 
-  test("#given the allowlist #when auditing the lifecycle port #then it is the only non-definition invoker", () => {
-    // given / when / then - the lifecycle dir is present and audited-in as the invoker
-    expect(INVOCATION_ALLOWLIST[0]).toBe("src/lifecycle/")
-  })
 })

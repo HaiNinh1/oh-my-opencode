@@ -1,4 +1,5 @@
-import { defineTool, type ToolDefinition } from "@code-yeongyu/senpi"
+import type { defineTool, ToolDefinition } from "@code-yeongyu/senpi"
+import type { TSchema } from "typebox"
 
 import { runTeamSend } from "../team/messaging"
 import type { TeamToolsService } from "../team/types"
@@ -19,12 +20,13 @@ export type { TaskSendTeamRouting } from "./send-shutdown"
 const DESCRIPTION = [
   "Send a message to a child task or team member, keyed by to.",
   "Plain-text messages always steer a running child immediately.",
-  "A plain-text message to a finished resident child revives that same session; disposed, evicted, cancelled, and terminal-errored children are not revived.",
+  "A plain-text message to a parked in-process or detached RPC child with a transcript and recorded launch spec resumes that session after eligible finished runs. Killed, cancelled, and lost children never revive; nonterminal suspended children resume with their parent session.",
   "message is required and accepts a plain string or a structured shutdown object {type:'shutdown_request'} or {type:'shutdown_response', approve, reason?}; structured messages are lead-only and need team_run_id (defaults to your single owned team).",
   "To retire a member: send {type:'shutdown_request'}, then after it wraps up {type:'shutdown_response', approve:true}.",
   "Addressing: a child task id/name goes to the live session; a team member name goes to the durable mailbox; '*' broadcasts to every member (lead-only). Plain-text bodies are capped by the team payload limit (default 32 KB); split larger payloads or send a file path.",
   "Cross-session: a child owned by another session is refused unless you pass all_scope=true.",
   "Team messages always steer into the recipient's running turn.",
+  "One-shot agents (plan-reviewer) always refuse task_send in every state; spawn a new plan-reviewer instead.",
 ].join(" ")
 
 const MEMBER_SCOPED_DESCRIPTION = [
@@ -68,7 +70,8 @@ export async function runTaskSend(
       body: params.message,
       ...(params.summary !== undefined ? { summary: params.summary } : {}),
     })
-    return toolResult(firstText(teamResult), { kind: "team_message", team: teamResult.details })
+    const wrapped: SendToolResult = toolResult(firstText(teamResult), { kind: "team_message", team: teamResult.details })
+    return teamResult.isError === true ? { ...wrapped, isError: true } : wrapped
   }
 
   if (params.message !== undefined) return routeStructuredMessage(params.to, params.message, params, teamRouting)
@@ -120,9 +123,20 @@ export type MemberScopedTaskSendDeps = {
   readonly resolveCallerSessionId?: CallerSessionResolver
 }
 
-export function createMemberScopedTaskSendTool(deps: MemberScopedTaskSendDeps) {
+// senpi declares AnyToolDefinition privately, so mirror defineTool's declared return type instead
+// of hand-rolling `ToolDefinition<any, any, any>`: a senpi bump that widens or narrows that
+// intersection propagates here rather than silently drifting from the engine's own shape. The
+// import is type-only, so it is erased and never binds this module to the engine barrel.
+type DefinedTool<TParams extends TSchema, TDetails> = ReturnType<typeof defineTool<TParams, TDetails>>
+
+export function createMemberScopedTaskSendTool(
+  deps: MemberScopedTaskSendDeps,
+): DefinedTool<typeof MemberScopedTaskSendParams, SendResultDetails> {
   const resolveCaller = deps.resolveCallerSessionId ?? defaultResolveCallerSessionId
-  return defineTool<typeof MemberScopedTaskSendParams, SendResultDetails>({
+  // Returned as a plain literal: senpi's defineTool is an identity helper for type inference
+  // (pinned by the senpi API tripwire), so wrapping here would only statically bind this module
+  // to the engine barrel. The cast below is type-level only — defineTool was identity at runtime.
+  const tool: ToolDefinition<typeof MemberScopedTaskSendParams, SendResultDetails> = {
     name: "task_send",
     label: "Task Send",
     description: MEMBER_SCOPED_DESCRIPTION,
@@ -135,5 +149,6 @@ export function createMemberScopedTaskSendTool(deps: MemberScopedTaskSendDeps) {
       }),
     renderCall: (args, theme) => renderMemberScopedTaskSendCall(args, theme),
     renderResult: (result, options, theme) => renderTaskSendResult(result, options, theme),
-  })
+  }
+  return tool as DefinedTool<typeof MemberScopedTaskSendParams, SendResultDetails>
 }

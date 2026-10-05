@@ -39,6 +39,27 @@ If two hypotheses have identical distinguishing evidence, they aren't actually d
 
 ## Phase 3 — Parallel Investigation
 
+### State freshness invariant
+
+**A debug session's state is a snapshot with a lifetime, not a fact you can carry forward indefinitely.**
+- Before any action that mutates the debuggee, re-observe the session's current state.
+- This includes continue, step, side-effecting evaluation, setting or removing breakpoints, and termination.
+- Record the current thread state and stop reason; those are the concrete tells for whether the old plan still applies.
+- An observation from an earlier turn may already be stale when the next action is issued.
+- Turns can be minutes apart while the debuggee runs at full speed, so this failure mode is normal, not exceptional.
+- If the thread state or stop reason has moved, re-observe the new state and do not replay the old plan.
+- Treat every mutation as conditional on the state you just observed, not on a remembered stop.
+
+### Failure-to-recovery taxonomy
+
+| Failure signature | Most likely cause | Next move |
+|---|---|---|
+| Adapter or debugger process failed to start | Wrong binary or missing installation | Verify the tool exists, then re-launch; do not retry blindly. |
+| Breakpoint accepted but never bound or verified | Source path mismatch, optimized-out code, or missing debug symbols | Check the binary was built with symbols and that the debugger-resolved path matches your file. |
+| Attach refused | Permissions, ptrace scope, SIP, or wrong PID | Fix the environment or target identity; a retry will not change it. |
+| No stop event within the expected window | Process is running, the breakpoint is unreachable, or the wait was too short | Pause and inspect threads rather than waiting longer. |
+| Session terminated unexpectedly | The debuggee crashed or exited | Capture the exit and crash evidence before restarting. |
+
 Branch depending on what's available.
 
 ### Path A: Team mode ENABLED
@@ -54,22 +75,22 @@ When the `team_*` tools are present, create a **debug-squad** team and split inv
   "members": [
     {
       "kind": "category",
-      "category": "deep",
+      "category": "deep-low",
       "prompt": "You are the Runtime State Inspector. Your job: attach to the live process, hit breakpoints, read program state (variables, heap, goroutines, stack, registers depending on runtime), and report observed values verbatim. Never guess — if you don't see the value, say so. Report back via team_send_message with file:line / address references and captured values. Never edit source code. Never run git commands. If you need an instrumentation statement added (breakpoint(), debugger;, dbg!, etc.), ask the Lead first."
     },
     {
       "kind": "category",
-      "category": "deep",
+      "category": "deep-low",
       "prompt": "You are the Log Archaeologist. Your job: grep server logs, stderr streams, SDK-internal debug output (DEBUG env, RUST_LOG, GODEBUG, PYTHONASYNCIODEBUG), and correlate timestamps. Produce a timeline of events with latencies. Flag anything that looks like a silent catch, a swallowed rejection, a panic recovered-and-ignored, a success response that contains failure signals (HTTP 200 with empty body, stopReason=error, exit 0 with error-in-stdout). Never edit source code."
     },
     {
       "kind": "category",
-      "category": "deep",
+      "category": "deep-low",
       "prompt": "You are the Reproduction Engineer. Your job: build the smallest reliable repro — a curl command, a vitest/pytest/go test, a tmux script, a Playwright script for browser bugs, a pwntools script for binary targets. It must reproduce on first try and be copy-pasteable by the Lead. Document exact input, expected output, observed output. Save repro artifacts under /tmp/ and tell the Lead to journal them. If the bug is browser-based you MUST use Playwright CLI — do not simulate with curl."
     },
     {
       "kind": "category",
-      "category": "deep",
+      "category": "deep-low",
       "prompt": "You are the Trace Correlator. Your job: take findings from the other members and cross-link them. Build a causal chain from symptom to suspected cause. Identify missing evidence. Propose the next single most-decisive runtime query. Never edit source code; only reason across already-captured evidence. If hypotheses diverge sharply after correlation, tell the Lead immediately — that is the signal for the Oracle Triple."
     }
   ]
@@ -96,7 +117,7 @@ task(subagent_type="explore", load_skills=[], run_in_background=true,
      Runtime state investigation for hypothesis 1: ...")
 task(subagent_type="explore", load_skills=[], run_in_background=true,
      prompt="Log/timing investigation for hypothesis 2: ...")
-task(category="deep", load_skills=[], run_in_background=true,
+task(category="deep-low", load_skills=[], run_in_background=true,
      prompt="Reproduction minimizer for hypothesis 3: ...")
 ```
 

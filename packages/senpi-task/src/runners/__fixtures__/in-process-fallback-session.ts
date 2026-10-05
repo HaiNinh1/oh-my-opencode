@@ -2,15 +2,9 @@ import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import {
-  createAgentSession,
-  createExtensionRuntime,
-  ModelRegistry,
-  ModelRuntime,
-  SessionManager,
-  type AgentSessionEvent,
-} from "@code-yeongyu/senpi"
+import type { AgentSessionEvent, createAgentSession } from "@code-yeongyu/senpi"
 
+import { loadSenpiBarrel } from "../../lazy/senpi-barrel"
 import { createMinimalSenpiResourceLoader } from "../../senpi/minimal-resource-loader"
 import { createRuntimeFallbackSettings } from "../in-process/runtime-fallback-settings"
 
@@ -49,6 +43,13 @@ export type FallbackSessionHarness = {
 }
 
 export async function createFallbackSessionHarness(errorMessage: string): Promise<FallbackSessionHarness> {
+  const {
+    createAgentSession,
+    ModelRegistry,
+    ModelRuntime,
+    SessionManager,
+    createExtensionRuntime,
+  } = await loadSenpiBarrel()
   const root = mkdtempSync(join(tmpdir(), "senpi-task-access-terminated-"))
   const modelRuntime = ModelRuntime.createSync()
   const modelRegistry = new ModelRegistry(modelRuntime)
@@ -74,6 +75,7 @@ export async function createFallbackSessionHarness(errorMessage: string): Promis
   const primary = modelRegistry.find("runtime-fallback-test", "dead-primary")
   if (primary === undefined) throw new Error("primary model missing")
   const settingsManager = createRuntimeFallbackSettings(
+    { cwd: root, agentDir: join(root, "agent"), projectTrusted: false },
     "runtime-fallback-test/dead-primary",
     [{
       source: "category",
@@ -125,7 +127,7 @@ function testModel(id: string) {
   }
 }
 
-function assistant(
+export function assistant(
   model: string,
   stopReason: StopReason,
   text: string,
@@ -151,7 +153,7 @@ function assistant(
   }
 }
 
-function streamMessage(message: AssistantMessage): EventStream {
+export function streamMessage(message: AssistantMessage): EventStream {
   const queue: unknown[] = []
   const waiters: Array<(value: IteratorResult<unknown>) => void> = []
   let done = false

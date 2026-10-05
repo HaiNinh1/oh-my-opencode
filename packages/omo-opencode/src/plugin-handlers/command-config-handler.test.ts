@@ -9,6 +9,7 @@ import { OhMyOpenCodeConfigSchema, type OhMyOpenCodeConfig } from "../config";
 import type { LoadedSkill } from "../features/opencode-skill-loader/types";
 import type { PluginComponents } from "./plugin-components-loader";
 import { applyCommandConfig } from "./command-config-handler";
+import { initDeepSkill } from "@oh-my-opencode/skills-loader-core/builtin-skills/skills/init-deep";
 import {
   getAgentDisplayName,
   getAgentListDisplayName,
@@ -123,8 +124,8 @@ describe("applyCommandConfig", () => {
   test("normalizes Atlas command agents to the runtime list name used by opencode command routing", async () => {
     // given
     loadBuiltinCommandsSpy.mockReturnValue({
-      "start-work": {
-        name: "start-work",
+      "ulw-execute": {
+        name: "ulw-execute",
         description: "(builtin) Start work",
         template: "template",
         agent: "atlas",
@@ -142,14 +143,14 @@ describe("applyCommandConfig", () => {
 
     // then
     const commandConfig = config.command as Record<string, { agent?: string }>;
-    expect(commandConfig["start-work"]?.agent).toBe(getAgentListDisplayName("atlas"));
+    expect(commandConfig["ulw-execute"]?.agent).toBe(getAgentListDisplayName("atlas"));
   });
 
   test("normalizes legacy display-name command agents to the runtime list name", async () => {
     // given
     loadBuiltinCommandsSpy.mockReturnValue({
-      "start-work": {
-        name: "start-work",
+      "ulw-execute": {
+        name: "ulw-execute",
         description: "(builtin) Start work",
         template: "template",
         agent: getAgentDisplayName("atlas"),
@@ -167,7 +168,7 @@ describe("applyCommandConfig", () => {
 
     // then
     const commandConfig = config.command as Record<string, { agent?: string }>;
-    expect(commandConfig["start-work"]?.agent).toBe(getAgentListDisplayName("atlas"));
+    expect(commandConfig["ulw-execute"]?.agent).toBe(getAgentListDisplayName("atlas"));
   });
 
   test("registers builtin skills like init-deep and security-review as opencode commands", async () => {
@@ -184,7 +185,8 @@ describe("applyCommandConfig", () => {
 
     // then
     const commandConfig = config.command as Record<string, { description?: string; template?: string }>;
-    expect(commandConfig["init-deep"]?.description).toContain("Initialize hierarchical AGENTS.md");
+    // The command carries the shipped skill description verbatim; pin the source value, not a phrase.
+    expect(commandConfig["init-deep"]?.description).toBe(initDeepSkill.description);
     expect(commandConfig["init-deep"]?.template).toContain("<skill-instruction>");
     expect(commandConfig["init-deep"]?.template).toContain("$ARGUMENTS");
     expect(commandConfig["security-review"]?.template).toContain("<skill-instruction>");

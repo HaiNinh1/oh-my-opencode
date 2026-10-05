@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { delimiter, dirname, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import { createSandbox, digestDirectory, seedSandbox } from "./drive.mjs"
+import { isolatedChildEnv } from "./sandbox-child-env.mjs"
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const packageRoot = resolve(scriptDir, "..", "..")
@@ -166,7 +167,19 @@ function main() {
     )
     const run = spawnSync(resolvedSenpi, ["-e", mockProviderEntry, "-p", "--provider", "omo-mock", "--model", "mock-1", "ulw please respond"], {
       cwd: sandbox.cwd,
-      env: { ...process.env, SENPI_CODING_AGENT_DIR: sandbox.agentDir, XDG_CONFIG_HOME: sandbox.xdgConfigHome, OMO_SENPI_QA: "1" },
+      env: {
+        ...isolatedChildEnv(process.env, sandbox.agentDir),
+        OMO_CODING_AGENT_DIR: sandbox.agentDir,
+        SENPI_CODING_AGENT_DIR: sandbox.agentDir,
+        PI_CODING_AGENT_DIR: sandbox.agentDir,
+        HOME: sandbox.homeDir,
+        USERPROFILE: sandbox.homeDir,
+        XDG_CONFIG_HOME: sandbox.xdgConfigHome,
+        XDG_DATA_HOME: sandbox.xdgDataHome,
+        XDG_CACHE_HOME: sandbox.xdgCacheHome,
+        PI_OFFLINE: "1",
+        OMO_SENPI_QA: "1",
+      },
       encoding: "utf8",
       timeout: 60_000,
     })

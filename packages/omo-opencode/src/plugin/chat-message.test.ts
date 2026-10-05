@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
 import { randomUUID } from "node:crypto"
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -8,7 +8,8 @@ import type { OhMyOpenCodeConfig } from "../config"
 import { readBoulderState } from "../features/boulder-state"
 import { _resetForTesting, getSessionAgent, registerAgentName, setMainSession, subagentSessions, updateSessionAgent } from "../features/claude-code-session-state"
 import { createAutoSlashCommandHook } from "../hooks/auto-slash-command"
-import { createStartWorkHook } from "../hooks/start-work"
+import { validateObjective } from "../hooks/goal/validation"
+import { createUlwExecuteHook } from "../hooks/ulw-execute"
 import { getAgentListDisplayName } from "../shared/agent-display-names"
 import { getOmoOpenCodeCacheDir, getOpenCodeCacheDir } from "../shared/data-path"
 import { OMO_INTERNAL_INITIATOR_MARKER } from "../shared/internal-initiator-marker"
@@ -21,7 +22,7 @@ type ChatMessageHandlerOutput = { message: Record<string, unknown>; parts: ChatM
 type ChatMessageHandlerArgs = Parameters<typeof createChatMessageHandler>[0]
 type MockHandlerArgs = ChatMessageHandlerArgs & { readonly _appliedSessions: string[] }
 
-function createStartWorkTemplateOutput(): ChatMessageHandlerOutput {
+function createUlwExecuteTemplateOutput(): ChatMessageHandlerOutput {
   return {
     message: {},
     parts: [
@@ -108,7 +109,7 @@ function createMockHandlerArgs(overrides?: {
       keywordDetector: null,
       claudeCodeHooks: null,
       autoSlashCommand: null,
-      startWork: null,
+      ulwExecute: null,
       goal: null,
     }),
     _appliedSessions: appliedSessions,
@@ -123,7 +124,7 @@ afterEach(() => {
 })
 
 describe("createChatMessageHandler - synthetic/internal messages", () => {
-  test("skips synthetic-only user messages before session state and hooks mutate", async () => {
+  test("acknowledges fallback-marked synthetic retries through runtime fallback before other hooks mutate", async () => {
     // given
     const hookCalls: string[] = []
     const args = createMockHandlerArgs({ shouldOverride: true })
@@ -132,10 +133,47 @@ describe("createChatMessageHandler - synthetic/internal messages", () => {
         hookCalls.push("keywordDetector")
       },
     }
+    args.hooks.runtimeFallback = {
+      "chat.message": async () => {
+        hookCalls.push("runtimeFallback")
+      },
+    }
     const handler = createChatMessageHandler(args)
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "synthetic prompt", synthetic: true }],
+      parts: [{
+        type: "text",
+        text: "synthetic prompt\n<!-- OMO_INTERNAL_INITIATOR -->\n<!-- OMO_RUNTIME_FALLBACK_RETRY -->",
+        synthetic: true,
+      }],
+    }
+
+    // when
+    await handler(createMockInput("sisyphus"), output)
+
+    // then
+    expect(args._appliedSessions).toEqual([])
+    expect(hookCalls).toEqual(["runtimeFallback"])
+    expect(getSessionAgent("test-session")).toBeUndefined()
+  })
+
+  test("does not acknowledge unrelated synthetic continuations as fallback retries", async () => {
+    // given
+    const hookCalls: string[] = []
+    const args = createMockHandlerArgs({ shouldOverride: true })
+    args.hooks.runtimeFallback = {
+      "chat.message": async () => {
+        hookCalls.push("runtimeFallback")
+      },
+    }
+    const handler = createChatMessageHandler(args)
+    const output: ChatMessageHandlerOutput = {
+      message: {},
+      parts: [{
+        type: "text",
+        text: `todo continuation\n${OMO_INTERNAL_INITIATOR_MARKER}`,
+        synthetic: true,
+      }],
     }
 
     // when
@@ -342,12 +380,12 @@ describe("createChatMessageHandler - cache warning behavior", () => {
   })
 })
 
-describe("createChatMessageHandler - /start-work integration", () => {
+describe("createChatMessageHandler - /ulw-execute integration", () => {
   let testDir = ""
   let originalWorkingDirectory = ""
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `chat-message-start-work-${randomUUID()}`)
+    testDir = join(tmpdir(), `chat-message-ulw-execute-${randomUUID()}`)
     originalWorkingDirectory = process.cwd()
     mkdirSync(join(testDir, ".omo", "plans"), { recursive: true })
     writeFileSync(join(testDir, ".omo", "plans", "worker-plan.md"), "# Plan\n- [ ] Task 1")
@@ -367,7 +405,7 @@ describe("createChatMessageHandler - /start-work integration", () => {
     updateSessionAgent("test-session", "prometheus")
     const args = createMockHandlerArgs()
     args.hooks.autoSlashCommand = createAutoSlashCommandHook({ skills: [] })
-    args.hooks.startWork = createStartWorkHook({
+    args.hooks.ulwExecute = createUlwExecuteHook({
       directory: testDir,
       client: { tui: { showToast: async () => {} } },
     } as never)
@@ -375,7 +413,7 @@ describe("createChatMessageHandler - /start-work integration", () => {
     const input = createMockInput("prometheus")
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "/start-work" }],
+      parts: [{ type: "text", text: "/ulw-execute" }],
     }
 
     // when
@@ -390,13 +428,13 @@ describe("createChatMessageHandler - /start-work integration", () => {
     expect(readBoulderState(testDir)?.agent).toBe("sisyphus")
   })
 
-  test("smoke: resolves quoted human-readable plan names through the full /start-work chat.message path", async () => {
+  test("smoke: resolves quoted human-readable plan names through the full /ulw-execute chat.message path", async () => {
     // given
     writeFileSync(join(testDir, ".omo", "plans", "my-feature-plan.md"), "# Plan\n- [ ] Task 1")
     updateSessionAgent("test-session", "prometheus")
     const args = createMockHandlerArgs()
     args.hooks.autoSlashCommand = createAutoSlashCommandHook({ skills: [] })
-    args.hooks.startWork = createStartWorkHook({
+    args.hooks.ulwExecute = createUlwExecuteHook({
       directory: testDir,
       client: { tui: { showToast: async () => {} } },
     } as never)
@@ -404,7 +442,7 @@ describe("createChatMessageHandler - /start-work integration", () => {
     const input = createMockInput("prometheus")
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "/start-work \"my feature plan\"" }],
+      parts: [{ type: "text", text: "/ulw-execute \"my feature plan\"" }],
     }
 
     // when
@@ -420,25 +458,25 @@ describe("createChatMessageHandler - /start-work integration", () => {
 })
 
 describe("createChatMessageHandler - goal command handling and stop continuation clearing", () => {
-  test("clears stop state before raw /start-work resumes work through chat.message", async () => {
+  test("clears stop state before raw /ulw-execute resumes work through chat.message", async () => {
     // given
     const stopContinuationGuard = createStopContinuationGuardMock(true)
-    const startWorkCalls: string[] = []
+    const ulwExecuteCalls: string[] = []
     const args = createMockHandlerArgs()
     args.hooks.stopContinuationGuard = stopContinuationGuard.guard
-    args.hooks.startWork = {
+    args.hooks.ulwExecute = {
       "chat.message": async (input: { sessionID: string }) => {
-        startWorkCalls.push(input.sessionID)
+        ulwExecuteCalls.push(input.sessionID)
       },
     }
     const handler = createChatMessageHandler(args)
-    const output = createStartWorkTemplateOutput()
+    const output = createUlwExecuteTemplateOutput()
 
     // when
     await handler(createMockInput("sisyphus"), output)
 
     // then
-    expect(startWorkCalls).toEqual(["test-session"])
+    expect(ulwExecuteCalls).toEqual(["test-session"])
     expect(stopContinuationGuard.isStoppedCalls).toEqual(["test-session"])
     expect(stopContinuationGuard.clearCalls).toEqual(["test-session"])
   })
@@ -453,7 +491,7 @@ describe("createChatMessageHandler - goal command handling and stop continuation
     const handler = createChatMessageHandler(args)
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "Ship it" }],
+      parts: [{ type: "text", text: "/goal Ship it" }],
     }
 
     // when
@@ -475,7 +513,7 @@ describe("createChatMessageHandler - goal command handling and stop continuation
     const handler = createChatMessageHandler(args)
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "pause" }],
+      parts: [{ type: "text", text: "/goal pause" }],
     }
 
     // when
@@ -497,7 +535,7 @@ describe("createChatMessageHandler - goal command handling and stop continuation
     const handler = createChatMessageHandler(args)
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "resume" }],
+      parts: [{ type: "text", text: "/goal resume" }],
     }
 
     // when
@@ -519,7 +557,7 @@ describe("createChatMessageHandler - goal command handling and stop continuation
     const handler = createChatMessageHandler(args)
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "clear" }],
+      parts: [{ type: "text", text: "/goal clear" }],
     }
 
     // when
@@ -534,12 +572,12 @@ describe("createChatMessageHandler - goal command handling and stop continuation
   test("does not clear stop state for ordinary stopped chat messages", async () => {
     // given
     const stopContinuationGuard = createStopContinuationGuardMock(true)
-    const startWorkCalls: string[] = []
+    const ulwExecuteCalls: string[] = []
     const args = createMockHandlerArgs()
     args.hooks.stopContinuationGuard = stopContinuationGuard.guard
-    args.hooks.startWork = {
+    args.hooks.ulwExecute = {
       "chat.message": async (input: { sessionID: string }) => {
-        startWorkCalls.push(input.sessionID)
+        ulwExecuteCalls.push(input.sessionID)
       },
     }
     const handler = createChatMessageHandler(args)
@@ -551,7 +589,7 @@ describe("createChatMessageHandler - goal command handling and stop continuation
     })
 
     // then
-    expect(startWorkCalls).toEqual(["test-session"])
+    expect(ulwExecuteCalls).toEqual(["test-session"])
     expect(stopContinuationGuard.isStoppedCalls).toHaveLength(0)
     expect(stopContinuationGuard.clearCalls).toHaveLength(0)
   })
@@ -559,13 +597,13 @@ describe("createChatMessageHandler - goal command handling and stop continuation
   test("does not clear stop state when the session was not stopped", async () => {
     // given
     const stopContinuationGuard = createStopContinuationGuardMock(false)
-    const startWorkCalls: string[] = []
+    const ulwExecuteCalls: string[] = []
     const goalMock = createGoalHookMock()
     const args = createMockHandlerArgs()
     args.hooks.stopContinuationGuard = stopContinuationGuard.guard
-    args.hooks.startWork = {
+    args.hooks.ulwExecute = {
       "chat.message": async (input: { sessionID: string }) => {
-        startWorkCalls.push(input.sessionID)
+        ulwExecuteCalls.push(input.sessionID)
       },
     }
     args.hooks.goal = goalMock.hook
@@ -574,27 +612,27 @@ describe("createChatMessageHandler - goal command handling and stop continuation
     // when
     await handler(createMockInput("sisyphus"), {
       message: {},
-      parts: createStartWorkTemplateOutput().parts,
+      parts: createUlwExecuteTemplateOutput().parts,
     })
     await handler(createMockInput("sisyphus"), {
       message: {},
-      parts: [{ type: "text", text: "Ship it" }],
+      parts: [{ type: "text", text: "/goal Ship it" }],
     })
     await handler(createMockInput("sisyphus"), {
       message: {},
-      parts: [{ type: "text", text: "pause" }],
+      parts: [{ type: "text", text: "/goal pause" }],
     })
     await handler(createMockInput("sisyphus"), {
       message: {},
-      parts: [{ type: "text", text: "resume" }],
+      parts: [{ type: "text", text: "/goal resume" }],
     })
     await handler(createMockInput("sisyphus"), {
       message: {},
-      parts: [{ type: "text", text: "clear" }],
+      parts: [{ type: "text", text: "/goal clear" }],
     })
 
     // then
-    expect(startWorkCalls).toEqual([
+    expect(ulwExecuteCalls).toEqual([
       "test-session",
       "test-session",
       "test-session",
@@ -602,10 +640,6 @@ describe("createChatMessageHandler - goal command handling and stop continuation
       "test-session",
     ])
     expect(goalMock.setGoalCalls).toEqual([
-      {
-        sessionID: "test-session",
-        objective: "<session-context>context</session-context>\nYou are starting an Atlas work session.",
-      },
       { sessionID: "test-session", objective: "Ship it" },
     ])
     expect(goalMock.pauseGoalCalls).toEqual(["test-session"])
@@ -617,6 +651,67 @@ describe("createChatMessageHandler - goal command handling and stop continuation
 })
 
 describe("createChatMessageHandler - /goal raw slash fallback", () => {
+  test("does not execute a command embedded in a later ordinary text part", async () => {
+    const goalMock = createGoalHookMock()
+    const args = createMockHandlerArgs()
+    args.hooks.goal = goalMock.hook
+    const output = { message: {}, parts: [
+      { type: "text", text: "Please explain this command; do not execute it:" },
+      { type: "text", text: "/goal clear" },
+    ] }
+    await createChatMessageHandler(args)(createMockInput("sisyphus"), output)
+    expect(goalMock.clearGoalCalls).toEqual([])
+    expect(goalMock.setGoalCalls).toEqual([])
+    expect(output.parts[1].text).toBe("/goal clear")
+  })
+
+  test("automatic goal uses original user text before hook injection", async () => {
+    const goalMock = createGoalHookMock()
+    const args = createMockHandlerArgs({ shouldOverride: true })
+    args.hooks.goal = goalMock.hook
+    args.pluginConfig.default_mode = { goal: true }
+    args.hooks.keywordDetector = { "chat.message": async (_input, output) => {
+      output.parts.push({ type: "text", text: "injected instructions".repeat(200) })
+    } }
+    const output = { message: {}, parts: [{ type: "text", text: "original task" }] }
+    await createChatMessageHandler(args)(createMockInput("sisyphus"), output)
+    expect(goalMock.setGoalCalls).toEqual([{ sessionID: "test-session", objective: "original task" }])
+    expect(output.parts[1].text).toBe("injected instructions".repeat(200))
+  })
+  test("does not route an auto-slash-expanded skill payload into goal handling", async () => {
+    // given
+    const setGoal = mock((_: string, objective: string) => {
+      validateObjective(objective)
+      return { objective, status: "active" }
+    })
+    const goalMock = createGoalHookMock()
+    const args = createMockHandlerArgs()
+    args.hooks.autoSlashCommand = createAutoSlashCommandHook({
+      skills: unsafeTestValue([{
+        name: "long-skill",
+        definition: {
+          description: "Long skill regression fixture",
+          template: "x".repeat(2_100),
+        },
+        scope: "user",
+      }]),
+    })
+    args.hooks.goal = { ...goalMock.hook, setGoal }
+    const handler = createChatMessageHandler(args)
+    const output: ChatMessageHandlerOutput = {
+      message: {},
+      parts: [{ type: "text", text: "/long-skill" }],
+    }
+
+    // when
+    const run = handler(createMockInput("sisyphus"), output)
+
+    // then
+    await expect(run).resolves.toBeUndefined()
+    expect(setGoal).not.toHaveBeenCalled()
+    expect(output.parts[0].text).toContain("<auto-slash-command>")
+  })
+
   test("sets goal when /goal <objective> arrives through chat.message without native command expansion", async () => {
     // given
     const goalMock = createGoalHookMock()
@@ -626,7 +721,7 @@ describe("createChatMessageHandler - /goal raw slash fallback", () => {
     const input = createMockInput("sisyphus")
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "Ship the dashboard" }],
+      parts: [{ type: "text", text: "/goal Ship the dashboard" }],
     }
 
     // when
@@ -647,7 +742,7 @@ describe("createChatMessageHandler - /goal raw slash fallback", () => {
     const input = createMockInput("sisyphus")
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "pause" }],
+      parts: [{ type: "text", text: "/goal pause" }],
     }
 
     // when
@@ -667,7 +762,7 @@ describe("createChatMessageHandler - /goal raw slash fallback", () => {
     const input = createMockInput("sisyphus")
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "resume" }],
+      parts: [{ type: "text", text: "/goal resume" }],
     }
 
     // when
@@ -687,7 +782,7 @@ describe("createChatMessageHandler - /goal raw slash fallback", () => {
     const input = createMockInput("sisyphus")
     const output: ChatMessageHandlerOutput = {
       message: {},
-      parts: [{ type: "text", text: "clear" }],
+      parts: [{ type: "text", text: "/goal clear" }],
     }
 
     // when

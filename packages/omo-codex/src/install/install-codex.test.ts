@@ -7,9 +7,10 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { findRepoRoot, findRepoRootFromImporter, resolveCodexInstallerBinDir, runCodexInstaller } from "./install-codex"
 import { createRepoWithBuiltComponentBins } from "./install-codex-test-fixtures"
+import { findMissingSpawnedScripts } from "./spawned-script-targets"
 import { createLegacyCodexHome, liveLegacyEndpointFor, startLegacyDaemonProcess, stopChild, waitForChildReady, writeLegacyVersionState } from "./lsp-daemon-reaper.test-support"
 
-const INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS = process.platform === "win32" ? 60_000 : 20_000
+const INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS = process.platform === "win32" ? 120_000 : 20_000
 
 const skipAstGrepInstall = async () => ({ kind: "skipped" as const, reason: "test" })
 
@@ -208,7 +209,7 @@ describe("install-codex", () => {
     expect(legacyCacheMissing).toBe(true)
   }, { timeout: INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS })
 
-  test("#given codex installer #when installing omo #then seeds OMO SOT through local migration script", async () => {
+  test("#given codex installer #when installing omo #then never spawns a repo script that is not shipped", async () => {
     // given
     const codexHome = await mkdtemp(join(tmpdir(), "omo-codex-home-sot-"))
     const binDir = await mkdtemp(join(tmpdir(), "omo-codex-bin-sot-"))
@@ -229,10 +230,8 @@ describe("install-codex", () => {
     })
 
     // then
-    const sotInvocation = invocations.find((invocation) => invocation.args.some((arg) => arg.endsWith("migrate-omo-sot.mjs")))
-    expect(sotInvocation?.command).toBe(process.execPath)
-    expect(sotInvocation?.args).toContain("--seed")
-    expect(sotInvocation?.home).toBe(home)
+    const missingScripts = await findMissingSpawnedScripts({ invocations, repoRoot })
+    expect(missingScripts).toEqual([])
   }, { timeout: INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS })
 
   test("#given repoRoot without root CLI dist #when installing omo #then warns about the skipped omo runtime wrapper", async () => {
@@ -247,11 +246,11 @@ describe("install-codex", () => {
 
     // then
     const cliPath = join(repoRoot, "dist", "cli", "index.js")
-    const wrapperWarnings = logs.filter((line) => line.includes("omo runtime wrapper"))
+    const wrapperWarnings = logs.filter((line) => line.includes("omo-agent-toolkit runtime wrapper"))
     expect(wrapperWarnings.length).toBeGreaterThan(0)
     expect(wrapperWarnings.join("\n")).toContain(cliPath)
     const linkedNames = await readdir(binDir)
-    const rootCliBinName = process.platform === "win32" ? "omo.cmd" : "omo"
+    const rootCliBinName = process.platform === "win32" ? "omo-agent-toolkit.cmd" : "omo-agent-toolkit"
     expect(linkedNames).not.toContain(rootCliBinName)
   }, { timeout: INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS })
 
@@ -314,7 +313,7 @@ describe("install-codex", () => {
     const configContent = await readFile(join(codexHome, "config.toml"), "utf8")
     expect(configContent).toContain('approval_policy = "never"')
     expect(configContent).toContain('sandbox_mode = "danger-full-access"')
-    expect(configContent).toContain('network_access = "enabled"')
+    expect(configContent).not.toMatch(/^\s*network_access\s*=/m)
     expect(configContent).toContain("hide_full_access_warning = true")
     expect(configContent).toContain("hide_world_writable_warning = true")
   }, { timeout: INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS })

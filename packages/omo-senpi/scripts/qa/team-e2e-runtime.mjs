@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs"
 import { join, win32 } from "node:path"
 
 import { killProcessGroup } from "./team-e2e-process.mjs"
+import { isolatedChildEnv } from "./sandbox-child-env.mjs"
 
 export {
   cleanupProcessGroups,
@@ -63,9 +64,12 @@ export function startSenpiRun(input) {
   const child = spawn(invocation.command, [...invocation.prefixArgs, ...args], {
     cwd: input.sandbox.cwd,
     env: {
-      ...process.env,
+      ...isolatedChildEnv(process.env, input.sandbox.agentDir),
       SENPI_CODING_AGENT_DIR: input.sandbox.agentDir,
       XDG_CONFIG_HOME: input.sandbox.xdgConfigHome,
+      // The omo user-scope config resolves from HOME (~/.omo/omo.jsonc), not XDG - without this the
+      // developer's real user categories leak into the lane and shadow the mock-pinned ones.
+      ...(input.sandbox.homeDir === undefined ? {} : { HOME: input.sandbox.homeDir, USERPROFILE: input.sandbox.homeDir }),
       SENPI_CODING_AGENT_SESSION_DIR: sessionDir,
       OMO_SENPI_QA: "1",
       ...(input.obsDir === undefined ? {} : { OMO_TEAM_E2E_OBS: input.obsDir }),

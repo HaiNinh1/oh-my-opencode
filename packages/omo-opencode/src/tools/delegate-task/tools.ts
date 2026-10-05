@@ -68,7 +68,7 @@ const delegateTaskArgsSchema = {
   run_in_background: tool.schema
     .boolean()
     .optional()
-    .describe("Optional; defaults to false (sync). true=async (returns background task ID `bg_...` for background_output), false=sync (waits). Use true ONLY for parallel exploration; otherwise omit or pass false for task delegation."),
+    .describe("true is the standard spawn: returns a background task ID `bg_...` at once; the completion notification delivers the result, which background_output reads. false blocks this response until the child finishes; use it only for a short child whose result gates your very next call. Omitted counts as false."),
   category: tool.schema.string().optional().describe("REQUIRED if subagent_type not provided. Do NOT provide both category and subagent_type."),
   subagent_type: tool.schema.string().optional().describe("REQUIRED if category not provided. Do NOT provide both category and subagent_type."),
   task_id: tool.schema
@@ -144,6 +144,11 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
         ? `${parentContext.model.providerID}/${parentContext.model.modelID}`
         : undefined
 
+      const currentModelConfig = options.loadCurrentModelConfig?.()
+      const modelOptions = currentModelConfig === undefined
+        ? options
+        : { ...options, userCategories: currentModelConfig.categories, agentOverrides: currentModelConfig.agents }
+
       let agentToUse: string
       let categoryModel: DelegatedModelConfig | undefined
       let categoryPromptAppend: string | undefined
@@ -154,7 +159,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
       let maxPromptTokens: number | undefined
 
       if (delegateTaskArgs.category) {
-        const resolution = await resolveCategoryExecution(delegateTaskArgs, options, inheritedModel, systemDefaultModel)
+        const resolution = await resolveCategoryExecution(delegateTaskArgs, modelOptions, inheritedModel, systemDefaultModel)
         if (resolution.error) {
           return resolution.error
         }
@@ -194,7 +199,7 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
           return executeUnstableAgentTask(delegateTaskArgs, ctx, options, parentContext, agentToUse, categoryModel, systemContent, actualModel)
         }
       } else {
-        const resolution = await resolveSubagentExecution(delegateTaskArgs, options, parentContext.agent, categoryExamples)
+        const resolution = await resolveSubagentExecution(delegateTaskArgs, modelOptions, parentContext.agent, categoryExamples)
         if (resolution.error) {
           return resolution.error
         }

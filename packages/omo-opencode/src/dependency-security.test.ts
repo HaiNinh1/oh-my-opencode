@@ -18,12 +18,13 @@ type BunLock = {
   workspaces?: {
     ""?: {
       dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
     }
   }
   packages?: Record<string, [string, ...unknown[]]>
 }
 
-const MINIMUM_SAFE_PICOMATCH_VERSION = "4.0.4"
+const MINIMUM_SAFE_PICOMATCH_VERSION = "4.0.7"
 const REPOSITORY_ROOT = dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = __repoRootFrom(REPOSITORY_ROOT)
 const FIRST_PARTY_SOURCE_PATHS = ["packages", "script", "test-support"] as const
@@ -94,12 +95,12 @@ async function findFirstPartyEffectImports(): Promise<string[]> {
 }
 
 describe("dependency security", () => {
-  it("#given picomatch is a runtime dependency #when dependencies are locked #then it uses the patched ReDoS-safe release", () => {
+  it("#given picomatch is bundled into the published dist #when dependencies are locked #then it uses the patched ReDoS-safe release", () => {
     const packageJson = JSON.parse(readFileSync(join(REPO_ROOT, "package.json"), "utf-8")) as {
-      dependencies?: Record<string, string>
+      devDependencies?: Record<string, string>
     }
     const bunLock = parse(readFileSync(join(REPO_ROOT, "bun.lock"), "utf-8")) as BunLock
-    const dependencyRange = packageJson.dependencies?.picomatch
+    const dependencyRange = packageJson.devDependencies?.picomatch
     const lockedReference = bunLock.packages?.picomatch?.[0]
 
     expect(dependencyRange).toBe(`^${MINIMUM_SAFE_PICOMATCH_VERSION}`)
@@ -107,7 +108,7 @@ describe("dependency security", () => {
 
     const lockedVersion = extractLockedVersion(lockedReference ?? "")
     expect(compareVersions(lockedVersion, MINIMUM_SAFE_PICOMATCH_VERSION)).toBeGreaterThanOrEqual(0)
-    expect(bunLock.workspaces?.[""]?.dependencies?.picomatch).toBe(`^${MINIMUM_SAFE_PICOMATCH_VERSION}`)
+    expect(bunLock.workspaces?.[""]?.devDependencies?.picomatch).toBe(`^${MINIMUM_SAFE_PICOMATCH_VERSION}`)
   })
 
   it("#given effect is only needed by OpenCode internals #when root dependencies are locked #then the root package does not depend on effect directly", () => {
@@ -122,12 +123,16 @@ describe("dependency security", () => {
     expect(opencodePluginDependencies).toMatchObject({
       dependencies: expect.objectContaining({ effect: expect.any(String) }),
     })
-    expect(bunLock.packages?.effect?.[0]).toBe("effect@4.0.0-beta.66")
+    expect(bunLock.packages?.effect?.[0]).toBe("effect@4.0.0-beta.83")
   })
 
+  // The scan spawns `git grep -P` over every first-party source and already bounds that spawn at
+  // 60s so a stalled grep fails deterministically. The case therefore has to outlive its own
+  // guard: on the 5s default the test died before the spawn budget could ever apply, which is the
+  // Windows failure. The assertion is unchanged - only the ceiling now exceeds what it wraps.
   it("#given first-party TypeScript sources #when dependency imports are scanned #then no source imports effect directly", async () => {
     const effectImports = await findFirstPartyEffectImports()
 
     expect(effectImports).toEqual([])
-  })
+  }, 90_000)
 })

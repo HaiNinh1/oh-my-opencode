@@ -14,12 +14,12 @@ You are running **ultraqa** - an autonomous, BOUNDED QA-cycling workflow that ru
 ## When to use vs not
 
 - USE when the desired behavior is already known and the only open question is whether an explicit QA condition (tests / build / lint / typecheck / manual QA scenario) passes.
-- USE as a verification/fix sub-loop under `start-work`, `ralph-loop`, or `ultrawork` when those need a tight test-fix cycle.
+- USE as a verification/fix sub-loop under `ulw-execute`, an active `/goal`, or `ultrawork` when those need a tight test-fix cycle.
 - DO NOT use to decide WHAT to build - that is `ulw-plan`. DO NOT use for open-ended exploration. DO NOT use for a single obvious one-line fix - just fix it directly.
 
-## Relationship to ralph-loop, start-work, and ultrawork
+## Relationship to goal, ulw-execute, and ultrawork
 
-ultraqa owns repeated quality-gate cycling only. If `ralph-loop` / `ultrawork` is active, ultraqa is a sub-loop under that authority - it produces the evidence those loops verify; it never competes with their session loop or clears their state. If `start-work` is active, ultraqa is the Phase 4 verify-and-fix engine for a single checkbox. ultraqa never marks plan checkboxes or edits product files itself - it delegates fixes to workers and reports the verdict up.
+ultraqa owns repeated quality-gate cycling only. If a `/goal` / `ultrawork` is active, ultraqa is a sub-loop under that authority - it produces the evidence those loops verify; it never competes with their session loop or clears their state. If `ulw-execute` is active, ultraqa is the Phase 4 verify-and-fix engine for a single checkbox. ultraqa never marks plan checkboxes or edits product files itself - it delegates fixes to workers and reports the verdict up.
 
 ## Goal parsing
 
@@ -87,7 +87,7 @@ Run this loop. Track every failure signature so you can detect repeats.
    )
    ```
 
-   Dispatch independent fixes in parallel with `parallel_tasks` when the diagnosis names disjoint files.
+   Dispatch independent fixes in parallel with `parallel_tasks` when the diagnosis names disjoint files (in Codex, parallel subagents).
 
 6. **RE-TEST.** Go back to step 1 with cycle N+1.
 

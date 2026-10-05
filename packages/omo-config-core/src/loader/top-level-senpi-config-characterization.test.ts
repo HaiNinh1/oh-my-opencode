@@ -1,5 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { availableParallelism, tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, test } from "bun:test"
 
@@ -17,13 +17,13 @@ const CURRENT_USER_CONFIG = `{
       "model": "kimi-coding/kimi-for-coding-highspeed-unlocked",
       "reasoningEffort": "minimal",
       "fallback_models": [
-        { "model": "quotio-openai/gpt-5.4-mini-fast", "reasoningEffort": "minimal" },
+        { "model": "openai-codex/gpt-5.6-luna-fast", "reasoningEffort": "minimal" },
         { "model": "example-gateway/z-ai/glm-5.2-ultrafast-unlocked", "reasoningEffort": "none" }
       ],
       "prompt_append": ${JSON.stringify(QUICK_PROMPT_APPEND)}
     },
     "deep": {
-      "model": "quotio-openai/gpt-5.6-terra",
+      "model": "openai-codex/gpt-5.6-terra",
       "variant": "xhigh"
     }
   },
@@ -31,13 +31,13 @@ const CURRENT_USER_CONFIG = `{
     "explore": {
       "model": "kimi-coding/kimi-for-coding-highspeed",
       "models": [
-        { "model": "quotio-openai/gpt-5.4-mini-fast", "reasoningEffort": "minimal" },
+        { "model": "openai-codex/gpt-5.6-luna-fast", "reasoningEffort": "minimal" },
         "example-gateway/z-ai/glm-5.2-ultrafast-unlocked",
-        { "model": "quotio-openai/gpt-5.4-mini", "reasoningEffort": "minimal" }
+        { "model": "openai-codex/gpt-5.6-luna-fast", "reasoningEffort": "minimal" }
       ]
     },
     "oracle": {
-      "model": "quotio-openai/gpt-5.6-sol",
+      "model": "openai-codex/gpt-5.6-sol",
       "reasoningEffort": "max"
     }
   }
@@ -48,42 +48,43 @@ const EXPECTED_CONFIG = {
     explore: {
       model: "kimi-coding/kimi-for-coding-highspeed",
       models: [
-        { model: "quotio-openai/gpt-5.4-mini-fast", reasoning: "minimal" },
+        { model: "openai-codex/gpt-5.6-luna-fast", reasoning: "minimal" },
         "example-gateway/z-ai/glm-5.2-ultrafast-unlocked",
-        { model: "quotio-openai/gpt-5.4-mini", reasoning: "minimal" },
+        { model: "openai-codex/gpt-5.6-luna-fast", reasoning: "minimal" },
       ],
     },
     oracle: {
-      model: "quotio-openai/gpt-5.6-sol",
+      model: "openai-codex/gpt-5.6-sol",
       reasoning: "max",
     },
   },
   categories: {
     quick: {
       fallback_models: [
-        { model: "quotio-openai/gpt-5.4-mini-fast", reasoning: "minimal" },
+        { model: "openai-codex/gpt-5.6-luna-fast", reasoning: "minimal" },
         { model: "example-gateway/z-ai/glm-5.2-ultrafast-unlocked", reasoning: "off" },
       ],
       model: "kimi-coding/kimi-for-coding-highspeed-unlocked",
       prompt_append: QUICK_PROMPT_APPEND,
       reasoning: "minimal",
     },
-    deep: {
-      model: "quotio-openai/gpt-5.6-terra",
+    "deep-low": {
+      model: "openai-codex/gpt-5.6-terra",
       reasoning: "xhigh",
     },
   },
-  codegraph: {
-    auto_provision: true,
-    daemon: true,
-    enabled: true,
-    telemetry: false,
-  },
   task: {
+    isolation: { enabled: false, backend: "auto", apply: true, merge: "patch", commits: "generic" },
     default_concurrency: 5,
-    default_execution_mode: "in-process",
+    global_concurrency: Math.max(8, availableParallelism() * 2),
+    default_execution_mode: "auto",
+    process_runner: "host",
+    host_engine_policy: "upgrade",
+    host_shard_prewarm: "first-turn",
     max_depth: 1,
-    residency_max_children: 8,
+    residency_max_children: "unlimited",
+    resume_children: true,
+    resident_idle_timeout_ms: 900000,
     team: {
       max_members: 8,
       max_parallel_members: 4,
@@ -103,7 +104,7 @@ const EXPECTED_CONFIG = {
 } satisfies OmoConfig
 
 describe("loadOmoConfig top-level Senpi configuration characterization", () => {
-  test("#given the current top-level-only user config shape #when resolving the senpi view #then category and agent settings are preserved exactly", () => {
+  test("#given the current top-level-only user config shape #when resolving the senpi view #then category and agent settings are preserved exactly, with the retired deep key canonicalized and reported", () => {
     // given
     const root = mkdtempSync(join(tmpdir(), "omo-config-top-level-senpi-"))
     const homeDir = join(root, "home")
@@ -122,7 +123,9 @@ describe("loadOmoConfig top-level Senpi configuration characterization", () => {
       })
 
       // then
-      expect(result.diagnostics).toEqual([])
+      expect(result.diagnostics.map(({ kind, issuePaths }) => ({ kind, issuePaths }))).toEqual([
+        { kind: "deprecated-keys", issuePaths: ["categories.deep"] },
+      ])
       expect(result.config).toEqual(EXPECTED_CONFIG)
     } finally {
       rmSync(root, { force: true, recursive: true })

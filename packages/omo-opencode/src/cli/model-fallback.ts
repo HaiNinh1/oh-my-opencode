@@ -18,6 +18,7 @@ import {
 	resolveModelFromChain,
 } from "./fallback-chain-resolution"
 import { transformModelForProvider } from "./provider-model-id-transform"
+import { isExcludedFallbackLaneModel } from "./fallback-lane-policy"
 
 export type { GeneratedOmoConfig } from "./model-fallback-types"
 
@@ -120,6 +121,7 @@ function attachFallbackModels<T extends AgentConfig | CategoryConfig>(
   }
 
   const fallbackModels = uniqueFallbacks.slice(primaryIndex + 1)
+    .filter((entry) => !isExcludedFallbackLaneModel(entry.model))
   if (fallbackModels.length === 0) {
     return config
   }
@@ -136,7 +138,9 @@ function attachAllFallbackModels<T extends AgentConfig | CategoryConfig>(
   availability: ReturnType<typeof toProviderAvailability>,
 ): T {
   const uniqueFallbacks = collectAvailableFallbacks(fallbackChain, availability)
-  const fallbackModels = uniqueFallbacks.filter((entry) => entry.model !== config.model)
+  const fallbackModels = uniqueFallbacks
+    .filter((entry) => entry.model !== config.model)
+    .filter((entry) => !isExcludedFallbackLaneModel(entry.model))
   if (fallbackModels.length === 0) {
     return config
   }
@@ -173,7 +177,9 @@ export function generateModelConfig(config: InstallConfig): GeneratedOmoConfig {
           .map(([role]) => [role, { model: ULTIMATE_FALLBACK }])
       ),
       categories: Object.fromEntries(
-        Object.keys(CLI_CATEGORY_MODEL_REQUIREMENTS).map((cat) => [cat, { model: ULTIMATE_FALLBACK }])
+        Object.entries(CLI_CATEGORY_MODEL_REQUIREMENTS)
+          .filter(([, req]) => !req.requiresAnyModel)
+          .map(([cat]) => [cat, { model: ULTIMATE_FALLBACK }])
       ),
     }
   }
@@ -194,7 +200,7 @@ export function generateModelConfig(config: InstallConfig): GeneratedOmoConfig {
     if (role === "explore") {
       let agentConfig: AgentConfig
       if (avail.native.openai) {
-        agentConfig = { model: "openai/gpt-5.6-luna-fast", variant: "low" }
+        agentConfig = { model: "openai/gpt-6-luna-fast", variant: "low" }
       } else if (avail.native.claude) {
         agentConfig = { model: "anthropic/claude-haiku-4-5" }
       } else if (avail.opencodeZen) {
@@ -254,6 +260,9 @@ export function generateModelConfig(config: InstallConfig): GeneratedOmoConfig {
         ? CLI_CATEGORY_MODEL_REQUIREMENTS["unspecified-low"].fallbackChain
         : req.fallbackChain
 
+    if (req.requiresAnyModel && !isAnyFallbackEntryAvailable(fallbackChain, avail)) {
+      continue
+    }
     if (req.requiresModel && !isRequiredModelAvailable(req.requiresModel, req.fallbackChain, avail)) {
       continue
     }

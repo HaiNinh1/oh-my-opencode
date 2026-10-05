@@ -217,7 +217,7 @@ describe("TaskManager start failure security", () => {
   test.each([
     ["depth-exceeded", "In-process child depth limit exceeded."],
     ["session-create-failed", "In-process child session creation failed."],
-    ["child-prompt-failed", "In-process child prompt failed to start."],
+    ["child-prompt-failed", "Child prompt failed to start."],
   ] satisfies readonly (readonly [RunnerFailure["kind"], string])[])(
     "#given a %s RunnerError containing secrets #when a named subagent start fails #then its stable classification preserves the resolved context",
     async (kind, publicMessage) => {
@@ -254,6 +254,9 @@ describe("TaskManager start failure security", () => {
         resolved_model: resolvedModel,
         run_in_background: false,
         error_message: publicMessage,
+        // The closed RunnerFailure enum travels with the sanitized message so a caller can classify
+        // the refusal (a denied parent kernel-tool grant vs a generic failure) without parsing it.
+        failure_kind: kind,
       })
       expect(JSON.stringify(result)).not.toContain(ADVERSARIAL_ERROR)
     },

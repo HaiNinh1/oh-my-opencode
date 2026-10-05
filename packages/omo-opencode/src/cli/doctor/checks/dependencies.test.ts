@@ -1,11 +1,12 @@
 /// <reference types="bun-types" />
 
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from "bun:test"
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { createRequire } from "node:module"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import * as deps from "./dependencies"
+import * as downloader from "../../../hooks/comment-checker/downloader"
 
 afterEach(() => mock.restore())
 
@@ -41,13 +42,7 @@ describe("dependencies check", () => {
       //#given cached binary exists
       const mockCachedPath = "/mock/path/to/comment-checker"
 
-      mock.module("../../../hooks/comment-checker/downloader", () => ({
-        getCachedBinaryPath: () => mockCachedPath,
-        getCacheDir: () => "/mock/cache/dir",
-        getBinaryName: () => "comment-checker",
-        downloadCommentChecker: async () => mockCachedPath,
-        ensureCommentCheckerBinary: async () => mockCachedPath,
-      }))
+      spyOn(downloader, "getCachedBinaryPath").mockReturnValue(mockCachedPath)
 
       //#when checking
       const info = await deps.checkCommentChecker()
@@ -85,6 +80,25 @@ describe("dependencies check", () => {
       expect(result).toBe(expected)
     })
 
+    it("#given the per-platform package is installed beside the package #when resolving package binary #then returns the platform package binary", () => {
+      //#given node_modules/@code-yeongyu/comment-checker plus its matching platform package
+      const scopeDir = join(realpathSync(testDir), "node_modules", "@code-yeongyu")
+      const packageDir = join(scopeDir, "comment-checker")
+      const platformDir = join(scopeDir, `comment-checker-${platformKey}`)
+      mkdirSync(packageDir, { recursive: true })
+      mkdirSync(join(platformDir, "bin"), { recursive: true })
+      writeFileSync(join(packageDir, "package.json"), "{}")
+      writeFileSync(join(platformDir, "package.json"), "{}")
+      const expected = join(platformDir, "bin", binaryName)
+      writeFileSync(expected, "")
+
+      //#when resolving through the package.json resolver
+      const result = deps.findCommentCheckerPackageBinary(undefined, () => join(packageDir, "package.json"))
+
+      //#then returns the platform package binary
+      expect(result).toBe(expected)
+    })
+
     it("#given only the legacy bin binary exists #when resolving package binary #then returns bin path", () => {
       //#given a package dir with binary only at bin/
       const binDir = join(testDir, "bin")
@@ -99,7 +113,7 @@ describe("dependencies check", () => {
       expect(result).toBe(expected)
     })
 
-    it("#given a zero-dependency install where require.resolve throws Bun's non-Error ResolveMessage #when resolving package binary #then returns null instead of crashing", () => {
+    it("#given a zero-dependency install where require.resolve throws Bun's ResolveMessage #when resolving package binary #then returns null instead of crashing", () => {
       //#given a real ResolveMessage captured from a genuinely failing require.resolve (lazycodex-ai ships no node_modules)
       const requireFromHere = createRequire(import.meta.url)
       let resolveMessage: unknown
@@ -109,7 +123,8 @@ describe("dependencies check", () => {
       } catch (error) {
         resolveMessage = error
       }
-      expect(resolveMessage instanceof Error).toBe(false)
+      // Bun 1.4 made ResolveMessage extend Error; assert the stable identity, not the prototype.
+      expect((resolveMessage as { name?: string }).name).toBe("ResolveMessage")
 
       //#when resolving without an override so the failing resolver is exercised
       const result = deps.findCommentCheckerPackageBinary(undefined, () => {

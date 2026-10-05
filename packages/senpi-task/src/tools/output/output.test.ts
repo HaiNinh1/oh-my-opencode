@@ -55,6 +55,23 @@ describe("runTaskOutput", () => {
     }
   })
 
+  test("#given a source-truncated transcript #when read #then the RPC-visible result reports truncation", async () => {
+    const record = makeRecord({ task_id: "st_source_truncated", status: "completed" })
+    const deps = depsFrom([record], () => ({
+      entries: [{ kind: "assistant", text: "bounded transcript" }],
+      source: "event-log",
+      truncated: true,
+    }))
+
+    const result = await runTaskOutput(deps, { task_id: record.task_id, mode: "full" }, "session-parent")
+
+    expect(result.details).toMatchObject({
+      kind: "transcript",
+      transcript: "assistant: bounded transcript",
+      truncated: true,
+    })
+  })
+
   test("#given default mode #when read #then a status snapshot with final_response is returned", async () => {
     // given
     const record = makeRecord({ task_id: "st_done", status: "completed", final_response: "the answer" })
@@ -181,5 +198,84 @@ describe("runTaskOutput", () => {
     if (result.details.kind === "status") {
       expect(result.details.snapshot.task_id).toBe("st_named")
     }
+  })
+
+  test("#given a persisted_only record #when read in status mode #then the status text states it is suspended", async () => {
+    // given
+    const record = makeRecord({ task_id: "st_susp", status: "running", residency_state: "persisted_only" })
+    const deps = depsFrom([record])
+
+    // when
+    const result = await runTaskOutput(deps, { task_id: "st_susp" }, "session-parent")
+
+    // then
+    expect(result.details.kind).toBe("status")
+    if (result.details.kind === "status") {
+      expect(result.details.snapshot.residency_state).toBe("persisted_only")
+      expect(result.details.snapshot.suspended).toBeDefined()
+    }
+    expect(firstText(result)).toContain("suspended")
+  })
+
+  test("#given an rpc_detached record #when read in status mode #then the status text states it is suspended", async () => {
+    // given
+    const record = makeRecord({ task_id: "st_susp", status: "running", residency_state: "rpc_detached" })
+    const deps = depsFrom([record])
+
+    // when
+    const result = await runTaskOutput(deps, { task_id: "st_susp" }, "session-parent")
+
+    // then
+    expect(result.details.kind).toBe("status")
+    if (result.details.kind === "status") {
+      expect(result.details.snapshot.residency_state).toBe("rpc_detached")
+      expect(result.details.snapshot.suspended).toBeDefined()
+    }
+    expect(firstText(result)).toContain("suspended")
+  })
+
+  test("#given a resident record #when read in status mode #then no suspended text appears (regression pin)", async () => {
+    // given
+    const record = makeRecord({ task_id: "st_live", status: "running", residency_state: "resident" })
+    const deps = depsFrom([record])
+
+    // when
+    const result = await runTaskOutput(deps, { task_id: "st_live" }, "session-parent")
+
+    // then
+    expect(firstText(result)).not.toContain("suspended")
+  })
+})
+
+// The shared daemon's loud fallback has to reach the human who asked for the child, not just a log
+// file: a status view carries the session's deduped runner notices.
+describe("runTaskOutput runner notices", () => {
+  test("#given a session that fell back to in-process children #when a status view is read #then the reason appears once", async () => {
+    // given
+    const record = makeRecord({ task_id: "st_noticed", status: "running" })
+    const deps: TaskOutputDeps = {
+      ...depsFrom([record]),
+      notices: () => ["host_unavailable:capability - task children run in this process: the daemon is older"],
+    }
+
+    // when
+    const result = await runTaskOutput(deps, { task_id: "st_noticed" }, "session-parent")
+
+    // then
+    const text = firstText(result)
+    expect(text.match(/host_unavailable:capability/g)).toHaveLength(1)
+    expect(text).toContain("st_noticed")
+  })
+
+  test("#given a session with no runner notices #when a status view is read #then the text is unchanged", async () => {
+    // given
+    const record = makeRecord({ task_id: "st_quiet", status: "running" })
+
+    // when
+    const withNotices = await runTaskOutput({ ...depsFrom([record]), notices: () => [] }, { task_id: "st_quiet" }, "session-parent")
+    const without = await runTaskOutput(depsFrom([record]), { task_id: "st_quiet" }, "session-parent")
+
+    // then
+    expect(firstText(withNotices)).toBe(firstText(without))
   })
 })

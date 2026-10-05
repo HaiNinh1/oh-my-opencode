@@ -1,15 +1,17 @@
 export {
   BUILTIN_CATEGORY_DEFAULTS,
   BUILTIN_CATEGORY_REQUIRES_MODEL,
+  CATEGORY_CALLER_GUIDANCE,
   CATEGORY_DESCRIPTIONS,
   CATEGORY_PROMPT_APPENDS,
   DEFAULT_CATEGORIES,
-  categoryGateModel,
+  categoryGateModels,
   isCategoryChainRungResolvable,
   isCategoryChainViable,
   isCategoryGateSatisfied,
 } from "./builtins"
-export { resolveCategory } from "./resolver"
+export { resolveCategoryCoverage, type CategoryCoverage, type UnusableCategory } from "./coverage"
+export { builtinCategoryChainCandidates, resolveAvailableCategoryNames, resolveCategory } from "./resolver"
 export type {
   BuiltinCategoryDefinition,
   CategoryModelSelection,

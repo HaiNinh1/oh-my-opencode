@@ -40,6 +40,7 @@ export async function injectContinuation(input: {
   worktreePath?: string
   idleSettleMs?: number
 }): Promise<void> {
+  if (input.sessionState.lifecycleActive === false) return
   const remaining = input.progress.total - input.progress.completed
   if (input.sessionState.isInjectingContinuation) {
     scheduleRetry({
@@ -161,6 +162,7 @@ export function scheduleRetry(input: {
   options?: AtlasHookOptions
 }): void {
   const { ctx, sessionID, sessionState, options } = input
+  if (sessionState.lifecycleActive === false) return
   if (sessionState.pendingRetryTimer) {
     return
   }
@@ -168,6 +170,8 @@ export function scheduleRetry(input: {
   sessionState.pendingRetryTimer = setTimeout(async () => {
     try {
       sessionState.pendingRetryTimer = undefined
+
+      if (sessionState.lifecycleActive === false) return
 
       if (sessionState.promptFailureCount >= MAX_CONSECUTIVE_PROMPT_FAILURES) return
       if (sessionState.stalledContinuationReason) return
@@ -187,7 +191,7 @@ export function scheduleRetry(input: {
       if (!currentBoulder.session_ids?.includes(normalizedSessionID)) return
 
       const currentProgress = getPlanProgress(resolveBoulderPlanPath(ctx.directory, currentBoulder))
-      if (currentProgress.isComplete) return
+      if (currentProgress.isComplete || currentProgress.total === 0) return
       if (options?.isContinuationStopped?.(sessionID)) return
       const canContinueSession = await canContinueTrackedBoulderSession({
         client: ctx.client,

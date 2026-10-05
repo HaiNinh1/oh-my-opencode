@@ -1,34 +1,74 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync, watch, writeFileSync } from "node:fs"
 import { homedir } from "node:os"
-import { delimiter, dirname, join, resolve } from "node:path"
+import { delimiter, dirname, extname, isAbsolute, join, resolve } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const { digestDirectory } = await import(pathToFileURL(join(scriptDir, "drive.mjs")).href)
-const { CREDENTIAL_FILES, digestCredentialFiles, parseEvents, readRecords, analyzeSpawn, analyzeRpcRouting, eventsMentionSteerAck, statusSnapshots, liveRecordRpcChildPids, recordRpcChildPids, sleep } =
+const { CREDENTIAL_FILES, digestCredentialFiles, parseEvents, readRecords, analyzeSpawn, analyzeRpcRouting, eventsMentionSteerAck, statusSnapshots, liveRecordRpcChildPids, recordRpcChildPids } =
   await import(pathToFileURL(join(scriptDir, "task-rpc-e2e-helpers.mjs")).href)
 const { SCENARIO_A_STEPS, prepareScenarioSandbox, driveSenpi, runKillCheck, runReconcileCheck } =
   await import(pathToFileURL(join(scriptDir, "task-rpc-e2e-scenarios.mjs")).href)
 const realSenpiAgentDir = join(homedir(), ".senpi", "agent")
 
+function executableNames(bin, platform = process.platform, pathExt = process.env.PATHEXT) {
+  if (platform !== "win32" || extname(bin) !== "") return [bin]
+  const extensions = (pathExt?.trim() || ".COM;.EXE;.BAT;.CMD")
+    .split(";")
+    .map((extension) => extension.trim())
+    .filter((extension) => extension.length > 0)
+  return [bin, ...extensions.map((extension) => `${bin}${extension}`)]
+}
+
 function resolveSenpi() {
   const bin = process.env.SENPI_BIN?.trim() || "senpi"
-  if (bin.includes("/")) return existsSync(bin) ? bin : null
-  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
-    const candidate = resolve(dir || ".", bin)
-    if (existsSync(candidate)) return candidate
+  if (isAbsolute(bin) || bin.includes("/") || bin.includes("\\")) {
+    for (const candidate of executableNames(bin)) {
+      const absolute = resolve(candidate)
+      if (existsSync(absolute)) return absolute
+    }
+    return null
+  }
+  const searchDirs = [
+    join(process.cwd(), "node_modules", ".bin"),
+    ...(process.env.PATH ?? "").split(delimiter),
+  ]
+  for (const dir of new Set(searchDirs)) {
+    for (const name of executableNames(bin)) {
+      const candidate = resolve(dir || ".", name)
+      if (existsSync(candidate)) return candidate
+    }
   }
   return null
 }
 
 async function runChecks(senpiBin, sandbox, sessionDir, stateDir) {
   const checks = []
-  const a = driveSenpi(senpiBin, sandbox, sessionDir, SCENARIO_A_STEPS)
+  const a = await driveSenpi(senpiBin, sandbox, sessionDir, SCENARIO_A_STEPS)
   const aEvents = parseEvents(a.stdout)
-  const routing = analyzeRpcRouting(readRecords(stateDir))
+  const aRecords = readRecords(stateDir)
+  if (aRecords.length === 0) {
+    return {
+      checks: [{
+        check: "scenario_a_parent_persisted_records",
+        verdict: "FAIL",
+        reason: `scenario A parent exited status=${a.status} signal=${a.signal ?? "none"} without persisting any task record`,
+        facts: {
+          status: a.status,
+          signal: a.signal ?? null,
+          stdoutEventCount: aEvents.length,
+          stderrExcerpt: (a.stderr ?? "").slice(0, 400),
+        },
+      }],
+      leakedPids: [],
+      spawnPass: false,
+      routed: false,
+    }
+  }
+  const routing = analyzeRpcRouting(aRecords)
   checks.push({ check: "process_mode_routes_to_rpc_runner", verdict: routing.routed ? "PASS" : "FAIL", ...(routing.reason && { reason: routing.reason }), facts: routing.facts })
-  const spawn = analyzeSpawn(readRecords(stateDir), stateDir)
+  const spawn = analyzeSpawn(aRecords, stateDir)
   checks.push({ check: "spawn_process_pid_and_session_jsonl", verdict: spawn.pass ? "PASS" : "FAIL", ...(spawn.reason && { reason: spawn.reason }), facts: spawn.facts })
 
   const steerFact = eventsMentionSteerAck(aEvents)
@@ -57,13 +97,45 @@ async function runChecks(senpiBin, sandbox, sessionDir, stateDir) {
 }
 
 async function waitForRecordedPidsToExit(stateDir, timeoutMs = 5_000) {
-  const deadline = Date.now() + timeoutMs
-  let livePids = liveRecordRpcChildPids(readRecords(stateDir))
-  while (livePids.length > 0 && Date.now() < deadline) {
-    await sleep(200)
-    livePids = liveRecordRpcChildPids(readRecords(stateDir))
+  const tasksDir = join(stateDir, "tasks")
+  const logsDir = join(stateDir, "logs")
+  const findLivePids = () => {
+    try {
+      return liveRecordRpcChildPids(readRecords(stateDir))
+    } catch (error) {
+      if (error?.code === "ENOENT" || error instanceof SyntaxError) return []
+      throw error
+    }
   }
-  return livePids
+  const initial = findLivePids()
+  if (initial.length === 0) return initial
+  return new Promise((resolve, reject) => {
+    let settled = false
+    const finish = (livePids) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      closeWatchers()
+      resolve(livePids)
+    }
+    const watchers = [tasksDir, logsDir].map((dir) => watch(dir, { persistent: false }, () => {
+      const livePids = findLivePids()
+      if (livePids.length === 0) finish(livePids)
+    }))
+    const closeWatchers = () => watchers.forEach((watcher) => watcher.close())
+    const timeout = setTimeout(() => finish(findLivePids()), timeoutMs)
+    for (const watcher of watchers) {
+      watcher.on("error", (error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        closeWatchers()
+        reject(error)
+      })
+    }
+    const livePids = findLivePids()
+    if (livePids.length === 0) finish(livePids)
+  })
 }
 
 async function main() {
@@ -132,6 +204,10 @@ function runSelfTest() {
   const globalRpcPgrep = ["p", 'grep", ["-f", "', ["senpi", "--mode", "rpc"].join(" "), '"]'].join("")
   if (driverSource.includes(staleCleanupCall) || helperSource.includes(globalRpcPgrep)) {
     throw new Error("self-test: RPC cleanup must use sandbox-owned task record pids, not global process scans")
+  }
+  const windowsNames = executableNames("senpi", "win32", ".EXE;.CMD")
+  if (!windowsNames.includes("senpi.EXE") || !windowsNames.includes("senpi.CMD")) {
+    throw new Error("self-test: Windows Senpi resolution must honor PATHEXT shims")
   }
   const scenarioSource = readFileSync(join(scriptDir, "task-rpc-e2e-scenarios.mjs"), "utf8")
   if (droppedToolPattern().test(scenarioSource)) {

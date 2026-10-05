@@ -1,76 +1,83 @@
 import { describe, expect, it } from "bun:test"
-import { readFileSync, realpathSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
+import { createAgentToolkit } from "../../extension/agent-toolkit-sdk"
 import { FakeExtensionAPI } from "../../../test-support/fake-extension-api"
-import { __testInternals, createUlwLoopComponent } from "./index"
-import {
-  activeStatus,
-  createLogger,
-  createTempOmoBin,
-  readRealCwd,
-  readRunnerRuntime,
-  withEnv,
-  withEnvAsync,
-} from "./ulw-loop.test-support"
+import { createUlwLoopComponent } from "./index"
+import { readUlwLoopStatusInProcess } from "./status-source"
+import { createLogger, sessionEventCtx, TEST_SESSION_ID } from "./ulw-loop.test-support"
 
 describe("omo-senpi ulw-loop runtime", () => {
-  it("#given OMO_BIN is set #when resolving the default omo binary #then Bun is not needed and PATH is ignored", () => {
-    withEnv({ OMO_BIN: "/custom/omo", PATH: "" }, () => {
-      expect(__testInternals.resolveOmoBin()).toBe("/custom/omo")
-    })
-  })
-
-  it("#given omo exists only in a controlled PATH #when resolving the default binary #then it scans PATH without shelling out to Bun", () => {
-    const fake = createTempOmoBin()
-    try {
-      withEnv({ OMO_BIN: undefined, PATH: fake.dir }, () => {
-        expect(__testInternals.resolveOmoBin()).toBe(fake.bin)
-      })
-    } finally {
-      fake.cleanup()
-    }
-  })
-
-  it("#given a temp omo binary #when default runOmoCommand executes status #then it captures stdout and cwd via Node-compatible spawning", async () => {
-    const fake = createTempOmoBin(activeStatus("NODE-RUNNER"))
-    try {
-      const result = await __testInternals.runOmoCommand(fake.bin, ["ulw-loop", "status", "--json"], { cwd: fake.dir })
-
-      expect(result).toEqual({ code: 0, stdout: `${activeStatus("NODE-RUNNER")}\n` })
-      expect(readRealCwd(fake.dir)).toBe(realpathSync(fake.dir))
-      expect(readRunnerRuntime(fake.dir).bunVersion).toBeNull()
-    } finally {
-      fake.cleanup()
-    }
-  }, { timeout: 20000 })
-
-  it("#given env and PATH are controlled #when the component registers with defaults #then no Bun global is required for active status handling", async () => {
-    const fake = createTempOmoBin(activeStatus("DEFAULT-REGISTRATION"))
-    try {
-      await withEnvAsync({ OMO_BIN: undefined, PATH: fake.dir }, async () => {
-        const pi = new FakeExtensionAPI()
-        await createUlwLoopComponent().register(pi, {
-          logger: createLogger(),
-          config: { getFlag: () => false },
-        })
-
-        const results = await pi.dispatch(
-          "input",
-          { type: "input", text: "continue", source: "interactive", streamingBehavior: "steer" },
-          { cwd: fake.dir },
-        )
-
-        expect(results).toHaveLength(1)
-        expect(results[0]).toMatchObject({ action: "transform" })
-      })
-    } finally {
-      fake.cleanup()
-    }
-  }, { timeout: 20000 })
-
   it("#given built Senpi runs under Node #when inspecting runtime source #then the ulw-loop component has no Bun global dependency", () => {
     const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8")
-
     expect(source).not.toMatch(/\bBun\b/)
+  })
+
+  it("#given a real session plan #when input arrives with the default reader #then in-process status activates steering for its owner only", async () => {
+    const cwd = mkdtempSync(join(tmpdir(), "omo-senpi-ulw-runtime-"))
+    try {
+      const seeded = await createAgentToolkit({ cwd, sessionId: TEST_SESSION_ID, surface: "omo-senpi" })
+        .createGoals({ brief: "- alpha goal", force: true })
+      expect(seeded.ok).toBe(true)
+      const status = await readUlwLoopStatusInProcess(cwd, TEST_SESSION_ID)
+      expect(status.code).toBe(0)
+      expect(JSON.parse(status.stdout)).toMatchObject({ ok: true, plan: { goals: expect.any(Array) } })
+
+      const pi = new FakeExtensionAPI()
+      await createUlwLoopComponent().register(pi, { logger: createLogger(), config: { getFlag: () => false } })
+      const input = { type: "input", text: "continue", source: "interactive", streamingBehavior: "steer" }
+      expect(await pi.dispatch("input", input, sessionEventCtx(cwd))).toEqual([expect.objectContaining({ action: "transform" })])
+      expect(await pi.dispatch("input", input, sessionEventCtx(cwd, {
+        sessionManager: { getSessionId: () => "unrelated-session" },
+      }))).toEqual([{ action: "continue" }])
+    } finally {
+      rmSync(cwd, { recursive: true, force: true })
+    }
+  })
+
+  it("#given readStatus returns ULW_LOOP_PLAN_MISSING #when input dispatches #then no warn entry is recorded", async () => {
+    const pi = new FakeExtensionAPI()
+    const logger = createLogger()
+    const calls: Array<{ cwd: string; sessionId: string }> = []
+    await createUlwLoopComponent({
+      planExists: () => true,
+      readStatus: async (cwd, sessionId) => {
+        calls.push({ cwd, sessionId })
+        return { code: 1, stdout: JSON.stringify({ ok: false, error: { code: "ULW_LOOP_PLAN_MISSING", message: "plan not found" } }) }
+      },
+    }).register(pi, { logger, config: { getFlag: () => false } })
+
+    const results = await pi.dispatch("input", {
+      type: "input", text: "continue", source: "interactive", streamingBehavior: "steer",
+    }, sessionEventCtx("/repo"))
+
+    expect(calls).toEqual([{ cwd: "/repo", sessionId: TEST_SESSION_ID }])
+    expect(results).toEqual([{ action: "continue" }])
+    expect(logger.entries.filter((entry) => entry.level === "warn")).toEqual([])
+  })
+
+  it("#given readStatus returns ULW_LOOP_PLAN_INVALID #when input dispatches #then warn carries errorCode", async () => {
+    const pi = new FakeExtensionAPI()
+    const logger = createLogger()
+    await createUlwLoopComponent({
+      planExists: () => true,
+      readStatus: async () => ({
+        code: 1,
+        stdout: JSON.stringify({ ok: false, error: { code: "ULW_LOOP_PLAN_INVALID", message: "invalid plan" } }),
+      }),
+    }).register(pi, { logger, config: { getFlag: () => false } })
+
+    const results = await pi.dispatch("input", {
+      type: "input", text: "continue", source: "interactive", streamingBehavior: "steer",
+    }, sessionEventCtx("/repo"))
+
+    expect(results).toEqual([{ action: "continue" }])
+    expect(logger.entries).toContainEqual({
+      level: "warn",
+      message: "omo-senpi ulw-loop status ignored",
+      details: { reason: "non-zero-exit", code: 1, errorCode: "ULW_LOOP_PLAN_INVALID" },
+    })
   })
 })

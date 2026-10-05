@@ -1,4 +1,5 @@
 import { normalizeModelID } from "./model-normalization"
+import { parseVariantFromModelID } from "./model-string-parser"
 
 export type HeuristicModelFamilyDefinition = {
   family: string
@@ -7,6 +8,7 @@ export type HeuristicModelFamilyDefinition = {
   variants?: string[]
   reasoningEfforts?: string[]
   reasoningEffortAliases?: Record<string, string>
+  supportsTemperature?: boolean
   supportsThinking?: boolean
 }
 
@@ -24,10 +26,48 @@ export const HEURISTIC_MODEL_FAMILY_REGISTRY: ReadonlyArray<HeuristicModelFamily
     supportsThinking: true,
   },
   {
+    family: "openai-deep-research",
+    includes: ["o3-deep-research", "o4-mini-deep-research"],
+    variants: ["low", "medium", "high"],
+    reasoningEfforts: ["none", "minimal", "low", "medium", "high"],
+    supportsTemperature: true,
+  },
+  {
     family: "openai-reasoning",
     pattern: /(?:^|\/)o\d(?:$|-)/,
     variants: ["low", "medium", "high"],
     reasoningEfforts: ["none", "minimal", "low", "medium", "high"],
+    supportsTemperature: false,
+  },
+  {
+    // Astra is the only GPT-6 tier whose API omits `none`, so it keeps the downgrade while the
+    // rest of the family accepts the tier. The pattern stays unanchored on purpose: callers reach
+    // detectHeuristicModelFamily with provider prefixes and `-fast` suffixes still attached.
+    family: "gpt-6-astra",
+    pattern: /gpt-6-astra/,
+    variants: ["low", "medium", "high", "xhigh", "max"],
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    reasoningEffortAliases: { none: "low", minimal: "low" },
+    supportsTemperature: false,
+  },
+  {
+    // GPT-6.1 Sol's API ladder is low..max: like Astra it omits `none` (and `minimal`), so both
+    // downgrade to low instead of the plain GPT-6 family accepting `none`. The pattern matches the
+    // normalized id: detectHeuristicModelFamily rewrites `gpt-6.1-sol` to `gpt-6-1-sol` first.
+    family: "gpt-6.1-sol",
+    pattern: /gpt-6-1-sol/,
+    variants: ["low", "medium", "high", "xhigh", "max"],
+    reasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+    reasoningEffortAliases: { none: "low", minimal: "low" },
+    supportsTemperature: false,
+  },
+  {
+    family: "gpt-6",
+    includes: ["gpt-6"],
+    variants: ["low", "medium", "high", "xhigh", "max"],
+    reasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+    reasoningEffortAliases: { minimal: "low" },
+    supportsTemperature: false,
   },
   {
     family: "gpt-5",
@@ -75,7 +115,13 @@ export const HEURISTIC_MODEL_FAMILY_REGISTRY: ReadonlyArray<HeuristicModelFamily
   {
     family: "glm",
     includes: ["glm"],
-    variants: ["low", "medium", "high"],
+    variants: ["low", "medium", "high", "max"],
+    reasoningEfforts: ["high", "max"],
+    reasoningEffortAliases: {
+      low: "high",
+      medium: "high",
+      xhigh: "max",
+    },
   },
   {
     family: "minimax",
@@ -107,7 +153,8 @@ export const HEURISTIC_MODEL_FAMILY_REGISTRY: ReadonlyArray<HeuristicModelFamily
 ]
 
 export function detectHeuristicModelFamily(modelID: string): HeuristicModelFamilyDefinition | undefined {
-  const normalizedModelID = normalizeModelID(modelID).toLowerCase()
+  const parsedModel = parseVariantFromModelID(modelID, { allowMaxSuffix: true })
+  const normalizedModelID = normalizeModelID(parsedModel.modelID).toLowerCase()
 
   for (const definition of HEURISTIC_MODEL_FAMILY_REGISTRY) {
     if (definition.pattern?.test(normalizedModelID)) {

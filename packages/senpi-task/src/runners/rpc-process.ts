@@ -1,22 +1,29 @@
-import { type ChildProcess, spawn } from "node:child_process"
+import { type ChildProcess, type SpawnOptions, spawn } from "node:child_process"
 import { log } from "@oh-my-opencode/utils"
 
 import type { RpcChildHandle, RpcRunnerSpec } from "./types"
+import { RunnerError } from "./in-process/runner-error"
 import { createRpcChildHandle } from "./rpc/handle"
+import { createRpcModelAdmission, type RpcModelAdmission } from "./rpc/model-admission"
 import { type MalformedLineHandler, RpcProtocolClient } from "./rpc/protocol-client"
 import { type RpcSpawnDescriptor, buildRpcSpawn } from "./rpc/spawn"
+import { discardUnstartedRpcHandle } from "./rpc/start-cleanup"
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000
 
 export type RpcProcessRunnerOptions = {
   readonly spawnChild?: (descriptor: RpcSpawnDescriptor) => ChildProcess
+  readonly spawnProcess?: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess
   readonly buildSpawn?: (spec: RpcRunnerSpec) => RpcSpawnDescriptor
   readonly heartbeatIntervalMs?: number
   readonly onMalformedLine?: MalformedLineHandler
   readonly now?: () => number
+  readonly modelAdmission?: RpcModelAdmission
   // The parent's `-e` extension entries, forwarded to every child so a detached process reproduces the
   // parent's extensions. Applied only when a spec does not already carry its own extensions.
   readonly inheritedExtensions?: readonly string[]
+  // Told once when a child's fallback models cannot reach its process (#9512).
+  readonly onWarning?: (message: string) => void | (() => void)
 }
 
 /**
@@ -31,22 +38,31 @@ export class RpcProcessRunner {
   private readonly heartbeatIntervalMs: number
   private readonly onMalformedLine: MalformedLineHandler | undefined
   private readonly now: () => number
+  private readonly modelAdmission: RpcModelAdmission
   private readonly inheritedExtensions: readonly string[]
+  private readonly onWarning: (message: string) => void | (() => void)
+  private fallbackChainUnsupportedNoticed = false
 
   constructor(options: RpcProcessRunnerOptions = {}) {
-    this.spawnChild = options.spawnChild ?? defaultSpawnChild
+    this.spawnChild =
+      options.spawnChild ??
+      ((descriptor) => defaultSpawnChild(descriptor, options.spawnProcess ?? spawn))
     this.buildSpawn = options.buildSpawn ?? ((spec) => buildRpcSpawn(spec))
     this.heartbeatIntervalMs = options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS
     this.onMalformedLine = options.onMalformedLine
     this.now = options.now ?? Date.now
+    this.modelAdmission = options.modelAdmission ?? createRpcModelAdmission()
     this.inheritedExtensions = options.inheritedExtensions ?? []
+    this.onWarning = options.onWarning ?? ((message) => log("senpi-task process runner", { message }))
   }
 
-  start(specInput: RpcRunnerSpec): RpcChildHandle {
+  async start(specInput: RpcRunnerSpec): Promise<RpcChildHandle> {
     const spec =
       specInput.extensions === undefined && this.inheritedExtensions.length > 0
         ? { ...specInput, extensions: this.inheritedExtensions }
         : specInput
+    await this.modelAdmission(spec)
+    this.noticeFallbackChainUnsupported(spec)
     const descriptor = this.buildSpawn(spec)
     const child = this.spawnChild(descriptor)
     const client = new RpcProtocolClient({ child, onMalformedLine: this.onMalformedLine })
@@ -56,15 +72,35 @@ export class RpcProcessRunner {
       taskId: spec.task_id,
       heartbeatIntervalMs: this.heartbeatIntervalMs,
       now: this.now,
+      childEnv: descriptor.env,
     })
     const resume = spec.resumeSessionPath === undefined ? undefined : client.switchSession(spec.resumeSessionPath)
-    if (resume === undefined) {
-      client.send({ type: "prompt", message: spec.prompt }).catch((error: unknown) => {
-        log("senpi-task rpc initial prompt failed", { taskId: spec.task_id, error: String(error) })
-      })
-    } else {
-      void resume.catch((error: unknown) => {
-        log("senpi-task rpc switch_session failed", { taskId: spec.task_id, error: String(error) })
+    try {
+      if (resume === undefined) {
+        await handle.startInitialPrompt(spec.prompt)
+      } else {
+        await resume
+      }
+    } catch (error) {
+      // Capture this BEFORE cleanup: a rejected prompt can leave the child alive, and the cleanup
+      // termination must never be recorded as the cause of the rejection.
+      const exitOutcome = handle.exitOutcome()
+      try {
+        await discardUnstartedRpcHandle(handle)
+      } catch (cleanupError) {
+        log("senpi-task rpc start cleanup failed", { taskId: spec.task_id, error: String(cleanupError) })
+      }
+      const message = error instanceof Error ? error.message : String(error)
+      // A child that died before its first prompt leaves its cause ONLY here: the classified exit is
+      // otherwise folded into `message`, which is stderr-derived and gets sanitized away downstream.
+      throw new RunnerError({
+        kind: resume === undefined ? "child-prompt-failed" : "session_unavailable",
+        message,
+        cause: error,
+        rejected_while: exitOutcome === undefined ? "alive" : "exited",
+        ...(exitOutcome === undefined
+          ? {}
+          : { exit: { kind: exitOutcome.kind, code: exitOutcome.facts.code, signal: exitOutcome.facts.signal } }),
       })
     }
     return Object.assign(handle, {
@@ -80,13 +116,30 @@ export class RpcProcessRunner {
       getEntries: (since?: string) => client.getEntries(since),
     })
   }
+
+  // A separate `senpi --mode rpc` process has no way to receive an in-memory fallback chain. The manager
+  // still walks the chain when a turn fails before any tool call (#tryRuntimeFallback); what is lost is
+  // the in-session hop after a tool call. Say so once rather than drop it silently.
+  private noticeFallbackChainUnsupported(spec: RpcRunnerSpec): void {
+    if (this.fallbackChainUnsupportedNoticed || (spec.fallbackModels ?? []).length === 0) return
+    this.fallbackChainUnsupportedNoticed = true
+    this.onWarning(
+      "task children started as their own process switch to their fallback models only when a turn " +
+        "fails before any tool call; after a tool call they fall back only through your senpi settings",
+    )
+  }
 }
 
-function defaultSpawnChild(descriptor: RpcSpawnDescriptor): ChildProcess {
-  return spawn(descriptor.command, [...descriptor.args], {
+function defaultSpawnChild(
+  descriptor: RpcSpawnDescriptor,
+  spawnProcess: (command: string, args: readonly string[], options: SpawnOptions) => ChildProcess,
+): ChildProcess {
+  return spawnProcess(descriptor.command, [...descriptor.args], {
     cwd: descriptor.cwd,
     env: descriptor.env,
     stdio: ["pipe", "pipe", "pipe"],
     shell: false,
+    windowsHide: true,
+    detached: process.platform !== "win32",
   })
 }

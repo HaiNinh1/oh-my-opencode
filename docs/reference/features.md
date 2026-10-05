@@ -2,32 +2,36 @@
 
 ## Agents
 
-Oh-My-OpenAgent provides 11 specialized AI agents. Each has distinct expertise, optimized models, and tool permissions.
+The main agent runs in your session and delegates through the `task` tool: categories route to the category worker, and four curated read-only agents cover research and plan review. Each has its own prompt, model chain, and tool policy.
 
 ### Current Agent Model Chains
 
-The category chains below are edition-aware. Senpi uses `kimi-coding` for Kimi rungs. The OpenCode edition uses `kimi-for-coding` for the same Kimi chain positions. The same resolved chain is used at spawn time and again if runtime retry fallback needs to recover.
+The category chains below are edition-aware. Senpi uses `kimi-coding` for Kimi rungs. The OpenCode edition uses `kimi-for-coding` for the same Kimi chain positions. Senpi lists both OpenAI lanes on every GPT rung: `chatgpt-subscription` (the ChatGPT subscription lane) first, then `openai` (the API-key lane, or an OpenAI-compatible proxy configured under that id). Rung order is the ranking, so a machine holding both an API key and a ChatGPT login is never billed per token for delegated work, and a machine with only `openai` still gets every GPT rung, including in the runtime fallback list. The `ultrabrain`, `deep-low`, `deep-high`, and `unspecified-high` defaults name `chatgpt-subscription`; on an `openai`-only machine they resolve through the same chains. The OpenCode edition lists `openai` first, its single OpenAI provider id. The same resolved chain is used at spawn time and again if runtime retry fallback needs to recover.
 
-| Agent | Primary | Full fallback chain |
+| Role | Primary | Full fallback chain |
 | --- | --- | --- |
-| **sisyphus** | `claude-opus-5` | `anthropic\|github-copilot\|opencode\|vercel/claude-opus-5 (max)` → `opencode-go\|kimi-for-coding\|moonshotai\|opencode\|vercel\|bailian-coding-plan\|moonshotai-cn\|firmware\|ollama-cloud\|aihubmix/kimi-k3` → `openai\|github-copilot\|opencode\|vercel/gpt-5.6-sol (medium)` → `zai-coding-plan\|opencode\|bailian-coding-plan\|vercel/glm-5.2` → `opencode/big-pickle` |
-| **hephaestus** | `gpt-5.6-sol` | `openai\|github-copilot\|vercel\|opencode/gpt-5.6-sol (medium)` |
-| **oracle** | `gpt-5.6-sol` | `openai\|opencode\|vercel/gpt-5.6-sol (xhigh)` → `github-copilot/gpt-5.6-sol (high)` → `google\|github-copilot\|opencode\|vercel/gemini-3.1-pro (high)` → `anthropic\|github-copilot\|opencode\|vercel/claude-opus-5 (max)` → `opencode-go\|vercel/glm-5.2` |
-| **librarian** | `gpt-5.4-mini-fast` | `openai/gpt-5.4-mini-fast` → `opencode-go\|bailian-coding-plan/qwen3.7-plus` → `vercel/minimax-m2.7-highspeed` → `opencode-go\|vercel/minimax-m3` → `minimax-coding-plan\|minimax-cn-coding-plan/MiniMax-M3` → `opencode-go\|vercel/minimax-m2.7` → `anthropic\|github-copilot\|vercel/claude-haiku-4-5` → `openai\|vercel/gpt-5.4-nano` |
-| **explore** | `gpt-5.4-mini-fast` | `openai/gpt-5.4-mini-fast` → `opencode-go\|bailian-coding-plan/qwen3.7-plus` → `vercel/minimax-m2.7-highspeed` → `opencode-go\|vercel/minimax-m3` → `minimax-coding-plan\|minimax-cn-coding-plan/MiniMax-M3` → `opencode-go\|vercel/minimax-m2.7` → `anthropic\|github-copilot\|vercel/claude-haiku-4-5` → `openai\|vercel/gpt-5.4-nano` |
-| **multimodal-looker** | `gpt-5.6-sol` | `openai\|opencode\|vercel/gpt-5.6-sol (low)` → `opencode-go\|vercel/kimi-k3` → `zai-coding-plan\|vercel/glm-4.6v` → `openai\|github-copilot\|opencode\|vercel/gpt-5-nano` |
-| **prometheus** | `claude-fable-5` | `anthropic\|github-copilot\|opencode\|vercel/claude-fable-5 (xhigh)` → `opencode-go\|kimi-for-coding\|moonshotai\|opencode\|vercel/kimi-k3 (max)` |
-| **metis** | `claude-opus-5` | `anthropic\|github-copilot\|opencode\|vercel/claude-opus-5 (high)` → `opencode-go\|kimi-for-coding\|moonshotai\|opencode\|vercel/kimi-k3 (low)` |
-| **momus** | `gpt-5.6-terra` | `openai\|vercel/gpt-5.6-terra (high)` → `github-copilot/gpt-5.6-terra (high)` → `openai\|opencode\|vercel/gpt-5.6-sol (xhigh)` → `github-copilot/gpt-5.6-sol (high)` → `anthropic\|github-copilot\|opencode\|vercel/claude-opus-5 (max)` → `google\|github-copilot\|opencode\|vercel/gemini-3.1-pro (high)` → `opencode-go\|vercel/glm-5.2` |
-| **atlas** | `claude-sonnet-5` | `anthropic\|github-copilot\|opencode\|vercel/claude-sonnet-5` → `opencode-go\|vercel/kimi-k3` → `openai\|github-copilot\|opencode\|vercel/gpt-5.6-sol (medium)` → `opencode-go\|vercel/minimax-m3` → `minimax-coding-plan\|minimax-cn-coding-plan/MiniMax-M3` → `opencode-go\|vercel/minimax-m2.7` |
-| **sisyphus-junior** | `claude-sonnet-5` | `anthropic\|github-copilot\|opencode\|vercel/claude-sonnet-5` → `opencode-go\|vercel/kimi-k3` → `openai\|github-copilot\|opencode\|vercel/gpt-5.6-sol (medium)` → `opencode-go\|vercel/minimax-m3` → `minimax-coding-plan\|minimax-cn-coding-plan/MiniMax-M3` → `opencode-go\|vercel/minimax-m2.7` → `opencode/big-pickle` |
+| **main agent** | your session model | No chain of its own. Claude Opus 5.5 or GPT 5.6 Sol recommended; mid-session fallback follows the harness retry chains. |
+| **explore** | `kimi-for-coding-highspeed` | `kimi-coding\|kimi-for-coding/kimi-for-coding-highspeed (off)` → `openai\|chatgpt-subscription/gpt-6-luna-fast (low)` → `deepseek/deepseek-flash (max)` → `opencode-go\|bailian-coding-plan/qwen3.7-plus` → `opencode-go/minimax-m2.7` → `anthropic\|github-copilot/claude-haiku-4-5`
+| **librarian** | `kimi-for-coding-highspeed` | `kimi-coding\|kimi-for-coding/kimi-for-coding-highspeed (off)` → `openai\|chatgpt-subscription/gpt-6-luna-fast (low)` → `deepseek/deepseek-flash (max)` → `opencode-go\|bailian-coding-plan/qwen3.7-plus` → `opencode-go/minimax-m2.7` → `anthropic\|github-copilot/claude-haiku-4-5`
+| **plan-consultant** | `claude-fable-5-1` | `anthropic\|github-copilot\|opencode/claude-fable-5-1 (max)` → `anthropic\|github-copilot\|opencode/claude-opus-5-5 (max)` → `opencode-go\|kimi-for-coding\|moonshotai\|opencode/kimi-k3 (max)`
+| **plan-reviewer** | `gpt-6-astra` | `openai\|chatgpt-subscription/gpt-6-astra (xhigh)` → `github-copilot/gpt-6-astra (high)` → `openai\|chatgpt-subscription\|opencode/gpt-6-astra (high)` → `anthropic\|github-copilot\|opencode/claude-opus-5-5 (max)` → `google\|github-copilot\|opencode/gemini-3.1-pro (high)` → `opencode-go/glm-5.2`
+| **category: visual-engineering** | `claude-fable-5-1` | `anthropic\|anthropic-api\|github-copilot\|opencode/claude-fable-5-1 (max)` → `anthropic\|anthropic-api\|github-copilot\|opencode/claude-opus-5-5 (max)` → `kimi-coding\|kimi-for-coding\|moonshotai\|opencode-go/kimi-k3 (max)` |
+| **category: architect** | `claude-fable-5-1` | `anthropic\|anthropic-api\|github-copilot\|opencode/claude-fable-5-1 (max)` |
+| **category: ultrabrain** | `gpt-6-astra` | `openai\|chatgpt-subscription/gpt-6-astra (max)` → `github-copilot/gpt-6-astra (max)` → `openai\|chatgpt-subscription\|opencode/gpt-6-astra (max)` → `openai\|chatgpt-subscription/gpt-5.6-sol (max)` → `github-copilot/gpt-5.6-sol (max)` → `openai\|chatgpt-subscription\|opencode/gpt-5.6-sol (max)` |
+| **category: deep-low** | `gpt-6.1-sol` | `openai\|chatgpt-subscription/gpt-6.1-sol (medium)` → `openai\|chatgpt-subscription/gpt-6.1-sol-fast (medium)` → `openai\|chatgpt-subscription\|github-copilot\|opencode/gpt-5.6-sol (medium)` → `openai\|chatgpt-subscription/gpt-5.6-sol-fast (medium)` |
+| **category: deep-high** | `gpt-6-astra` | `openai\|chatgpt-subscription\|github-copilot\|opencode/gpt-6-astra (high)` |
+| **category: artistry** | `claude-fable-5-1` | `anthropic\|anthropic-api\|github-copilot\|opencode/claude-fable-5-1 (max)` → `kimi-coding\|kimi-for-coding\|moonshotai\|opencode-go/kimi-k3 (max)` → `anthropic\|anthropic-api\|github-copilot\|opencode/claude-opus-5-5 (max)` |
+| **category: quick** | `gpt-6-luna-fast` | `openai\|chatgpt-subscription/gpt-6-luna-fast (low)` → `deepseek/deepseek-flash (off)` → `qwen-token-plan\|alibaba-token-plan\|bailian-coding-plan/qwen3.6-flash (low)` → `opencode-go/minimax-m3 (max)` → `opencode-go/minimax-m2.7 (max)` → `xai/grok-4.20-0309-non-reasoning` → `anthropic\|anthropic-api\|github-copilot/claude-haiku-4-5 (off)` → `zai\|zai-coding-cn/glm-5.3-flash (low)` → `xiaomi/mimo-v2.6-flash (low)` |
+| **category: unspecified-low** | `claude-sonnet-5-5` | `anthropic\|anthropic-api\|github-copilot\|opencode/claude-sonnet-5-5 (medium)` → `xiaomi\|opencode-go/mimo-v2.6-pro (max)` → `xai\|github-copilot\|opencode-go/grok-4.7 (xhigh)` → `openai\|chatgpt-subscription\|github-copilot\|opencode/gpt-5.6-terra (high)` → `anthropic\|anthropic-api\|github-copilot\|opencode/claude-sonnet-5 (low)` → `qwen-token-plan\|alibaba-token-plan\|qwen-token-plan-cn\|alibaba-token-plan-cn/qwen3.8-max-preview (max)` → `deepseek\|opencode-go/deepseek-v4-pro (max)` → `xiaomi\|opencode-go/mimo-v2.5-pro (max)` |
+| **category: unspecified-high** | `claude-opus-5-5` | `anthropic\|anthropic-api\|github-copilot\|opencode/claude-opus-5-5 (medium)` → `zai-coding-plan\|opencode-go/glm-5.3 (max)` → `kimi-coding\|kimi-for-coding\|moonshotai\|opencode-go/kimi-k3 (max)` |
+| **category: writing** | `claude-opus-5-5` | `anthropic\|anthropic-api\|github-copilot\|opencode/claude-opus-5-5 (low)` → `anthropic\|anthropic-api\|github-copilot\|opencode/claude-opus-4-6 (max)` |
 
 ### Invoking Agents
 
-The main agent invokes these automatically, but you can call them explicitly:
+The main agent spawns these through the `task` tool, and you can ask for them by name:
 
 ```
-Ask @oracle to review this design and propose an architecture
+Use task(category: "architect") to review this design and propose an architecture
 Ask @librarian how this is implemented - why does the behavior keep changing?
 Ask @explore for the policy on this feature
 ```
@@ -36,12 +40,12 @@ Ask @explore for the policy on this feature
 
 | Agent             | Restrictions                                                                            |
 | ----------------- | --------------------------------------------------------------------------------------- |
-| oracle            | Read-only: cannot write, edit, or delegate (blocked: write, edit, task, call_omo_agent) |
-| librarian         | Cannot write, edit, or delegate (blocked: write, edit, task, call_omo_agent)            |
-| explore           | Cannot write, edit, or delegate (blocked: write, edit, task, call_omo_agent)            |
-| multimodal-looker | Allowlist: `read` only                                                                  |
-| atlas             | Cannot delegate (blocked: task, call_omo_agent)                                         |
-| momus             | Cannot write, edit, or delegate (blocked: write, edit, task)                            |
+| explore           | Read-only allowlist: `read`, `find`, `grep`, `ls`, curated `bash`, read-only LSP tools; cannot write, edit, or delegate |
+| librarian         | Same read-only allowlist; cannot write, edit, or delegate                               |
+| plan-consultant   | Same read-only allowlist; plan-gated                                                     |
+| plan-reviewer     | Same read-only allowlist; plan-gated and one-shot (`task_send` is refused)              |
+
+The OpenCode edition's agent roster, tab-cycling order, and agent-specific hooks are documented separately. See [OpenCode edition configuration (legacy)](./opencode-config.md).
 
 ### Instruction Files vs Enforcement
 
@@ -52,7 +56,7 @@ deterministic permission boundary.
 Deterministic enforcement today comes from OMO config (`agents.*.permission`,
 agent `tools`, disabled tools/agents), built-in agent restrictions, OpenCode's
 own permission gate when it is available, and guard hooks such as
-`team-tool-gating`, `write-existing-file-guard`, and `prometheus-md-only`.
+`team-tool-gating` and `write-existing-file-guard`.
 
 OMO does not currently read an `AGENTOWNERS.yml` file or run a generic
 AGENTOWNERS policy-enforcer hook. If a project needs hard agent boundaries,
@@ -64,7 +68,7 @@ review gates rather than relying on prose-only instructions.
 Run agents in the background and continue working:
 
 - Have GPT debug while Claude tries different approaches
-- Opus 5 handles visual work while GPT-5.6 Sol tackles deep reasoning
+- Opus 5 handles visual work while GPT-6 Astra tackles deep reasoning
 - Fire massive parallel searches, continue implementation, use results when ready
 
 ```
@@ -123,9 +127,8 @@ When running inside tmux:
 - Watch multiple agents work in real-time
 - Each pane shows agent output live
 - Auto-cleanup when agents complete
-- **Stable agent ordering**: core-agent tab cycling defaults to Sisyphus, Hephaestus, Prometheus, Atlas, and can be customized with `agent_order`
 
-When running inside cmux (`cmux omo`), the same pane integration is routed through cmux's tmux compatibility command. OMO detects the cmux environment from `CMUX_SOCKET_PATH` or a cmux-provided `TMUX` value, so `tmux.enabled` can create cmux panes even when a real `tmux` binary is not installed.
+When running inside cmux (`cmux omo-agent-toolkit`), the same pane integration is routed through cmux's tmux compatibility command. OMO detects the cmux environment from `CMUX_SOCKET_PATH` or a cmux-provided `TMUX` value, so `tmux.enabled` can create cmux panes even when a real `tmux` binary is not installed.
 
 Customize agent models, prompts, and permissions in the `[opencode]` block of `~/.omo/omo.jsonc`.
 
@@ -138,12 +141,11 @@ See the **[Team Mode Guide](../guide/team-mode.md)** for configuration, team spe
 ### Architecture Snapshot (current)
 
 - **Feature modules**: `packages/omo-opencode/src/features/` has 23 modules.
-- **Tool system**: `packages/omo-opencode/src/tools/` has 15 tool directories that produce **20 to 39 tools** depending on config gates.
-- **Hook system**: 5-tier composition is **54 base hooks**. With team mode it becomes **61** (extra tool guard + transforms + direct team session event handlers).
-- **MCP system**: 3 tiers: built-in remote MCPs (`websearch`, `context7`, `grep_app`), `.mcp.json` loader, and skill-embedded MCP from `SKILL.md` frontmatter.
-- **Managers**: plugin startup creates 4 managers: TmuxSessionManager, BackgroundManager, SkillMcpManager, ConfigHandler.
+- **Tool system**: `packages/omo-opencode/src/tools/` has 14 tool-producing directories plus a shared helper directory. The registry exposes **12 to 38 tools** depending on config gates. The 9 LSP aliases are served by the built-in `lsp` MCP, not by the tool registry.
+- **Hook system**: the 5-tier composers define **58 slots** (Session 23 + Tool Guard 18 + Transform 8 + Continuation 7 + Skill 2). Default config activates about 50-51; the maximum is 62 when the 4 direct Team Mode event handlers are included.
+- **MCP system**: 3 tiers: built-in MCPs with 3 remote servers (`websearch`, `context7`, `grep_app`) plus local stdio `lsp`, `.mcp.json` loader, and skill-embedded MCP from `SKILL.md` frontmatter.
+- **Managers and controllers**: startup creates TmuxSessionManager, BackgroundManager, SkillMcpManager, ConfigHandler, and ModelFallbackControllerAccessor fields, plus optional TuiStateMirror and MonitorManager fields.
 - **Config pipeline**: 6 phases in order: provider, plugin-components, agents, tools, MCPs, commands.
-- **Canonical core agent order**: Sisyphus, Hephaestus, Prometheus, Atlas.
 - **OpenClaw**: bidirectional integrations for Discord, Telegram, HTTP, and shell with reply listener daemon.
 
 ## Category System
@@ -161,14 +163,15 @@ By combining these two concepts, you can generate optimal agents through `task`.
 
 | Category             | Default Model                   | Use Cases                                                                                                                   |
 | -------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `visual-engineering` | `anthropic/claude-opus-5` (max) | Frontend, UI/UX, design, styling, animation                                                                                |
-| `ultrabrain`         | `openai/gpt-5.6-sol` (xhigh)    | Deep logical reasoning, complex architecture decisions requiring extensive analysis                                         |
-| `deep`               | `openai/gpt-5.6-sol` (medium)   | Goal-oriented autonomous problem-solving on hairy problems requiring deep research. ONE goal + ONE deliverable per call — multiple goals must fan out as parallel `deep` calls, never bundled into one. |
-| `artistry`           | `anthropic/claude-fable-5` (xhigh) | Highly creative/artistic tasks, novel ideas                                                                                 |
-| `quick`              | `kimi-for-coding/kimi-for-coding-highspeed` | Trivial tasks - single file changes, typo fixes, simple modifications                                                  |
-| `unspecified-low`    | `openai/gpt-5.6-luna` (xhigh)   | Tasks that don't fit other categories, low effort required                                                                  |
-| `unspecified-high`   | `kimi-for-coding/kimi-k3` (max) | Tasks that don't fit other categories, high effort required                                                               |
-| `writing`            | `kimi-for-coding/kimi-k3` (low) | Documentation, prose, technical writing                                                                                     |
+| `visual-engineering` | `anthropic/claude-fable-5-1` (max) → `anthropic/claude-opus-5-5` (max) → `kimi-for-coding/kimi-k3` (max) | Frontend, UI/UX, design, styling, animation                                                                                |
+| `ultrabrain`         | `openai/gpt-6-astra` (max)      | Deep logical reasoning, complex architecture decisions requiring extensive analysis. Falls back to `gpt-5.6-sol` (max).     |
+| `deep-low`           | `openai/gpt-6.1-sol` (medium) | Default deep lane: one goal, one deliverable, decisions the child can settle from what it reads. 3D graphics, computer use, browser use, backend, logic, algorithms, CAPTCHA solving, and multimodal work route here. ONE goal + ONE deliverable per call — multiple goals fan out as parallel calls. Falls back to the Fast tier `gpt-6.1-sol-fast`, then `gpt-5.6-sol` (the only rung GitHub Copilot and OpenCode Zen serve), then `gpt-5.6-sol-fast`, all at medium; unavailable without a GPT-6.1 Sol or GPT-5.6 Sol tier. |
+| `deep-high`          | `openai/gpt-6-astra` (high)     | Escalation deep lane: the goal's central decision cannot be settled from evidence alone (a trade-off, a contract crossing a package or process boundary, a mechanism with no in-repo pattern, or correctness argued from invariants). A `deep-low` child that returns `ESCALATE: deep-high` is re-spawned here with its findings. No model fallback: unavailable without `gpt-6-astra`. |
+| `artistry`           | `anthropic/claude-fable-5-1` (max) → `kimi-for-coding/kimi-k3` (max) → `anthropic/claude-opus-5-5` (max) | Highly creative/artistic tasks, novel ideas                                                                                 |
+| `quick`              | `openai/gpt-6-luna-fast` (low) | Trivial tasks - single file changes, typo fixes, simple modifications                                                  |
+| `unspecified-low`    | `anthropic/claude-sonnet-5-5` (medium) | Tasks that don't fit other categories, low effort required                                                                  |
+| `unspecified-high`   | `anthropic/claude-opus-5-5` (medium) | Tasks that don't fit other categories, high effort required. Falls back to GLM 5.3, then Kimi K3.          |
+| `writing`            | `anthropic/claude-opus-5-5` (low)     | Documentation, prose, technical writing. Unavailable when none of its Claude models is connected; it never falls back to another family. |
 
 ### Usage
 
@@ -190,20 +193,25 @@ You can define custom categories in the `[opencode]` block of the unified config
 | Field               | Type    | Description                                                                 |
 | ------------------- | ------- | --------------------------------------------------------------------------- |
 | `description`       | string  | Human-readable description of the category's purpose. Shown in task prompt. |
-| `model`             | string  | AI model ID to use (e.g., `anthropic/claude-opus-5`)                        |
-| `fallback_models`   | string\|array | Fallback models on API errors. Supports strings or mixed arrays of strings and object entries with per-model settings |
-| `variant`           | string  | Model variant (e.g., `max`, `xhigh`)                                        |
+| `model`             | string  | AI model ID to use (e.g., `anthropic/claude-opus-5-5`)                        |
+| `models`            | array   | Ordered model chain; the first entry is the primary model and the rest are fallbacks. Entries are strings or objects with per-model settings |
+| `reasoning`         | string  | Canonical reasoning level (`off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`, `auto`) |
+| `fallback_models`   | string\|array | Deprecated: use `models`. Fallback models on API errors. Supports strings or mixed arrays of strings and object entries with per-model settings |
+| `variant`           | string  | Deprecated: use `reasoning`. Model variant (e.g., `max`, `xhigh`)           |
 | `temperature`       | number  | Creativity level (0.0 ~ 2.0). Lower is more deterministic.                  |
 | `top_p`             | number  | Nucleus sampling parameter (0.0 ~ 1.0)                                      |
 | `prompt_append`     | string  | Content to append to system prompt when this category is selected           |
-| `thinking`          | object  | Thinking model configuration (`{ type: "enabled", budgetTokens: 16000 }`)   |
-| `reasoningEffort`   | string  | Reasoning effort level (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) |
+| `thinking`          | object  | Deprecated: use `reasoning` plus provider options. Thinking model configuration (`{ type: "enabled", budgetTokens: 16000 }`) |
+| `reasoningEffort`   | string  | Deprecated: use `reasoning`. Reasoning effort level (`none`, `minimal`, `low`, `medium`, `high`, `xhigh`, `max`) |
 | `textVerbosity`     | string  | Text verbosity level (`low`, `medium`, `high`)                              |
+| `provider_options`  | object  | Provider-specific request options passed through to the harness             |
+| `max_tokens`        | number  | Maximum response token count (positive integer)                             |
+| `maxTokens`         | number  | Deprecated: use `max_tokens`. Maximum response token count                  |
 | `tools`             | object  | Tool usage control (disable with `{ "tool_name": false }`)                  |
-| `maxTokens`         | number  | Maximum response token count                                                |
 | `max_prompt_tokens` | number  | Maximum prompt tokens for delegated tasks                                   |
 | `is_unstable_agent` | boolean | Mark agent as unstable - forces background mode for monitoring              |
 | `disable`           | boolean | Disable this category and exclude it from task delegation                   |
+| `warn_unavailable`  | boolean | Suppress or emit unavailable-chain notices for this category               |
 
 #### Example Configuration
 
@@ -225,7 +233,7 @@ You can define custom categories in the `[opencode]` block of the unified config
 
     // 3. Configure thinking model and restrict tools
     "deep-reasoning": {
-      "model": "anthropic/claude-opus-5",
+      "model": "anthropic/claude-opus-5-5",
       "thinking": {
         "type": "enabled",
         "budgetTokens": 32000,
@@ -238,9 +246,9 @@ You can define custom categories in the `[opencode]` block of the unified config
 }
 ```
 
-### Sisyphus-Junior as Delegated Executor
+### The category worker
 
-When you use a Category, a special agent called **Sisyphus-Junior** performs the work.
+When you use a Category, the work runs in **the category worker**: a fresh worker session configured by the category's model and skills.
 
 - **Characteristic**: Cannot **re-delegate** tasks to other agents.
 - **Purpose**: Prevents infinite delegation loops and ensures focus on the assigned task.
@@ -258,7 +266,7 @@ Configure per-agent fallback chains with arrays that can mix plain model strings
 ```jsonc
 {
   "agents": {
-    "sisyphus": {
+    "plan-consultant": {
       "fallback_models": [
         "opencode/glm-5.2",
         { "model": "openai/gpt-5.6-sol", "variant": "high" },
@@ -283,16 +291,16 @@ Load agent system prompts from external files using `file://` URLs in the `promp
 ```jsonc
 {
   "agents": {
-    "sisyphus": {
+    "librarian": {
       "prompt": "file:///path/to/custom-prompt.md"
     },
-    "oracle": {
+    "plan-reviewer": {
       "prompt_append": "file:///path/to/additional-context.md"
     }
   },
   "categories": {
-    "deep": {
-      "prompt_append": "file:///path/to/deep-category-append.md"
+    "deep-low": {
+      "prompt_append": "file:///path/to/deep-low-category-append.md"
     }
   }
 }
@@ -327,33 +335,13 @@ Commands are slash-triggered workflows that execute predefined templates.
 
 | Command              | Description                                                                                |
 | -------------------- | ------------------------------------------------------------------------------------------ |
-| `/init-deep`         | Initialize hierarchical AGENTS.md knowledge base                                           |
 | `/goal`              | Set, show, pause, resume, or clear the active thread goal                                  |
 | `/refactor`          | Intelligent refactoring with LSP, AST-grep, architecture analysis, and TDD verification    |
-| `/start-work`        | Start Atlas work session from Prometheus plan                                              |
+| `/ulw-execute`        | Execute a work plan in this session                                                        |
 | `/stop-continuation` | Stop all continuation mechanisms (todo continuation, Goal, boulder) for this session       |
+| `/remove-ai-slops`   | Remove AI-generated code smells from branch changes and review the result                   |
 | `/handoff`           | Create a detailed context summary for continuing work in a new session                     |
-
-### /init-deep
-
-**Purpose**: Generate hierarchical AGENTS.md files throughout your project
-
-**Usage**:
-
-```
-/init-deep [--create-new] [--max-depth=N]
-```
-
-Creates directory-specific context files that agents automatically read:
-
-```
-project/
-├── AGENTS.md                        # Project-wide context
-├── packages/omo-opencode/src/
-│   ├── AGENTS.md                    # src-specific context
-│   └── components/
-│       └── AGENTS.md                # Component-specific context
-```
+| `/hyperplan`         | Load the `hyperplan` skill and run an adversarial `team_create` planning workflow (requires `team_mode.enabled: true`)      |
 
 ### /goal
 
@@ -372,7 +360,7 @@ project/
 **Behavior**:
 
 - The goal persists for the session and is shown in the TUI.
-- While a goal is active, every `session.idle` re-injects a continuation prompt that tracks `tokensUsed` and `timeUsedSeconds`.
+- While a goal is active, every `session.idle` re-injects a continuation prompt that includes the stored `tokensUsed` and `timeUsedSeconds` fields (currently unused; they remain 0).
 - The agent calls `update_goal({ status: "complete" })` only after a completion audit confirms the objective is achieved.
 - `pause` stops idle continuations without clearing the goal; `clear` removes it. `session.deleted` also clears the goal.
 - Goal state is stored in `.omo/goal/<sessionID>.json`.
@@ -396,14 +384,14 @@ project/
 ```
 
 - `enabled` (default `false`) gates the Goal subsystem and its tools.
-- `auto_start` (default `false`) allows a goal to be auto-created from the first main-session message when `default_mode.goal` is true.
-- `default_max_iterations` (1-1000, default `100`) is the continuation iteration cap, preserved for Ralph Loop behavioral parity.
+- `auto_start` (default `false`) is accepted in config but not wired; first-message auto-create is intended to follow `default_mode.goal`, and that path is currently inert.
+- `default_max_iterations` (1-1000, default `100`) is retained on the `goal` schema for Ralph Loop config migration; the Goal hook doesn't enforce an iteration cap.
 
 **Migration**: the legacy top-level `ralph_loop` config auto-migrates to `goal` at load time and logs a deprecation warning; explicit `goal` config wins over migrated values. `default_mode.ralph_loop` was renamed to `default_mode.goal`.
 
 ### /ulw-loop
 
-The `/ulw-loop` slash command has been removed; continuous goal pursuit is now handled by `/goal`. The `omo ulw-loop` CLI subcommand remains as a passthrough to the Codex LazyCodex ulw-loop CLI.
+The `/ulw-loop` slash command has been removed; continuous goal pursuit is now handled by `/goal`. The `omo-agent-toolkit ulw-loop` CLI subcommand remains as a passthrough to the Codex LazyCodex ulw-loop CLI.
 
 ### /refactor
 
@@ -423,19 +411,19 @@ The `/ulw-loop` slash command has been removed; continuous goal pursuit is now h
 - TDD verification after changes
 - Codemap generation
 
-### /start-work
+### /ulw-execute
 
-**Purpose**: Start execution from a Prometheus-generated plan
+**Purpose**: Start execution from a ulw-plan work plan
 
 **Usage**:
 
 ```
-/start-work [plan-name] [--worktree <path>] [--make-pr] [--ship]
+/ulw-execute [plan-name] [--worktree <path>] [--make-pr] [--ship]
 ```
 
-Uses atlas agent to execute planned tasks systematically.
+The main agent executes the approved work plan in the same session: it injects the work plan + boulder + worktree/PR context, then starts executing. First actions are `create_goal` and todo registration, not immediate coding.
 
-- `--worktree <path>`: work inside a task-owned git worktree.
+- `--worktree <path>`: use this git worktree (create it if needed). Omit it to work in the current repo.
 - `--make-pr`: deliver the work as a pull request; implies worktree mode (a task-owned worktree is created when `--worktree` is omitted) and hands off with the PR URL.
 - `--ship`: implies `--make-pr`, then keeps working until the PR passes CI/review gates and is merged, before cleaning up the worktree.
 
@@ -455,10 +443,10 @@ Generates a structured handoff document capturing the current state, what was do
 
 Load custom commands from:
 
-- `.opencode/command/*.md` (project, OpenCode native)
-- `~/.config/opencode/command/*.md` (user, OpenCode native)
+- `.opencode/commands/*.md` and `.opencode/command/*.md` (project, OpenCode native)
+- `~/.config/opencode/commands/*.md` and `~/.config/opencode/command/*.md` (user, OpenCode native)
 - `.claude/commands/*.md` (project, Claude Code compat)
-- `~/.config/opencode/commands/*.md` (user, Claude Code compat)
+- `~/.claude/commands/*.md` (user, Claude Code compat)
 
 ## Skill Sets
 
@@ -466,16 +454,22 @@ Skill sets provide specialized workflows with embedded MCP servers and detailed 
 
 ### Built-in Skill Sets
 
+Selected built-in skills include `debugging`, `dev-browser`, `frontend`, `git-master`, `init-deep`, `playwright`, `playwright-cli`, `remove-ai-slops`, `review-work`, `security-research`, `security-review`, `team-mode`, and `visual-qa`. Browser provider selection activates one browser skill, and `team-mode` is available only when Team Mode is enabled. The table below highlights selected skills.
+
+#### init-deep
+
+`init-deep` is a built-in skill, not a built-in command. Invoke it through the `skill` surface or load it by name. It generates hierarchical `AGENTS.md` files throughout the project and supports `--create-new` and `--max-depth=N` arguments.
+
 | Skill set              | Trigger                                                 | Description                                                                                                                                                                                                                                                                                                                                   |
 | ---------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **git-master**         | commit, rebase, squash, "who wrote", "when was X added" | Git expert. Detects commit styles, splits atomic commits, formulates rebase strategies. Three specializations: Commit Architect (atomic commits, dependency ordering), Rebase Surgeon (history rewriting, conflict resolution), and History Archaeologist (finding when/where specific changes were introduced).                              |
 | **playwright**         | Browser tasks, testing, screenshots                     | Browser automation via Playwright MCP. MUST USE for browser verification, browsing, web scraping, testing, and screenshots.                                                                                                                                                                                                                   |
-| **agent-browser**      | Browser tasks on agent-browser                          | Browser automation via the `agent-browser` CLI. Covers navigation, snapshots, screenshots, network inspection, and scripted interactions.                                                                                                                                                                                                     |
+| **visual-qa**          | Browser rendering and screenshot evidence               | omowright from js eval: the owned engine for renders on a task-owned profile, the attached engine for pages that need the user's login. |
 | **dev-browser**        | Stateful browser scripting                              | Browser automation with persistent page state for iterative workflows and authenticated sessions.                                                                                                                                                                                                                                             |
 | **frontend**           | UI/UX tasks, styling                                    | Designer-turned-developer persona. Crafts strong UI/UX even without design mockups. Emphasizes bold aesthetic direction, distinctive typography, cohesive color palettes.                                                                                                                                                                     |
-| **review-work**        | "review work", "review my work", "QA my work"          | Post-implementation review orchestrator. Launches 5 parallel background sub-agents for comprehensive review: goal verification, code quality, security, hands-on QA, and context mining. All must pass for review to pass.                                                                                                                     |
+| **review-work**        | "review work", "review my work", "QA my work"          | Post-implementation gate review. The orchestrator runs manual QA on the real surface, then one gate reviewer audits goal, code quality, security, missed context, and the QA evidence. Passes only on a clean QA matrix plus APPROVE.                                                                                                                     |
 | **ulw-research**       | `ulw-research`, deep research requests | Maximum-saturation research. Runs parallel explore/librarian swarms across code, docs, web, and OSS repos; recursively follows `EXPAND` leads until convergence; proves contested claims by running code; and returns cited synthesis. Epistemic instrumentation covers intent-vs-reality diffing, claim graph, observation manifest, independent-observation convergence, temporal evidence, verification economics, and cause-disappearance records. |
-| **$omo:remove-ai-slops** | "remove AI slop", "de-AI", "humanize"                 | Removes AI-generated code smells from files while preserving functionality. Identifies and eliminates verbose comments, redundant error handling, over-engineered patterns, and generic AI phrasing.                                                                                                                                           |
+| **remove-ai-slops** | "remove AI slop", "de-AI", "humanize"                 | Removes AI-generated code smells from files while preserving functionality. Invoke as `skill(name="remove-ai-slops")`. Identifies and eliminates verbose comments, redundant error handling, over-engineered patterns, and generic AI phrasing.                                                                                                                                           |
 
 `ulw-research` is intentionally explicit. Ordinary questions and normal implementation context-gathering will not trigger a saturation swarm. Use `ulw-research` when the research itself is the deliverable and every claim needs a citation, a proof artifact, or an execution-backed verdict.
 
@@ -513,46 +507,36 @@ Skill sets provide specialized workflows with embedded MCP servers and detailed 
 
 ### Browser Automation Options
 
-Oh-My-OpenAgent provides two browser automation providers, configurable via `browser_automation_engine.provider`.
+On OmO Native and Codex, shipped browser guidance runs through **omowright**,
+staged inside the `browser` skill and loaded from the js-eval kernel. In Codex,
+`browser:control-in-app-browser` stays first for ordinary page control. The
+OpenCode edition keeps its `browser_automation_engine` providers; an obsolete
+provider value fails validation and doctor names the rejected value.
 
-#### Option 1: Playwright MCP (Default)
+#### Owned engine
 
-```yaml
-mcp:
-  playwright:
-    command: npx
-    args: ["@playwright/mcp@latest"]
-```
+`connectPipe({ browserPath, browserArgs, storageRoot })` launches a browser your
+code owns over a pipe (no listening port) with a task-owned profile;
+`connectCloakProfile({ profileDir })` launches CloakBrowser with a pinned
+fingerprint for bot-scored targets. The page is Playwright-shaped
+(`snapshot`, `locator(ref)`, `screenshot`, `evaluate`), with coordinate control,
+captcha helpers, network snooping, request routes and flight traces beside it.
+Chrome must already be installed; no managed browser download is required.
 
-**Usage**:
+#### Attached engine
 
-```
-/playwright Navigate to example.com and take a screenshot
-```
+`connectBrowserSkill({ name, focused: false })` drives the browser the user is
+already signed into through BrowserSkill's daemon and extension;
+`bskSnapshot(session)` returns the same tree-and-refs shape without leaving a
+trace in the page. `bskDoctor()` / `bskOnboard()` (wrapped by the skill's
+`browser-doctor.mjs` / `browser-install.mjs`) install the CLI, start the daemon
+and register the Web Store extension in the one browser the user actually uses
+(OS default browser, running app, recent use; `--browser=<id>` overrides, and the
+doctor reports `choose-browser` instead of guessing when those disagree) so the
+user's only step is one **Enable** click. Never launch against, clone, or clear the user's live profile; never fall
+back to the owned engine for a page that needs their login.
 
-#### Option 2: Agent Browser CLI (Vercel)
-
-```json
-{
-  "browser_automation_engine": {
-    "provider": "agent-browser"
-  }
-}
-```
-
-**Requires installation**:
-
-```bash
-bun add -g agent-browser
-```
-
-**Usage**:
-
-```
-Use agent-browser to navigate to example.com and extract the main heading
-```
-
-**Capabilities (Both Providers)**:
+**Browser QA capabilities (choose the tier that supports the criterion)**:
 
 - Navigate and interact with web pages
 - Take screenshots and PDFs
@@ -594,7 +578,7 @@ Same-named skill at higher priority overrides lower.
 
 Loaded skill display priority follows this order: `project > user > opencode > builtin/plugin`.
 
-Disable built-in skills via `disabled_skills: ["playwright"]` in config.
+Disable built-in skills via `disabled_skills: ["playwright"]` in config; the same key at the shared base of `~/.omo/omo.jsonc` hides a skill on every harness, including the bundled `frontend` / `visual-qa` skills on OmO Native.
 
 ### Category + Skill Combo Strategies
 
@@ -610,7 +594,7 @@ You can create powerful specialized agents by combining Categories and Skills.
 
 - **Category**: `ultrabrain`
 - **load_skills**: `[]` (pure reasoning)
-- **Effect**: Uses GPT-5.6 Sol at xhigh effort through OpenAI or Vercel when available, at high effort through GitHub Copilot, and retains an xhigh Sol rung through OpenAI, OpenCode, or Vercel before non-GPT fallbacks.
+- **Effect**: Uses GPT-6 Astra at max effort through OpenAI or ChatGPT Subscription when available, then GitHub Copilot, then OpenCode. When Astra is unavailable it walks the same provider order on GPT-5.6 Sol at max effort. The chain is GPT-only.
 
 #### The Maintainer (Quick Fixes)
 
@@ -644,7 +628,7 @@ When delegating, **clear and specific** prompts are essential. Include these 7 e
 
 ## Tools
 
-Tool registration is config-gated. `packages/omo-opencode/src/tools/` has 15 directories, and exposed tools range from **20 minimum to 39 maximum**.
+Tool registration is config-gated. The registry exposes **12 to 38 tools**.
 
 ### Code Search Tools
 
@@ -657,20 +641,25 @@ Tool registration is config-gated. `packages/omo-opencode/src/tools/` has 15 dir
 
 | Tool     | Description                                                                                                                                                |
 | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **edit** | Hash-anchored edit tool. Uses `LINE#ID` format for precise, safe modifications. Validates content hashes before applying changes and rejects stale hash edits. |
+| **edit** | Hash-anchored edit tool (`LINE#ID`), registered only when `hashline_edit: true` (default false). Validates content hashes before applying changes and rejects stale hash edits. |
 
 Hashline IDs use characters from `ZPMQVRWSNKTXJBYH`.
 
 ### LSP Tools (IDE Features for Agents)
 
+All 9 aliases below are served by the built-in `lsp` MCP rather than the native tool registry.
+
 | Tool                    | Description                                 |
 | ----------------------- | ------------------------------------------- |
+| **lsp_status**          | List configured and active LSP servers      |
 | **lsp_diagnostics**     | Get errors/warnings before build            |
 | **lsp_prepare_rename**  | Validate rename operation                   |
 | **lsp_rename**          | Rename symbol across workspace              |
+| **lsp_format**          | Format a source file via its language server      |
 | **lsp_goto_definition** | Jump to symbol definition                   |
 | **lsp_find_references** | Find all usages across workspace            |
 | **lsp_symbols**         | Get file outline or workspace symbol search |
+| **lsp_install_decision** | Record allow/decline decisions for missing LSP installation |
 
 ### AST-Grep Skill
 
@@ -681,15 +670,29 @@ AST-aware search and rewrite now lives in the `ast-grep` skill. Load it with the
 | Tool                  | Description                                                                                                                                                                                                                             |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **call_omo_agent**    | Spawn explore/librarian agents. Supports `run_in_background`.                                                                                                                                                                           |
-| **task**              | Category-based task delegation. Supports built-in categories like `visual-engineering`, `ultrabrain`, `deep`, `artistry`, `quick`, `unspecified-low`, `unspecified-high`, and `writing`, or direct agent targeting via `subagent_type`. |
+| **task**              | Category-based task delegation. Supports built-in categories like `visual-engineering`, `ultrabrain`, `deep-low`, `deep-high`, `artistry`, `quick`, `unspecified-low`, `unspecified-high`, and `writing`, or direct agent targeting via `subagent_type`. |
 | **background_output** | Retrieve background task results                                                                                                                                                                                                        |
 | **background_cancel** | Cancel running background tasks                                                                                                                                                                                                         |
+
+`task` is the broader delegation path for category routing, direct
+`subagent_type` calls, skills, and sync/background execution.
+`call_omo_agent` is the narrow compatibility path for the small
+explore/librarian-style agent allowlist. Keep the split in mind when
+configuring permissions: the category worker blocks `task` to avoid nested
+delegation loops, but can still use `call_omo_agent` where that narrower
+path is explicitly allowed.
 
 ### Visual Analysis Tools
 
 | Tool        | Description                                                                                                                                                    |
 | ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **look_at** | Analyze media files (PDFs, images, diagrams) via Multimodal-Looker agent. Extracts specific information or summaries from documents, describes visual content. |
+
+### Computer Use (OmO Native)
+
+**Experimental.** OmO Native agents can drive native desktop applications through the `computer` tool: screenshots, window lists, accessibility trees, and mouse and keyboard input on macOS, Linux and Windows. The engine starts only when the tool is first used; input goes to the target in the background by default, a global stop chord (Control+Option+Command+Escape on macOS, Ctrl+Alt+Shift+Escape elsewhere) suspends it, and `/computer on|off|status|stop|resume` controls it from the prompt. Inspection needs the `computer:read` permission tier and input needs `computer:exec`.
+
+Setup per OS, configuration, the safety model, privacy and troubleshooting are in the [computer use guide](../guide/computer-use.md); the tool contract is in the [computer tool reference](computer.md).
 
 ### Skill Tools
 
@@ -702,7 +705,7 @@ AST-aware search and rewrite now lives in the `ast-grep` skill. Load it with the
 
 | Tool               | Description                              |
 | ------------------ | ---------------------------------------- |
-| **session_list**   | List all OpenCode sessions               |
+| **session_list**   | List OpenCode sessions for a project (defaults to the current working directory); optional date and limit filters |
 | **session_read**   | Read messages and history from a session |
 | **session_search** | Full-text search across session messages |
 | **session_info**   | Get session metadata and statistics      |
@@ -761,6 +764,8 @@ interface Task {
   blockedBy: string[]; // Tasks blocking this
   owner?: string; // Agent name
   metadata?: Record<string, unknown>;
+  repoURL?: string;
+  parentID?: string;
   threadID: string; // Session ID (auto-set)
 }
 ```
@@ -793,7 +798,7 @@ TaskUpdate({ id: "T-002", status: "completed" });
 // T-003 now unblocked
 ```
 
-**Storage**: Tasks are stored as JSON files in `.omo/tasks/`.
+**Storage**: By default, tasks are stored as JSON files under the OpenCode config directory at `tasks/<list-id>`. Override the directory with the task storage `storage_path` option documented on the legacy OpenCode configuration page.
 
 **Difference from TodoWrite**:
 
@@ -829,7 +834,7 @@ interactive_bash(tmux_command="capture-pane -p -t dev-app")
 
 - Commands are tmux subcommands (no `tmux` prefix)
 - Use for interactive apps that need persistent sessions
-- One-shot commands should use regular `Bash` tool with `&`
+- Use the managed background-session or Monitor mechanism (`monitor_start`) for one-shot commands that must continue in the background; do not rely on shell `&` as the managed contract
 
 ## Hooks
 
@@ -837,13 +842,13 @@ Hooks intercept and modify behavior at key points in the agent lifecycle across 
 
 Current composition counts:
 
-- Session: 24
-- Tool Guard: 16
-- Transform: 5
+- Session: 23
+- Tool Guard: 18 (17 non-Team slots plus `teamToolGating`)
+- Transform: 8
 - Continuation: 7
 - Skill: 2
-- Total base: 54
-- With `team_mode.enabled`: +1 Tool Guard, +2 Transform, +4 direct team session event handlers in `packages/omo-opencode/src/plugin/event.ts` = 61
+- Total composed slots: 58
+- Default config leaves several slots null (gated by team_mode, hashline_edit, preemptive_compaction, etc.); the maximum is 62 when the 4 direct Team Mode event handlers are included
 
 ### Hook Events
 
@@ -862,8 +867,8 @@ Current composition counts:
 
 | Hook                            | Event                    | Description                                                                                                                                                                                               |
 | ------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **directory-agents-injector**   | PreToolUse + PostToolUse | Auto-injects AGENTS.md when reading files. Walks from file to project root, collecting all AGENTS.md files. Deprecated for OpenCode 1.1.37+ — Auto-disabled when native AGENTS.md injection is available. |
-| **directory-readme-injector**   | PreToolUse + PostToolUse | Auto-injects README.md for directory context.                                                                                                                                                             |
+| **directory-agents-injector**   | PostToolUse + Event | Auto-injects AGENTS.md after Read. Walks from file to project root, collecting all AGENTS.md files. Auto-disabled on OpenCode 1.1.37+ when native AGENTS.md injection is available. |
+| **directory-readme-injector**   | PostToolUse + Event | Auto-injects README.md after Read for directory context.                                                                                                                                                  |
 | **rules-injector**              | PreToolUse + PostToolUse | Injects rules from `.claude/rules/` when conditions match. Supports globs and alwaysApply.                                                                                                                |
 | **compaction-context-injector** | Event                    | Preserves critical context during session compaction.                                                                                                                                                     |
 | **preemptive-compaction**       | Event                    | Proactively compacts sessions before hitting token limits.                                                                                                                                                |
@@ -872,21 +877,21 @@ Current composition counts:
 
 | Hook                        | Event               | Description                                                                                                                                                 |
 | --------------------------- | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **keyword-detector**        | Message + Transform | IntentGate detector. Activates `ultrawork`/`ulw`, `search`, `analyze`, and `team` modes from message keywords. |
-| **think-mode**              | Params              | Auto-detects extended thinking needs. Catches "think deeply", "ultrathink" and adjusts model settings.                                                      |
+| **keyword-detector**        | Message             | IntentGate detector. Activates `ultrawork`/`ulw`, `team`, `hyperplan`, and `hyperplan-ultrawork` from message keywords. |
+| **think-mode**              | Message             | On "think"/"ultrathink" in the user message, sets the message variant to `high` unless already a high variant.                                              |
 | **goal**                    | Event               | Re-injects a goal continuation prompt on session.idle while a goal is active; clears the goal on session.deleted.                                           |
-| **start-work**              | Message             | Handles /start-work command execution.                                                                                                                      |
-| **auto-slash-command**      | Message             | Automatically executes slash commands from prompts.                                                                                                         |
+| **ulw-execute**              | Message + command.execute.before | After /ulw-execute is expanded, selects a work plan, initializes boulder state, scaffolds notepads, and injects plan context into the current session. |
+| **auto-slash-command**      | Message + command.execute.before | Expands detected slash commands into their command templates in the prompt.                                                                    |
 | **stop-continuation-guard** | Event + Message     | Guards the stop-continuation mechanism.                                                                                                                     |
-| **category-skill-reminder** | Event + PostToolUse | Reminds agents about available category skills for delegation.                                                                                              |
+| **category-skill-reminder** | PostToolUse + Message Transform + Event | Reminds agents about available category skills for delegation.                                                                                              |
 
 #### Quality & Safety
 
 | Hook                            | Event                    | Description                                                                               |
 | ------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------- |
 | **comment-checker**             | PostToolUse              | Runs `@code-yeongyu/comment-checker` to block AI-slop comment patterns. Bypass options: `// @allow` for a line, `// comment-checker-disable-file` at file top. |
-| **thinking-block-validator**    | Transform                | Validates thinking blocks to prevent API errors.                                          |
-| **edit-error-recovery**         | PostToolUse + Event      | Recovers from edit tool failures.                                                         |
+| **tool-pair-validator**         | Message Transform        | Validates tool call/result pairs during chat message transformation.                       |
+| **edit-error-recovery**         | PostToolUse              | Recovers from edit tool failures.                                                         |
 | **write-existing-file-guard**   | PreToolUse               | Prevents accidental overwrites of existing files without reading them first.              |
 | **hashline-read-enhancer**      | PostToolUse              | Enhances read output with hash-anchored line markers for the hashline edit tool.          |
 
@@ -896,22 +901,22 @@ Current composition counts:
 | ------------------------------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **anthropic-context-window-limit-recovery** | Event           | Handles Claude context window limits gracefully.                                                                                                                                                                                                            |
 | **runtime-fallback**                        | Event + Message | Automatically switches to backup models on retryable API errors (e.g., 429, 500, 502, 503, 504), provider key misconfiguration errors (e.g., missing API key), and provider retry signals. `message.updated` retry-signal detection requires `timeout_seconds > 0`; structured `session.status` retry events can still trigger fallback. |
-| **model-fallback**                          | Event + Message | Manages model fallback chain when primary model is unavailable.                                                                                                                                                                                             |
+| **model-fallback**                          | Message         | Applies the pending model-fallback chain to the next chat.message when a fallback is queued.                                                                                                                                                                                             |
 | **json-error-recovery**                     | PostToolUse     | Recovers from JSON parse errors in tool outputs.                                                                                                                                                                                                            |
 
 #### Truncation & Context Management
 
 | Hook                      | Event       | Description                                                                                         |
 | ------------------------- | ----------- | --------------------------------------------------------------------------------------------------- |
-| **tool-output-truncator** | PostToolUse | Truncates output from Grep, Glob, LSP, AST-grep tools. Dynamically adjusts based on context window. |
+| **tool-output-truncator** | PostToolUse | Truncates output from grep, glob, lsp_diagnostics, interactive_bash, skill_mcp, and webfetch. Dynamically adjusts based on context window. |
 
 #### Notifications & UX
 
 | Hook                         | Event               | Description                                                                                        |
 | ---------------------------- | ------------------- | -------------------------------------------------------------------------------------------------- |
-| **auto-update-checker**      | Event               | Checks for new versions on session creation, shows startup toast with version and Sisyphus status. |
+| **auto-update-checker**      | Event               | Checks for new versions on session creation, shows startup toast with version and orchestration status. |
 | **background-notification**  | Event               | Notifies when background agent tasks complete.                                                     |
-| **session-notification**     | Event               | OS notifications when agents go idle. Works on macOS, Linux, Windows.                              |
+| **session-notification**     | Event               | OS notifications when agents go idle. Works on macOS, Linux, Windows. Use one notification path with OpenCode native Attention to avoid duplicates. |
 | **agent-usage-reminder**     | PostToolUse + Event | Reminds you to leverage specialized agents for better results.                                     |
 | **question-label-truncator** | PreToolUse          | Truncates long question labels in the Question tool UI.                                            |
 
@@ -920,7 +925,7 @@ Current composition counts:
 | Hook                             | Event               | Description                                         |
 | -------------------------------- | ------------------- | --------------------------------------------------- |
 | **task-resume-info**             | PostToolUse         | Provides task resume information for continuity.    |
-| **delegate-task-retry**          | PostToolUse + Event | Retries failed task delegation calls.               |
+| **delegate-task-retry**          | PostToolUse         | Retries failed task delegation calls.               |
 | **empty-task-response-detector** | PostToolUse         | Detects empty responses from delegated tasks.       |
 | **tasks-todowrite-disabler**     | PreToolUse          | Disables TodoWrite tool when task system is active. |
 
@@ -936,19 +941,13 @@ Current composition counts:
 
 | Hook                         | Event               | Description                                             |
 | ---------------------------- | ------------------- | ------------------------------------------------------- |
-| **claude-code-hooks**        | All                 | Executes hooks from Claude Code's settings.json.        |
-| **atlas**                    | Multiple            | Main orchestration logic for todo-driven work sessions. |
+| **claude-code-hooks**        | Message + PreToolUse + PostToolUse | Executes supported Claude Code hook handlers for `chat.message` and `tool.execute.before`/`tool.execute.after`; it does not run on every OMO hook event. |
 | **interactive-bash-session** | PostToolUse + Event | Manages tmux sessions for interactive CLI.              |
 | **non-interactive-env**      | PreToolUse          | Handles non-interactive environment constraints.        |
 
 #### Specialized
 
-| Hook                        | Event      | Description                                                |
-| --------------------------- | ---------- | ---------------------------------------------------------- |
-| **prometheus-md-only**      | PreToolUse | Enforces markdown-only output for Prometheus planner.      |
-| **no-sisyphus-gpt**         | Message    | Prevents Sisyphus from running on incompatible GPT models. |
-| **no-hephaestus-non-gpt**   | Message    | Prevents Hephaestus from running on non-GPT models.        |
-| **sisyphus-junior-notepad** | PreToolUse | Manages notepad state for Sisyphus-Junior agents.          |
+The OpenCode edition's agent-specific hooks are documented on the legacy page linked from [Agents](#agents).
 
 ### Claude Code Hooks Integration
 
@@ -1013,7 +1012,7 @@ The three tiers of MCP servers and where they come from:
 
 | Tier | Source | Visible in `opencode mcp list`? |
 | ---- | ------ | ------------------------------- |
-| 1 — Built-in | Injected at runtime by oh-my-openagent (`websearch`, `context7`, `grep_app`) | No |
+| 1 — Built-in | Injected at runtime by oh-my-openagent (`websearch`, `context7`, `grep_app`, `lsp`) | No |
 | 2 — Claude Code `.mcp.json` | Loaded from `.mcp.json` files and merged in by oh-my-openagent at runtime | No |
 | 3 — Skill-embedded | Declared in `SKILL.md` frontmatter, spun up on demand per session | No |
 | — Native OpenCode | Configured directly in `opencode.json` under the `mcp` key, without the plugin | Yes |
@@ -1075,7 +1074,7 @@ When a skill MCP has `oauth` configured:
 - **Dynamic Client Registration**: Auto-registers with servers supporting RFC 7591 (clientId becomes optional)
 - **PKCE**: Mandatory for all flows
 - **Resource Indicators**: Auto-generated from MCP URL per RFC 8707
-- **Token Storage**: Persisted in `~/.config/opencode/mcp-oauth.json` (chmod 0600)
+- **Token Storage**: Per-server files under `~/.config/opencode/mcp-oauth/<hash>.json` (mode 0600). Legacy `~/.config/opencode/mcp-oauth.json` is still read.
 - **Auto-refresh**: Tokens refresh on 401; step-up authorization on 403 with `WWW-Authenticate`
 - **Dynamic Port**: OAuth callback server uses an auto-discovered available port
 
@@ -1162,7 +1161,7 @@ Full compatibility layer for Claude Code configurations.
 
 | Type         | Locations                                                                          |
 | ------------ | ---------------------------------------------------------------------------------- |
-| **Commands** | `~/.config/opencode/commands/`, `.claude/commands/`                                |
+| **Commands** | OpenCode: `~/.config/opencode/command(s)/`, `.opencode/command(s)/`. Claude: `~/.claude/commands/`, `.claude/commands/` (gated by `claude_code.commands`) |
 | **Skills**   | `~/.config/opencode/skills/*/SKILL.md`, `.claude/skills/*/SKILL.md`                |
 | **Agents**   | `~/.config/opencode/agents/*.md`, `.claude/agents/*.md`                            |
 | **MCPs**     | `~/.claude.json`, `~/.config/opencode/.mcp.json`, `.mcp.json`, `.claude/.mcp.json` |

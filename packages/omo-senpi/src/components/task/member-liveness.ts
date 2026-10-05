@@ -6,7 +6,7 @@ import {
   type TaskStatus,
 } from "@oh-my-opencode/senpi-task"
 
-import type { IdleInjectionCoordinator } from "../../extension/idle-injection-coordinator"
+import { IdleInjectionRetiredError, type IdleInjectionCoordinator } from "../../extension/idle-injection-coordinator"
 import type { SenpiExtensionAPI } from "../../extension/types"
 
 export const TEAM_MEMBER_LIVENESS_MESSAGE_TYPE = "senpi-task.team-member-liveness"
@@ -15,6 +15,7 @@ export type TeamMemberLivenessDetails = {
   readonly memberName: string
   readonly lastKnownState: TaskStatus
   readonly reason?: string
+  readonly killed?: boolean
 }
 
 type TeamMemberLivenessDeliveryDetails = TeamMemberLivenessDetails & {
@@ -99,7 +100,12 @@ export function createTeamMemberLivenessNotifier(
     }
     if (deps.coordinator !== undefined) {
       try {
-        deps.coordinator.enqueue(injection)
+        // A refused enqueue (coordinator retired with the session) is not queued and gets no receipt,
+        // so the retry has to be driven from here; an accepted one reports through onDeliveryFailed.
+        if (deps.coordinator.enqueue(injection) === false) {
+          failDelivery(key, record, new IdleInjectionRetiredError())
+          return
+        }
         if (deps.isStreaming()) deps.coordinator.scheduleFlush()
         else deps.coordinator.flushSoon()
       } catch (error) {
@@ -171,11 +177,20 @@ export function livenessDeliveryKeysFromSessionText(text: string): readonly stri
 
 export function livenessDetails(record: TaskRecord): TeamMemberLivenessDetails | undefined {
   const memberName = parseTeamMemberTaskIdentity(record)?.memberName
-  if (memberName === undefined || (record.status !== "error" && record.status !== "lost")) return undefined
+  if (
+    memberName === undefined
+    || (record.status !== "error" && record.status !== "lost" && record.killed !== true)
+  ) {
+    return undefined
+  }
+  // A suspended record (persisted_only/rpc_detached) sits between shutdown and revival: the member
+  // is not dead, and reconcile may still revive it, so it must never produce a death event.
+  if (record.residency_state === "persisted_only" || record.residency_state === "rpc_detached") return undefined
   return {
     memberName,
     lastKnownState: record.status,
     ...(record.error_message === undefined ? {} : { reason: record.error_message }),
+    ...(record.killed === true ? { killed: true } : {}),
   }
 }
 

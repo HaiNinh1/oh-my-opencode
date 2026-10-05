@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test"
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
-import { FakeExtensionAPI } from "../../../test-support/fake-extension-api"
+import { dispatchRunEnd, FakeExtensionAPI } from "../../../test-support/fake-extension-api"
 import type { ComponentLogger } from "../../extension/types"
 import { createUlwLoopComponent } from "./index"
-import { activeStatus, completeStatus, createLogger } from "./ulw-loop.test-support"
+import { activeStatus, completeStatus, createLogger, sessionEventCtx } from "./ulw-loop.test-support"
 
 type StatusCall = {
   readonly key: string
@@ -54,8 +57,8 @@ async function registerFooterScenario(input: {
 }): Promise<FakeExtensionAPI> {
   const pi = new FakeExtensionAPI()
   await createUlwLoopComponent({
-    resolveOmoBin: () => "/tmp/omo",
-    runCommand: async () => ({ code: 0, stdout: input.outputs.shift() ?? activeStatus() }),
+    planExists: () => true,
+    readStatus: async () => ({ code: 0, stdout: input.outputs.shift() ?? activeStatus() }),
     footerStatus: {
       isGoalActive: input.goalActive,
       timers: input.timers,
@@ -71,7 +74,89 @@ function visibleFrame(text: string | undefined): string | undefined {
   return text?.replaceAll("\u2800", "")
 }
 
+async function defaultFooterScenario(sessionId: string, outputs = [activeStatus(), activeStatus()]) {
+  const root = mkdtempSync(join(tmpdir(), "omo-senpi-footer-"))
+  const cwd = join(root, "project")
+  const sessionDir = join(root, "session")
+  const goalDir = join(cwd, ".omo", "goal")
+  mkdirSync(goalDir, { recursive: true })
+  mkdirSync(sessionDir, { recursive: true })
+  const timers = fakeTimers()
+  const ui = recordingUi()
+  const pi = new FakeExtensionAPI()
+  await createUlwLoopComponent({
+    planExists: () => true,
+    readStatus: async () => ({ code: 0, stdout: outputs.shift() ?? activeStatus() }),
+    footerStatus: { timers },
+  }).register(pi, {
+    logger: createLogger(),
+    config: { getFlag: () => false },
+  })
+  return {
+    context: {
+      cwd,
+      ui,
+      sessionManager: {
+        getSessionFile: () => join(sessionDir, "session.json"),
+        getSessionDir: () => sessionDir,
+        getSessionId: () => sessionId,
+      },
+    },
+    goalPath: join(goalDir, `${encodeURIComponent(sessionId)}.json`),
+    pi,
+    timers,
+    ui,
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  }
+}
+
+function writeGoal(path: string, status: "active" | "complete"): void {
+  writeFileSync(path, `${JSON.stringify({ version: 1, goal: { status } })}\n`)
+}
+
 describe("omo-senpi ulw-loop footer status", () => {
+  it("reads the project goal store and publishes all four animation frames", async () => {
+    const scenario = await defaultFooterScenario("session-project-store")
+    try {
+      writeGoal(scenario.goalPath, "active")
+
+      await scenario.pi.dispatch("session_start", { type: "session_start" }, scenario.context)
+      scenario.timers.fire()
+      scenario.timers.fire()
+      scenario.timers.fire()
+
+      const frames = scenario.ui.calls.filter((call) => call.key === "ulw-loop").map((call) => call.text)
+      expect(frames.map(visibleFrame)).toEqual([
+        "⚡ ultraworking",
+        "⚡ ultraworking.",
+        "⚡ ultraworking..",
+        "⚡ ultraworking...",
+      ])
+      expect(scenario.timers.activeCount()).toBe(1)
+    } finally {
+      scenario.cleanup()
+    }
+  })
+
+  it("uses an encoded session id and clears when the project goal completes", async () => {
+    const scenario = await defaultFooterScenario("session/encoded")
+    try {
+      expect(scenario.goalPath).toEndWith("session%2Fencoded.json")
+      writeGoal(scenario.goalPath, "active")
+
+      await scenario.pi.dispatch("session_start", { type: "session_start" }, scenario.context)
+      expect(scenario.ui.calls.some((call) => call.key === "ulw-loop" && call.text !== undefined)).toBe(true)
+
+      writeGoal(scenario.goalPath, "complete")
+      await dispatchRunEnd(scenario.pi, { type: "agent_end", messages: [{ role: "assistant", stopReason: "stop" }] }, scenario.context)
+
+      expect(scenario.ui.calls.at(-1)).toEqual({ key: "ulw-loop", text: undefined })
+      expect(scenario.timers.activeCount()).toBe(0)
+    } finally {
+      scenario.cleanup()
+    }
+  })
+
   it("publishes animated ultraworking status only when goal and ulw-loop are active", async () => {
     const timers = fakeTimers()
     const ui = recordingUi()
@@ -81,7 +166,7 @@ describe("omo-senpi ulw-loop footer status", () => {
       timers,
     })
 
-    await pi.dispatch("session_start", { type: "session_start" }, { cwd: "/repo", ui })
+    await pi.dispatch("session_start", { type: "session_start" }, sessionEventCtx("/repo", { ui }))
     timers.fire()
     timers.fire()
     timers.fire()
@@ -107,20 +192,52 @@ describe("omo-senpi ulw-loop footer status", () => {
       timers,
     })
 
-    await pi.dispatch("session_start", { type: "session_start" }, { cwd: "/repo", ui })
+    await pi.dispatch("session_start", { type: "session_start" }, sessionEventCtx("/repo", { ui }))
     expect(ui.calls).toHaveLength(0)
 
     goalActive = true
-    await pi.dispatch("agent_end", { type: "agent_end" }, { cwd: "/repo", ui })
+    await dispatchRunEnd(pi, { type: "agent_end", messages: [{ role: "assistant", stopReason: "stop" }] }, sessionEventCtx("/repo", { ui }))
     expect(timers.activeCount()).toBe(1)
 
-    await pi.dispatch("agent_end", { type: "agent_end" }, { cwd: "/repo", ui })
+    await dispatchRunEnd(pi, { type: "agent_end", messages: [{ role: "assistant", stopReason: "stop" }] }, sessionEventCtx("/repo", { ui }))
     expect(ui.calls.at(-1)).toEqual({ key: "ulw-loop", text: undefined })
     expect(timers.activeCount()).toBe(0)
 
-    await pi.dispatch("session_shutdown", { type: "session_shutdown" }, { cwd: "/repo", ui })
+    await pi.dispatch("session_shutdown", { type: "session_shutdown" }, sessionEventCtx("/repo", { ui }))
     expect(ui.calls.at(-1)).toEqual({ key: "ulw-loop", text: undefined })
     expect(timers.activeCount()).toBe(0)
+  })
+
+  it("#given an active footer #when the run ends on a blocked outcome #then the footer still syncs for the finished run", async () => {
+    const timers = fakeTimers()
+    const ui = recordingUi()
+    const logger = createLogger()
+    const pi = await registerFooterScenario({
+      goalActive: () => true,
+      outputs: [activeStatus(), completeStatus()],
+      timers,
+      logger,
+    })
+
+    await dispatchRunEnd(pi, { type: "agent_end", messages: [{ role: "assistant", stopReason: "stop" }] }, sessionEventCtx("/repo", { ui }))
+    expect(timers.activeCount()).toBe(1)
+
+    // Esc right after the last goal completed: no continuation, and no tool_result will arrive to
+    // refresh the footer either, so this run's own probe is the only thing that can clear it.
+    await dispatchRunEnd(
+      pi,
+      { type: "agent_end", aborted: true, abortSource: "user", messages: [{ role: "assistant", stopReason: "stop" }] },
+      sessionEventCtx("/repo", { ui }),
+    )
+
+    expect(pi.messages).toHaveLength(1)
+    expect(ui.calls.at(-1)).toEqual({ key: "ulw-loop", text: undefined })
+    expect(timers.activeCount()).toBe(0)
+    expect(logger.entries).toContainEqual({
+      level: "info",
+      message: "omo-senpi ulw-loop continuation skipped",
+      details: { reason: "terminal-outcome", blockedBy: "aborted", stopReason: "stop", aborted: true, willRetry: false },
+    })
   })
 
   it("keeps continuation and headless paths unchanged", async () => {
@@ -132,7 +249,7 @@ describe("omo-senpi ulw-loop footer status", () => {
       timers,
     })
 
-    await pi.dispatch("agent_end", { type: "agent_end" }, { cwd: "/repo", ui })
+    await dispatchRunEnd(pi, { type: "agent_end", messages: [{ role: "assistant", stopReason: "stop" }] }, sessionEventCtx("/repo", { ui }))
     expect(pi.messages).toHaveLength(1)
     expect(pi.messages[0]?.message["customType"]).toBe("omo-senpi:ulw-continuation")
     expect(ui.calls.some((call) => call.key === "ulw-loop" && visibleFrame(call.text) === "⚡ ultraworking")).toBe(true)
@@ -143,7 +260,7 @@ describe("omo-senpi ulw-loop footer status", () => {
       outputs: [activeStatus()],
       timers: headlessTimers,
     })
-    await expect(headlessPi.dispatch("agent_end", { type: "agent_end" }, { cwd: "/repo" })).resolves.toHaveLength(1)
+    await expect(dispatchRunEnd(headlessPi, { type: "agent_end", messages: [{ role: "assistant", stopReason: "stop" }] }, sessionEventCtx("/repo"))).resolves.toHaveLength(1)
     expect(headlessPi.messages).toHaveLength(1)
     expect(headlessTimers.activeCount()).toBe(0)
   })

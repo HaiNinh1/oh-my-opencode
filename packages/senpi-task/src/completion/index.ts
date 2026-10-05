@@ -1,3 +1,4 @@
+export { DAG_VERIFICATION_DIRECTIVE } from "./dag-verification-directive"
 export { buildCompletionDetails, buildCompletionMessage, completionMessageLines } from "./notification"
 export type { BuildDetailsOptions } from "./notification"
 export { routeCompletion, shouldNotifyStatus } from "./routing"
@@ -17,6 +18,8 @@ export type {
   ParentNotifierMessage,
   ParentState,
   ReconcileFailedNotificationsInput,
+  ReconcileUnnotifiedNotificationsInput,
+  RecordDeliveryFailureInput,
   RoutingDecision,
   SkipReason,
   TransitionReason,

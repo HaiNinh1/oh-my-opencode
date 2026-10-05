@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { BUILTIN_CATEGORY_DEFAULTS, resolveCategory } from "./index"
+import { BUILTIN_CATEGORY_DEFAULTS, BUILTIN_CATEGORY_REQUIRES_MODEL, resolveCategory } from "./index"
 
 type FakeModel = {
   readonly provider: string
@@ -36,7 +36,7 @@ const gpt56CategoryCases = [
     category: "ultrabrain",
     modelId: "gpt-5.6-sol",
     nativeVariant: "max",
-    mixedWinner: { provider: "vercel", modelId: "openai/gpt-5.6-sol", variant: "max" },
+    mixedWinner: { provider: "github-copilot", modelId: "gpt-5.6-sol", variant: "max" },
     copilotVariant: "max",
     copilotFallbackEntry: { providers: ["github-copilot"] as string[], model: "gpt-5.6-sol", variant: "max" },
   },
@@ -47,7 +47,7 @@ const gpt56CategoryCases = [
     mixedWinner: { provider: "github-copilot", modelId: "gpt-5.6-sol", variant: "medium" },
     copilotVariant: "medium",
     copilotFallbackEntry: {
-      providers: ["openai", "quotio-openai", "github-copilot", "opencode", "vercel"] as string[],
+      providers: ["chatgpt-subscription", "openai", "github-copilot", "opencode"] as string[],
       model: "gpt-5.6-sol",
       variant: "medium",
     },
@@ -59,7 +59,7 @@ const gpt56CategoryCases = [
     mixedWinner: { provider: "github-copilot", modelId: "gpt-5.6-terra", variant: "high" },
     copilotVariant: "high",
     copilotFallbackEntry: {
-      providers: ["openai", "quotio-openai", "github-copilot", "opencode", "vercel"] as string[],
+      providers: ["chatgpt-subscription", "openai", "github-copilot", "opencode"] as string[],
       model: "gpt-5.6-terra",
       variant: "high",
     },
@@ -79,7 +79,7 @@ describe("resolveCategory", () => {
           ultrabrain: {
             model: "anthropic/claude-opus-4-7",
             variant: "max",
-            prompt_append: "USER OVERLAY PROMPT",
+            prompt_append: "fixture-overlay",
           },
         },
       },
@@ -91,8 +91,8 @@ describe("resolveCategory", () => {
     expect(resolved.spec.provider).toBe("anthropic")
     expect(resolved.spec.modelId).toBe("claude-opus-4-7")
     expect(resolved.spec.variant).toBe("max")
-    expect(resolved.spec.prompt_append).toContain("DEEP LOGICAL REASONING")
-    expect(resolved.spec.prompt_append).toEndWith("\n\nUSER OVERLAY PROMPT")
+    expect(resolved.spec.prompt_append).not.toBe("fixture-overlay")
+    expect(resolved.spec.prompt_append).toEndWith("\n\nfixture-overlay")
   })
 
   test("#given a disabled omo category overlay #when resolved #then a disabled result explains the reason", () => {
@@ -251,95 +251,95 @@ describe("resolveCategory", () => {
     expect(resolved.spec.reasoningEffort).toBe("medium")
   })
 
-  test("#given quick primary is unavailable and the quotio rung is available #when resolved #then delegate-core fallback chain reaches gpt-5.6-luna-fast", () => {
+  test("#given quick primary is unavailable and the deepseek rung is available #when resolved #then delegate-core fallback chain reaches deepseek-flash", () => {
     // given
-    const models = registry([model("quotio-openai", "gpt-5.6-luna-fast")])
+    const models = registry([model("deepseek", "deepseek-flash")])
 
     // when
     const result = resolveCategory("quick", {}, models)
 
     // then
     const resolved = expectResolved(result)
-    expect(resolved.spec.provider).toBe("quotio-openai")
-    expect(resolved.spec.modelId).toBe("gpt-5.6-luna-fast")
-    expect(resolved.spec.variant).toBe("low")
+    expect(resolved.spec.provider).toBe("deepseek")
+    expect(resolved.spec.modelId).toBe("deepseek-flash")
+    expect(resolved.spec.variant).toBe("off")
     expect(resolved.modelSelection.matchedFallback).toBe(true)
     expect(resolved.modelSelection.fallbackEntry).toEqual({
-      providers: ["quotio-openai"],
-      model: "gpt-5.6-luna-fast",
-      variant: "low",
+      providers: ["deepseek"],
+      model: "deepseek-flash",
+      variant: "off",
     })
   })
 
-  test("#given writing's Kimi for Coding default is available #when resolved #then its canonical Kimi K3 id is selected", () => {
+  test("#given writing's Opus 5.5 default is unavailable and Opus 4.6 is available #when resolved #then the Opus 4.6 rung is selected at max", () => {
     // given
-    const models = registry([model("kimi-coding", "k3")])
+    const models = registry([model("anthropic", "claude-fable-5-1"), model("anthropic", "claude-opus-4-6")])
 
     // when
     const result = resolveCategory("writing", {}, models)
 
     // then
     const resolved = expectResolved(result)
-    expect(resolved.spec.provider).toBe("kimi-coding")
-    expect(resolved.spec.modelId).toBe("k3")
-    expect(resolved.spec.variant).toBe("low")
-    expect(resolved.modelSelection.matchedFallback).toBe(false)
+    expect(resolved.spec.provider).toBe("anthropic")
+    expect(resolved.spec.modelId).toBe("claude-opus-4-6")
+    expect(resolved.spec.variant).toBe("max")
+    expect(resolved.modelSelection.matchedFallback).toBe(true)
+    expect(resolved.modelSelection.fallbackEntry).toEqual({
+      providers: ["anthropic-subscription", "anthropic", "anthropic-api", "github-copilot", "opencode"],
+      model: "claude-opus-4-6",
+      variant: "max",
+    })
   })
 
-  test("#given writing's provider default is unavailable and Kimi K3 is available #when resolved #then the K3 fallback is selected", () => {
+  test("#given only writing's last rung is available #when resolved #then Opus 4.6 is selected at max", () => {
+    // given
+    const models = registry([model("anthropic", "claude-opus-4-6")])
+
+    // when
+    const result = resolveCategory("writing", {}, models)
+
+    // then
+    const resolved = expectResolved(result)
+    expect(resolved.spec.provider).toBe("anthropic")
+    expect(resolved.spec.modelId).toBe("claude-opus-4-6")
+    expect(resolved.spec.variant).toBe("max")
+    expect(resolved.modelSelection.matchedFallback).toBe(true)
+    expect(resolved.modelSelection.fallbackEntry).toEqual({
+      providers: ["anthropic-subscription", "anthropic", "anthropic-api", "github-copilot", "opencode"],
+      model: "claude-opus-4-6",
+      variant: "max",
+    })
+  })
+
+  test("#given visual-engineering primary models are unavailable and Kimi K3 is available #when resolved #then delegate-core fallback chain preserves the max variant", () => {
     // given
     const models = registry([model("opencode-go", "kimi-k3")])
-
-    // when
-    const result = resolveCategory("writing", {}, models)
-
-    // then
-    const resolved = expectResolved(result)
-    expect(resolved.spec.provider).toBe("opencode-go")
-    expect(resolved.spec.modelId).toBe("kimi-k3")
-    expect(resolved.spec.variant).toBe("low")
-    expect(resolved.modelSelection.matchedFallback).toBe(true)
-    expect(resolved.modelSelection.fallbackEntry).toEqual({
-      providers: ["kimi-coding", "kimi-for-coding", "moonshotai", "opencode-go"],
-      model: "kimi-k3",
-      variant: "low",
-    })
-  })
-
-  test("#given visual-engineering primary is unavailable and the ZAI GLM rung is available #when resolved #then delegate-core fallback chain preserves the max variant", () => {
-    // given
-    const models = registry([model("zai-coding-plan", "glm-5.2")])
 
     // when
     const result = resolveCategory("visual-engineering", {}, models)
 
     // then
     const resolved = expectResolved(result)
-    expect(resolved.spec.provider).toBe("zai-coding-plan")
-    expect(resolved.spec.modelId).toBe("glm-5.2")
+    expect(resolved.spec.provider).toBe("opencode-go")
+    expect(resolved.spec.modelId).toBe("kimi-k3")
     expect(resolved.spec.variant).toBe("max")
     expect(resolved.modelSelection.matchedFallback).toBe(true)
     expect(resolved.modelSelection.fallbackEntry).toEqual({
-      providers: ["zai-coding-plan", "opencode-go", "vercel"],
-      model: "glm-5.2",
+      providers: ["kimi-coding", "kimi-for-coding", "moonshotai", "opencode-go"],
+      model: "kimi-k3",
       variant: "max",
     })
   })
 
-  test("#given only transformed Vercel GPT-5.6 models #when deep categories resolve #then each keeps its native top rung", () => {
-    for (const { category, modelId, nativeVariant } of gpt56CategoryCases) {
-      const gatewayModelId = `openai/${modelId}`
-      const result = expectResolved(resolveCategory(category, {}, registry([model("vercel", gatewayModelId)])))
+  test("#given only an unlisted Vercel gateway re-publishing the GPT models #when deep categories resolve #then none resolves on it", () => {
+    for (const { category, modelId } of gpt56CategoryCases) {
+      const result = resolveCategory(category, {}, registry([model("vercel", `openai/${modelId}`)]))
 
-      expect(result.spec.provider).toBe("vercel")
-      expect(result.spec.modelId).toBe(gatewayModelId)
-      expect(result.spec.variant).toBe(nativeVariant)
-      expect(result.modelSelection.fallbackEntry?.model).toBe(modelId)
-      expect(result.modelSelection.fallbackEntry?.variant).toBe(nativeVariant)
+      expect(result.kind).toBe("model_unavailable")
     }
   })
 
-  test("#given transformed Vercel and Copilot GPT-5.6 models #when deep categories resolve #then the first available rung provider wins", () => {
+  test("#given an unlisted Vercel gateway and Copilot GPT models #when deep categories resolve #then the listed Copilot rung wins", () => {
     for (const { category, modelId, mixedWinner } of gpt56CategoryCases) {
       const gatewayModelId = `openai/${modelId}`
       const models = registry([
@@ -355,7 +355,7 @@ describe("resolveCategory", () => {
     }
   })
 
-  test("#given only Copilot GPT-5.6 models #when deep categories resolve #then each uses its copilot rung", () => {
+  test("#given only Copilot GPT models #when deep categories resolve #then each uses its copilot rung", () => {
     for (const { category, modelId, copilotVariant, copilotFallbackEntry } of gpt56CategoryCases) {
       const result = expectResolved(resolveCategory(category, {}, registry([model("github-copilot", modelId)])))
 
@@ -408,7 +408,7 @@ describe("resolveCategory", () => {
 
   test("#given category params in omo overlay #when resolved #then child spec carries generation params and prompt append", () => {
     // given
-    const models = registry([model("kimi-coding", "kimi-for-coding-highspeed")])
+    const models = registry([model("chatgpt-subscription", "gpt-6-luna-fast")])
 
     // when
     const result = resolveCategory(
@@ -422,7 +422,7 @@ describe("resolveCategory", () => {
             thinking: { type: "enabled", budgetTokens: 1024 },
             reasoningEffort: "medium",
             tools: { read: true, write: false },
-            prompt_append: "EXTRA QUICK CONTEXT",
+            prompt_append: "fixture-quick-overlay",
           },
         },
       },
@@ -437,8 +437,8 @@ describe("resolveCategory", () => {
     expect(resolved.spec.thinking).toEqual({ type: "enabled", budgetTokens: 1024 })
     expect(resolved.spec.reasoningEffort).toBe("medium")
     expect(resolved.spec.tools).toEqual({ read: true, write: false })
-    expect(resolved.spec.prompt_append).toContain("SMALL / QUICK")
-    expect(resolved.spec.prompt_append).toEndWith("\n\nEXTRA QUICK CONTEXT")
+    expect(resolved.spec.prompt_append).not.toBe("fixture-quick-overlay")
+    expect(resolved.spec.prompt_append).toEndWith("\n\nfixture-quick-overlay")
   })
 
   test("#given a custom category description #when resolved #then the resolved result preserves it", () => {
@@ -466,30 +466,30 @@ describe("resolveCategory", () => {
 })
 
 describe("builtin category defaults", () => {
-  test("#given ported builtin defaults #when snapshotted #then all nine category defaults stay pinned", () => {
+  test("#given ported builtin defaults #when inspected #then machine routing fields stay pinned without prose wording", () => {
     // given
     const defaults = BUILTIN_CATEGORY_DEFAULTS
 
-    // when
-    const snapshotSubject = defaults.map(({ config, description, name, promptAppend }) => ({
-      name,
-      config,
-      description,
-      promptAppend,
-    }))
-
-    // then
-    expect(JSON.stringify(snapshotSubject, null, 2)).toMatchSnapshot()
-    expect(defaults.map((entry) => entry.name)).toEqual([
-      "visual-engineering",
-      "artistry",
-      "ultrabrain",
-      "deep",
-      "quick",
-      "unspecified-low",
-      "architect",
-      "unspecified-high",
-      "writing",
+    // then: declared order plus each category's primary provider, model, and variant
+    expect(defaults.map(({ config, name }) => [name, config.model, config.variant])).toEqual([
+      ["visual-engineering", "anthropic/claude-fable-5-1", "max"],
+      ["artistry", "anthropic/claude-fable-5-1", "max"],
+      ["ultrabrain", "chatgpt-subscription/gpt-6-astra", "max"],
+      ["deep-low", "chatgpt-subscription/gpt-6.1-sol", "medium"],
+      ["deep-high", "chatgpt-subscription/gpt-6-astra", "high"],
+      ["quick", "chatgpt-subscription/gpt-6-luna-fast", "low"],
+      ["unspecified-low", "anthropic/claude-sonnet-5-5", "medium"],
+      ["unspecified-high", "anthropic/claude-opus-5-5", "medium"],
+      ["architect", "anthropic/claude-fable-5-1", "max"],
+      ["writing", "anthropic/claude-opus-5-5", "low"],
     ])
+
+    // then: availability gating applies only to the model-gated builtins; any listed id opens the gate
+    expect(BUILTIN_CATEGORY_REQUIRES_MODEL).toEqual({
+      architect: ["claude-fable-5-1"],
+      ultrabrain: ["gpt-6-astra", "gpt-5.6-sol"],
+      "deep-low": ["gpt-6.1-sol", "gpt-6.1-sol-fast", "gpt-5.6-sol-fast", "gpt-5.6-sol"],
+      "deep-high": ["gpt-6-astra"],
+    })
   })
 })

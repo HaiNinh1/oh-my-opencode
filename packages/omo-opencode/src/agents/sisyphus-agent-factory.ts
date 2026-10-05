@@ -9,6 +9,7 @@ import {
   buildClaudeSisyphusAgentConfig,
   buildGlmSisyphusAgentConfig,
   buildGptSisyphusAgentConfig,
+  buildGrokSisyphusAgentConfig,
 } from "./sisyphus-agent-config";
 import { buildFallbackSisyphusPrompt } from "./sisyphus-dynamic-prompt";
 import { buildClaudeFable5SisyphusPrompt } from "./sisyphus/claude-fable-5";
@@ -18,6 +19,7 @@ import { buildClaudeOpus5SisyphusPrompt } from "./sisyphus/claude-opus-5";
 import { buildGlm52SisyphusPrompt } from "./sisyphus/glm-5-2";
 import { buildGpt54SisyphusPrompt } from "./sisyphus/gpt-5-4";
 import { buildGpt55SisyphusPrompt } from "./sisyphus/gpt-5-5";
+import { buildGrok4SisyphusPrompt } from "./sisyphus/grok-4";
 import { buildKimiK26SisyphusPrompt } from "./sisyphus/kimi-k2-6";
 import { buildKimiK27SisyphusPrompt } from "./sisyphus/kimi-k2-7";
 import { buildKimiK3SisyphusPrompt } from "./sisyphus/kimi-k3";
@@ -30,10 +32,13 @@ import {
   isGlmModel,
   isGpt5_5Model,
   isGpt5_6Model,
+  isGpt6Model,
   isGptModel,
   isGptNativeSisyphusModel,
+  isGrok45Model,
+  isGrok46Model,
+  isKimiK2CodeModel,
   isKimiK2Model,
-  isKimiK27Model,
   isKimiK3Model,
 } from "./types";
 
@@ -57,6 +62,7 @@ export type SisyphusPromptFamily =
   | "claude-opus-4-8"
   | "claude-opus-4-7"
   | "glm-5-2"
+  | "grok-4"
   | "fallback";
 
 /**
@@ -72,15 +78,16 @@ export type SisyphusPromptFamily =
  */
 export function resolveSisyphusPromptFamily(model: string): SisyphusPromptFamily {
   if (isKimiK3Model(model)) return "kimi-k3";
-  if (isKimiK27Model(model)) return "kimi-k2-7";
+  if (isKimiK2CodeModel(model)) return "kimi-k2-7";
   if (isKimiK2Model(model)) return "kimi-k2-6";
-  if (isGpt5_5Model(model) || isGpt5_6Model(model)) return "gpt-5-5";
+  if (isGpt5_5Model(model) || isGpt5_6Model(model) || isGpt6Model(model)) return "gpt-5-5";
   if (isGptNativeSisyphusModel(model)) return "gpt-5-4";
   if (isClaudeFable5Model(model)) return "claude-fable-5";
   if (isClaudeOpus5Model(model)) return "claude-opus-5";
   if (isClaudeOpus48Model(model)) return "claude-opus-4-8";
   if (isClaudeOpus47Model(model)) return "claude-opus-4-7";
   if (isGlmModel(model)) return "glm-5-2";
+  if (isGrok45Model(model) || isGrok46Model(model)) return "grok-4";
   return "fallback";
 }
 
@@ -157,6 +164,12 @@ export function createSisyphusAgent(
         MODE,
         model,
         buildGlm52SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
+      );
+    case "grok-4":
+      return buildGrokSisyphusAgentConfig(
+        MODE,
+        model,
+        buildGrok4SisyphusPrompt(model, agents, tools, skills, categories, useTaskSystem),
       );
     case "fallback": {
       const prompt = buildFallbackSisyphusPrompt(

@@ -24,7 +24,7 @@ import { createLaunchConcurrencyProbe } from "../test-support/async-test-helpers
 
 const resolveMemberMock = mock(async (member: TeamSpec["members"][number]) => ({
   agentToUse: `${member.name}-agent`,
-  model: { providerID: "openai", modelID: "gpt-5.4-mini" },
+  model: { providerID: "openai", modelID: "gpt-5.6-luna-fast" },
   fallbackChain: undefined,
   systemContent: `system:${member.name}`,
 }))
@@ -201,9 +201,9 @@ describe("createTeamRun", () => {
       subagent_type: member.subagent_type,
       model: member.model,
     }))).toEqual([
-      { name: "member-1", subagent_type: "member-1-agent", model: { providerID: "openai", modelID: "gpt-5.4-mini" } },
-      { name: "member-2", subagent_type: "member-2-agent", model: { providerID: "openai", modelID: "gpt-5.4-mini" } },
-      { name: "member-3", subagent_type: "member-3-agent", model: { providerID: "openai", modelID: "gpt-5.4-mini" } },
+      { name: "member-1", subagent_type: "member-1-agent", model: { providerID: "openai", modelID: "gpt-5.6-luna-fast" } },
+      { name: "member-2", subagent_type: "member-2-agent", model: { providerID: "openai", modelID: "gpt-5.6-luna-fast" } },
+      { name: "member-3", subagent_type: "member-3-agent", model: { providerID: "openai", modelID: "gpt-5.6-luna-fast" } },
     ])
   })
 
@@ -223,7 +223,6 @@ describe("createTeamRun", () => {
 
     // then
     expect(firstPrompt).toContain("Lead-only tools you must NOT call")
-    expect(firstPrompt).not.toContain("3. Request shutdown via `team_shutdown_request`")
   })
 
   test("rolls back launched members in reverse order when a later spawn fails", async () => {
@@ -297,6 +296,47 @@ describe("createTeamRun", () => {
     // then
     expect(await pathExists(path.resolve(baseDir, "./worktrees/member-1"))).toBe(false)
     expect(await pathExists(path.resolve(baseDir, "./worktrees/member-2"))).toBe(false)
+  })
+
+  test("passes the resolved worktree path as cwd to launch", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-cwd-"))
+    temporaryDirectories.push(baseDir)
+    let launchCount = 0
+    const { manager, launchMock } = createManager(baseDir, async () => ({ id: `task-${++launchCount}`, sessionId: `session-${launchCount}`, status: "running" } as BackgroundTask))
+    const spec = createSpec(2, true)
+
+    // when
+    await createTeamRun(spec, "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager)
+
+    // then
+    expect(launchMock).toHaveBeenCalledTimes(2)
+    const launchInputs = launchMock.mock.calls.map((call) => call[0] as LaunchInput)
+    for (const member of spec.members) {
+      const expectedWorktree = path.resolve(baseDir, member.worktreePath!)
+      const launchInput = launchInputs.find((input) => input.description.endsWith(`/${member.name}`))
+      expect(launchInput?.cwd).toBe(expectedWorktree)
+      expect(launchInput?.prompt).toContain(`Worktree: ${expectedWorktree}`)
+    }
+  })
+
+  test("omits cwd when the member has no worktree", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-no-worktree-cwd-"))
+    temporaryDirectories.push(baseDir)
+    let launchCount = 0
+    const { manager, launchMock } = createManager(baseDir, async () => ({ id: `task-${++launchCount}`, sessionId: `session-${launchCount}`, status: "running" } as BackgroundTask))
+    const spec = createSpec(2, false)
+
+    // when
+    await createTeamRun(spec, "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager)
+
+    // then
+    expect(launchMock).toHaveBeenCalledTimes(2)
+    for (const call of launchMock.mock.calls) {
+      const launchInput = call[0] as LaunchInput
+      expect("cwd" in launchInput).toBe(false)
+    }
   })
 
   test("returns the existing runtime on repeated calls with the same spec and lead session", async () => {

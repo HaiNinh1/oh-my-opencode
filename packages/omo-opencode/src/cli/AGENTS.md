@@ -1,10 +1,10 @@
-# src/cli/ — CLI: install, run, doctor, mcp (oauth), refresh-model-capabilities, get-local-version, version, boulder, cleanup, ulw-loop
+# src/cli/ — CLI: install, run, doctor, config, mcp (oauth), refresh-model-capabilities, get-local-version, version, boulder, worktree-sweep, cleanup, ulw-loop
 
 **Generated:** 2026-07-03
 
 ## OVERVIEW
 
-Commander.js CLI with 10 commands (`sparkshell` removed 2026-07). Entry: `index.ts` → `runCli()` in `cli-program.ts`.
+Commander.js CLI with 12 commands (`sparkshell` removed 2026-07). Entry: `index.ts` → `runCli()` in `cli-program.ts`; runtime commands registered via `configureRuntimeCommands()` in `runtime-commands.ts`.
 
 ## COMMANDS
 
@@ -13,15 +13,17 @@ Commander.js CLI with 10 commands (`sparkshell` removed 2026-07). Entry: `index.
 | `install` | Interactive/non-interactive setup | Provider selection → config gen → plugin registration |
 | `run <message>` | Non-interactive session launcher | Agent resolution (flag → env → config → Sisyphus) |
 | `doctor` | 4-category health checks | System, Config, Tools, Models |
+| `config migrate` | Migrate legacy OMO config into `~/.omo/omo.jsonc` | `config-migrate.ts` over `runOpenCodeStartupMigration`; `--dry-run` prints transform + backup move plan, `--json` machine-readable |
 | `get-local-version` | Version detection | Installed vs npm latest |
 | `version` | Print plugin version | Trivial 2-line subcommand |
 | `mcp` | MCP management; nested `oauth` group | `mcp oauth login <server-name>` (PKCE), `logout`, `status` |
 | `refresh-model-capabilities` | Refresh models.dev cache | Model capabilities refresh |
 | `boulder` | Boulder state inspector | Format work-state + tasks from `.omo/boulder-state/` |
+| `worktree-sweep` | Sweep stale git worktrees | `worktree-sweep/`: classify + delete merged/stale worktrees; excludes externally-owned roots (`~/.codex/worktrees`, `~/.codex-gui-cli-remote/worktrees`) by default |
 | `cleanup` (alias `uninstall`) | Remove Codex Light state | Clean managed Codex cache/marketplace + repair project-local legacy Codex artifacts |
 | `ulw-loop` | Codex ulw-loop CLI | Run the Codex LazyCodex ulw-loop CLI |
 
-`install` accepts `--platform=opencode|codex|both` (default `opencode`). `codex`/`both` route through `install-codex/` to install the Codex CLI Light edition (also `npx lazycodex-ai install`). See `packages/omo-codex/AGENTS.md`.
+`install` accepts `--platform=opencode|codex|both|native` (default `opencode`). `codex`/`both` route through `install-codex/` to install the Codex CLI Light edition (also `npx lazycodex-ai install`). See `packages/omo-codex/AGENTS.md`. `native` is public: it routes through `install-native/`, which clears a stale global `omo` left by a pre-rename oh-my-openagent/oh-my-opencode release (`legacy-omo-bin.ts` scan + `repair-legacy-omo-bin.ts`, only the conflicting bin, never the package), runs the real OmO Native install (`bun add -g omo-ai@beta`, npm fallback with bun stated as recommended) through an injected spawn, verifies the `omo` PATH resolves is omo-ai (`verify-omo-command.ts`, with the exact `export PATH=...` fix when it is not), and then points at `omo setup`. Every user-facing surface advertises that installer command (`formatNativeInstallEntryCommand`), not the raw package install, because it is the only spelling that is correct on both kinds of machine. A `native-dev` choice appears (hidden from help) only when `OMO_ENABLE_NATIVE_DEV_PLATFORM=1` (legacy `OMO_ENABLE_SENPI_PLATFORM=1` still accepted) is set from a source checkout; it routes through `install-native-dev/`, which wraps the in-repo engine adapter installer. `install-ast-grep-sg.ts` provisions the `sg` binary at install time.
 
 ## STRUCTURE
 
@@ -35,24 +37,21 @@ cli/
 ├── model-fallback.ts            # Model config gen by provider availability
 ├── provider-availability.ts     # Provider detection
 ├── fallback-chain-resolution.ts # Fallback chain logic
-├── config-manager/              # 20 config utilities
+├── config-manager/              # 27 config utilities
 │   ├── plugin registration, provider config
 │   ├── JSONC operations, auth plugins
 │   └── npm dist-tags, binary detection
 ├── doctor/
 │   ├── runner.ts                # Parallel check execution
 │   ├── formatter.ts             # Output formatting
-│   └── checks/                  # 15 check files in 4 categories
-│       ├── system.ts            # Binary, plugin, version
-│       ├── config.ts            # JSONC validity, Zod schema
-│       ├── tools.ts             # AST-Grep, LSP, GH CLI, MCP
-│       └── model-resolution.ts  # Cache, resolution, overrides (6 sub-files)
+│   └── checks/                  # 25 check files (8 registered + 3 Codex-only) — see [doctor/AGENTS.md](doctor/AGENTS.md)
 ├── run/                         # Session launcher
 │   ├── runner.ts                # Main orchestration
 │   ├── agent-resolver.ts        # Flag → env → config → Sisyphus
 │   ├── session-resolver.ts      # Create/resume sessions
 │   ├── event-handlers.ts        # Event processing
 │   └── poll-for-completion.ts   # Wait for todos/background tasks
+├── worktree-sweep/               # Stale git worktree classification + sweep
 └── mcp-oauth/                   # OAuth token management
 ```
 

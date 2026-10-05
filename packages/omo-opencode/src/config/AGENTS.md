@@ -17,7 +17,7 @@ config/schema/
 ├── categories.ts               # 8 built-in + custom categories
 ├── hooks.ts                    # HookNameSchema (56 enum values; `team-tool-gating` is the only team-* one in schema; others are wired by direct config gates)
 ├── skills.ts                   # SkillsConfigSchema (sources, paths, recursive)
-├── commands.ts                 # BuiltinCommandNameSchema (goal, refactor, start-work, stop-continuation, remove-ai-slops, hyperplan)
+├── commands.ts                 # BuiltinCommandNameSchema (goal, refactor, ulw-execute, stop-continuation, remove-ai-slops, hyperplan)
 ├── experimental.ts             # Feature flags incl plugin_load_timeout_ms (min 1000), task_system, max_tools
 ├── sisyphus.ts                 # SisyphusConfigSchema (task system)
 ├── sisyphus-agent.ts           # SisyphusAgentConfigSchema
@@ -30,19 +30,18 @@ config/schema/
 ├── notification.ts             # OS notification settings
 ├── git-master.ts               # commit_footer: boolean | string
 ├── git-env-prefix.ts           # Git environment prefix config
-├── browser-automation.ts       # provider: playwright | agent-browser | dev-browser | playwright-cli; playwright_mcp_args (user-config only)
+├── browser-automation.ts       # playwright/dev-browser/playwright-cli enum; rejects retired providers with migration guidance; playwright_mcp_args (user-config only)
 ├── background-task.ts          # Concurrency limits per model/provider, syncPollTimeoutMs
 ├── fallback-models.ts          # FallbackModelsConfigSchema
 ├── runtime-fallback.ts         # RuntimeFallbackConfigSchema (reactive provider fallback)
 ├── babysitting.ts              # Unstable agent monitoring
 ├── dynamic-context-pruning.ts  # Context pruning settings
-├── start-work.ts               # StartWorkConfigSchema (auto_commit)
+├── ulw-execute.ts               # UlwExecuteConfigSchema (auto_commit)
 ├── openclaw.ts                 # OpenClaw integration settings
 ├── model-capabilities.ts       # Model capabilities config
 ├── keyword-detector.ts         # disabled_keywords (ultrawork|search|analyze|team)
 ├── default-mode.ts             # DefaultModeConfigSchema (auto-inject ultrawork / auto-create goal on session start)
 ├── i18n.ts                     # I18nConfigSchema (locale override; falls back to LANG env var)
-├── codegraph.ts                # CodegraphConfigSchema (auto_init, auto_provision, enabled, telemetry, watch_debounce_ms)
 ├── monitor.ts                  # MonitorConfigSchema (live_mode_enabled, allowed_commands, batch/ring limits, flush_interval_ms)
 ├── tui.ts                      # TuiConfigSchema + TuiSidebarConfigSchema (sidebar.enabled)
 └── team-mode.ts                # TeamModeConfigSchema (enabled, max_parallel_members, max_members, tmux_visualization)
@@ -50,7 +49,7 @@ config/schema/
 
 ## ROOT SCHEMA FIELDS
 
-`$schema`, `new_task_system_enabled`, `default_run_agent`, `agent_order`, `agent_definitions`, `disabled_mcps`, `disabled_agents`, `disabled_skills`, `disabled_hooks`, `disabled_commands`, `disabled_tools`, `disabled_providers`, `mcp_env_allowlist`, `hashline_edit`, `telemetry`, `model_fallback`, `agents`, `categories`, `claude_code`, `sisyphus_agent`, `comment_checker`, `experimental`, `auto_update`, `skills`, **`goal`** (new; replaces `ralph_loop`), `ralph_loop` (deprecated; migrated to `goal` in `validate.ts`), `runtime_fallback`, `background_task`, `notification`, `model_capabilities`, `openclaw`, `i18n`, `monitor`, `codegraph`, **`team_mode`**, `keyword_detector`, `babysitting`, `git_master`, `browser_automation_engine`, `websearch`, `tmux`, `tui`, `sisyphus`, `start_work`, `default_mode`, `_migrations`.
+`$schema`, `new_task_system_enabled`, `default_run_agent`, `agent_order`, `agent_definitions`, `disabled_mcps`, `disabled_agents`, `disabled_skills`, `disabled_hooks`, `disabled_commands`, `disabled_tools`, `disabled_providers`, `mcp_env_allowlist`, `hashline_edit`, `telemetry`, `model_fallback`, `agents`, `categories`, `claude_code`, `sisyphus_agent`, `comment_checker`, `experimental`, `auto_update`, `skills`, **`goal`** (new; replaces `ralph_loop`), `ralph_loop` (deprecated; migrated to `goal` in `validate.ts`), `runtime_fallback`, `background_task`, `notification`, `model_capabilities`, `openclaw`, `i18n`, `monitor`, **`team_mode`**, `keyword_detector`, `babysitting`, `git_master`, `browser_automation_engine`, `websearch`, `tmux`, `tui`, `sisyphus`, `ulw_execute`, `default_mode`, `_migrations`.
 
 ## RALPH_LOOP -> GOAL MIGRATION
 

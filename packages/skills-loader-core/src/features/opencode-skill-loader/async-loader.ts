@@ -1,7 +1,7 @@
 import { readFile, readdir } from "fs/promises"
 import type { Dirent } from "fs"
 import { join, basename } from "path"
-import yaml from "js-yaml"
+import * as yaml from "js-yaml"
 import { parseFrontmatter } from "@oh-my-opencode/utils"
 import { sanitizeModelField } from "@oh-my-opencode/model-core"
 import { resolveSymlink, isMarkdownFile } from "@oh-my-opencode/utils"
@@ -9,6 +9,7 @@ import { resolveSkillPathReferences } from "../../shared/skill-path-resolver"
 import type { CommandDefinition } from "@oh-my-opencode/claude-code-compat-core/claude-code-command-loader/types"
 import type { SkillScope, SkillMetadata, LoadedSkill } from "./types"
 import type { SkillMcpConfig } from "../../types"
+import { parseAllowedTools } from "./allowed-tools-parser"
 
 export async function mapWithConcurrency<T, R>(
   items: T[],
@@ -130,18 +131,6 @@ $ARGUMENTS
   } catch {
     return null
   }
-}
-
-function parseAllowedTools(allowedTools: string | string[] | undefined): string[] | undefined {
-  if (!allowedTools) return undefined
-
-  // Handle YAML array format: already parsed as string[]
-  if (Array.isArray(allowedTools)) {
-    return allowedTools.map(t => t.trim()).filter(Boolean)
-  }
-
-  // Handle space-separated string format: "Read Write Edit Bash"
-  return allowedTools.split(/\s+/).filter(Boolean)
 }
 
 export async function discoverSkillsInDirAsync(

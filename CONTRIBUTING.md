@@ -60,7 +60,7 @@ If English isn't your first language, don't worry! We value your contributions r
 
 ### Prerequisites
 
-- **Bun** 1.3.12 (CI-pinned) - The only package manager for the workspace itself
+- **Bun** 1.4.0 (CI-pinned) - The only package manager for the workspace itself
 - **Node** 24 - Required for vendored packages (lsp-tools-mcp, lsp-daemon, git-bash-mcp) and the Codex plugin build via npm
 - **git** - Version control
 - **tmux** (optional) - Enables the `interactive_bash` tool and Team Mode visualization
@@ -132,7 +132,7 @@ All harnesses delegate to these scripts:
 
 | Harness | Wiring |
 | ------- | ------ |
-| GitHub Codespaces / VS Code Dev Containers | `.devcontainer/devcontainer.json` runs `postCreateCommand: script/agent/setup.sh` on `.devcontainer/Dockerfile` (Node 24 + Bun 1.3.12 + tmux) |
+| GitHub Codespaces / VS Code Dev Containers | `.devcontainer/devcontainer.json` runs `postCreateCommand: script/agent/setup.sh` on `.devcontainer/Dockerfile` (Node 24 + Bun 1.4.0 + tmux) |
 | Plain Docker | `script/agent/docker-dev.sh` builds the Dockerfile and opens a shell |
 | Cursor cloud agents | `.cursor/environment.json` `install` runs setup on environment creation |
 | Claude Code | `.claude/settings.json` `SessionStart` hook runs setup; `SessionEnd` hook launches cleanup |
@@ -175,7 +175,7 @@ oh-my-opencode/
 │   │       ├── agents/          # agent factories (Sisyphus, Hephaestus, Oracle, ...)
 │   │       ├── hooks/           # lifecycle hooks, 5-tier composition (see AGENTS.md for current counts)
 │   │       ├── tools/           # native tool dirs, config-gated (LSP via MCP, ast-grep via skill)
-│   │       ├── mcp/             # built-in MCPs: remote (websearch, context7, grep_app) + local stdio (lsp, codegraph)
+│   │       ├── mcp/             # built-in MCPs: remote (websearch, context7, grep_app) + local stdio (lsp)
 │   │       ├── features/        # feature modules (background-agent, skill-loader, tmux, MCP-OAuth, boulder-state, monitor, ...)
 │   │       ├── config/          # Zod v4 schema system
 │   │       ├── shared/          # Cross-cutting utilities
@@ -327,7 +327,7 @@ export function createMyHook(deps: { logger: Logger }) {
 
 ## QA Discipline
 
-Any change to `packages/omo-opencode` (the OpenCode side) must be QA'd with the `opencode-qa` skill. Any change to `packages/omo-codex` (the Codex Light side) must be QA'd with the `codex-qa` skill. Record QA evidence under `.omo/evidence/<date>-<slug>/`.
+Any change to `packages/omo-opencode` (the OpenCode side) must be QA'd with the `opencode-qa` skill. Any change to `packages/omo-codex` (the Codex Light side) must be QA'd with the `codex-qa` skill. Any change to `packages/omo-senpi` or `packages/senpi-task` (the Senpi side) must be QA'd with the `senpi-qa` skill. Record QA evidence under `.omo/evidence/<date>-<slug>/`; live Senpi QA records it under `.omo/evidence/omo-senpi-adapter/<slug>/`, resolved by `.agents/skills/senpi-qa/scripts/resolve-evidence-dir.mjs`. Evidence stays local: `.omo/evidence/` is gitignored and `script/tracked-evidence-paths-audit.test.ts` fails when any evidence path is tracked, so summarize the captures in the PR's QA & Evidence section instead of committing them.
 
 "It typechecks" or "`bun test` is green" is not QA. You must drive the real harness and record the observed behavior.
 
@@ -357,7 +357,7 @@ Any change to `packages/omo-opencode` (the OpenCode side) must be QA'd with the 
 - [ ] `bun test` passes
 - [ ] `bun run test:codex` passes (if Codex-side changed)
 - [ ] Tested locally with OpenCode
-- [ ] QA evidence recorded under `.omo/evidence/` (if harness-connected changes)
+- [ ] QA evidence recorded under `.omo/evidence/` and summarized in the PR body, not committed (if harness-connected changes)
 - [ ] Updated documentation if needed (README, AGENTS.md)
 - [ ] No version changes in `package.json`
 

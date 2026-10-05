@@ -1,6 +1,7 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { normalizeSDKResponse } from "../../shared"
 import type { SessionMessage, SessionMetadata, TodoItem } from "./types"
+import { sessionDirectoriesMatch } from "./directory-filter"
 import { isSessionSdkUnavailableError } from "./sdk-unavailable"
 
 function unwrapSdkResponseError(response: unknown): unknown {
@@ -49,7 +50,7 @@ export async function getSdkMainSessions(
   const mainSessions = sessions.filter((session) => !session.parentID)
   if (directory) {
     return mainSessions
-      .filter((session) => session.directory === directory)
+      .filter((session) => sessionDirectoriesMatch(session.directory, directory))
       .sort((a, b) => b.time.updated - a.time.updated)
   }
 
@@ -59,7 +60,10 @@ export async function getSdkMainSessions(
 export async function getSdkAllSessions(client: PluginInput["client"]): Promise<string[]> {
   const response = await fetchSdkResponse(() => client.session.list())
   const sessions = normalizeSDKResponse(response, [] as SessionMetadata[])
-  return sessions.map((session) => session.id)
+  return sessions
+    .slice()
+    .sort((a, b) => b.time.updated - a.time.updated)
+    .map((session) => session.id)
 }
 
 export async function sdkSessionExists(client: PluginInput["client"], sessionID: string): Promise<boolean> {

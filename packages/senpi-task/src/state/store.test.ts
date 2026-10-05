@@ -7,6 +7,7 @@ import {
   TaskRecordCollisionError,
   createTaskRecord,
   createTaskRecordStore,
+  projectStateKey,
   resolveStateDir,
   transitionTaskRecord,
 } from "../index"
@@ -27,7 +28,7 @@ function tempProject(): string {
 }
 
 describe("resolveStateDir", () => {
-  test("#given no task state override #when resolved #then project omo senpi-task directory is used", () => {
+  test("#given no task state override #when resolved #then the per-project directory under the omo home is used", () => {
     // given
     const project = "/tmp/project-a"
 
@@ -35,7 +36,7 @@ describe("resolveStateDir", () => {
     const stateDir = resolveStateDir({ project_dir: project })
 
     // then
-    expect(stateDir).toBe(join(project, ".omo", "senpi-task"))
+    expect(stateDir).toBe(join(process.env.HOME ?? "", ".omo", "agent", "projects", projectStateKey(project), "senpi-task"))
   })
 
   test("#given task state override #when resolved #then override directory wins", () => {
@@ -63,6 +64,7 @@ describe("TaskRecordStore", () => {
       agent_type: "sisyphus",
       execution_mode: "background",
       model: "gpt-5.2",
+      notify_on_terminal: false,
       tool_allow: ["read", "bash"],
       tool_deny: ["write"],
     })
@@ -98,6 +100,7 @@ describe("TaskRecordStore", () => {
       category: "quick",
       execution_mode: "in-process",
       model: "gpt-5.2",
+      notify_on_terminal: false,
     })
 
     // when
@@ -118,6 +121,7 @@ describe("TaskRecordStore", () => {
       depth: 0,
       execution_mode: "direct",
       model: "gpt-5.2",
+      notify_on_terminal: false,
     })
     store.save(record)
 
@@ -144,6 +148,7 @@ describe("TaskRecordStore", () => {
       depth: 0,
       execution_mode: "direct",
       model: "gpt-5.2",
+      notify_on_terminal: false,
     })
     store.save(good)
     const tasksDir = join(resolveStateDir({ project_dir: project }), "tasks")
@@ -174,6 +179,7 @@ describe("TaskRecordStore", () => {
       depth: 0,
       execution_mode: "direct",
       model: "gpt-5.2",
+      notify_on_terminal: false,
     })
     const duplicate = {
       ...createTaskRecord({
@@ -182,6 +188,7 @@ describe("TaskRecordStore", () => {
         depth: 0,
         execution_mode: "direct",
         model: "gpt-5.2",
+        notify_on_terminal: false,
       }),
       task_id: original.task_id,
     }
@@ -213,6 +220,7 @@ describe("TaskRecordStore", () => {
         depth: 0,
         execution_mode: "direct",
         model: "gpt-5.2",
+        notify_on_terminal: false,
       }),
       {
         type: "start",

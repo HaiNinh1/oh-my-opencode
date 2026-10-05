@@ -1,12 +1,6 @@
 import type { ComponentContext, OmoSenpiComponent, SenpiExtensionAPI } from "../../extension/types"
-import { hasActiveArchitectCategory } from "./architect-gate"
-import {
-  formatModelSelector,
-  isFableFiveModel,
-  isMessageEndEvent,
-  isModelSelectEvent,
-  isRefusalLikeMessage,
-} from "./detection"
+import { hasActiveArchitectCategory, type GateRegistry } from "./architect-gate"
+import { formatModelSelector, isMessageEndEvent, isModelSelectEvent, isRefusalLikeMessage } from "./detection"
 import {
   buildFallbackArchitectDirective,
   buildFallbackArchitectReminder,
@@ -25,7 +19,7 @@ type FallbackArchitectInputResult = { action: "continue" }
 
 export interface FallbackArchitectComponentOptions {
   /** Injectable so tests can decide the gate without depending on the developer's own omo.json. */
-  hasArchitectCategory?: (cwd: string) => boolean
+  hasArchitectCategory?: (cwd: string, registry?: GateRegistry) => boolean
 }
 
 interface FallbackArchitectState {
@@ -41,7 +35,8 @@ interface FallbackArchitectState {
 export function createFallbackArchitectComponent(
   options: FallbackArchitectComponentOptions = {},
 ): OmoSenpiComponent {
-  const hasArchitectCategory = options.hasArchitectCategory ?? ((cwd: string) => hasActiveArchitectCategory(cwd))
+  const hasArchitectCategory =
+    options.hasArchitectCategory ?? ((cwd: string, registry?: GateRegistry) => hasActiveArchitectCategory(cwd, { registry }))
 
   return {
     name: "fallback-architect",
@@ -60,26 +55,30 @@ export function createFallbackArchitectComponent(
       pi.on("model_select", (payload: unknown, eventCtx: unknown): void => {
         if (isDisabled() || !isModelSelectEvent(payload)) return
 
-        // Back on fable 5 (manual switch, session restore, or senpi reverting the fallback):
-        // the weaker-model advice no longer applies.
-        if (isFableFiveModel(payload.model) || payload.source === "fallback-revert") {
+        const selected = formatModelSelector(payload.model)
+        // Back on the model that was refused (manual switch, session restore) or senpi reverting
+        // the fallback: the weaker-model advice no longer applies.
+        if (payload.source === "fallback-revert" || state.active?.from === selected) {
           state.active = undefined
           state.refusalPending = false
           return
         }
 
         if (payload.source !== "fallback") return
-        if (!isFableFiveModel(payload.previousModel) || !state.refusalPending) return
+        // Any model pushed off its turn by a refusal arms the nudge: the signal that makes the
+        // architect consult worth suggesting is the refusal, not which model produced it (#8513).
+        const previousModel = payload.previousModel
+        if (previousModel === undefined || !state.refusalPending) return
 
         const cwd = extractCwd(eventCtx) ?? process.cwd()
-        if (!hasArchitectCategory(cwd)) {
+        if (!hasArchitectCategory(cwd, extractRegistry(eventCtx))) {
           ctx.logger.info("omo-senpi fallback-architect skipped", { reason: "architect-category-inactive" })
           state.refusalPending = false
           return
         }
 
-        const from = formatModelSelector(payload.previousModel)
-        const to = formatModelSelector(payload.model)
+        const from = formatModelSelector(previousModel)
+        const to = selected
         pi.sendMessage({
           customType: FALLBACK_ARCHITECT_DIRECTIVE_TYPE,
           content: buildFallbackArchitectDirective({ from, to }),
@@ -133,4 +132,14 @@ function isUserSourcedInput(payload: unknown): payload is Record<string, unknown
 function extractCwd(eventCtx: unknown): string | undefined {
   if (isRecord(eventCtx) && typeof eventCtx["cwd"] === "string") return eventCtx["cwd"]
   return undefined
+}
+
+// Senpi's ExtensionContext.modelRegistry satisfies the port structurally; untyped contexts (tests,
+// older hosts) simply yield undefined and the gate keeps its config-only behavior.
+function extractRegistry(eventCtx: unknown): GateRegistry | undefined {
+  if (!isRecord(eventCtx)) return undefined
+  const registry = eventCtx["modelRegistry"]
+  if (!isRecord(registry)) return undefined
+  if (typeof registry["getAvailable"] !== "function" || typeof registry["find"] !== "function") return undefined
+  return registry as unknown as GateRegistry
 }

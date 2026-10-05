@@ -1,6 +1,6 @@
 # src/ - Plugin Source
 
-**Generated:** 2026-07-17 / 7d664b96b
+**Generated:** 2026-08-07 / 51ab1e5b6
 
 ## STOP. THIS IS THE OPENCODE PLUGIN. QA IS MANDATORY. EVERY SINGLE TIME YOU CHANGE ANYTHING HERE.
 
@@ -15,7 +15,7 @@
 3. **PROVE THE HOOK / EVENT FIRED.** Changed a lifecycle hook? Prove the matching event hit the wire (`scripts/sse-hook-probe.sh --event <name>`). Changed a tool? Drive it via `opencode run --format json` and assert on the structured events.
 4. **USE tmux** for TUI smoke (`scripts/tui-smoke.sh`) and interactive driving; assert REAL behavior via `opencode run` or the server API + SSE, not the TUI pane.
 
-**RECORD THE EVIDENCE UNDER `.omo/evidence/<YYYYMMDD>-<short-slug>/`** (one organized subfolder per change): WHY THERE IS NO REGRESSION (before/after + isolation proof + exact commands and output) and PROOF THAT EVERY INTENDED CHANGE LANDED (new behavior observed on real opencode). See the root [`AGENTS.md`](../../../AGENTS.md) "STOP. QA IS MANDATORY" section for the full mandate, which also covers the Codex side.
+**RECORD THE EVIDENCE UNDER `.omo/evidence/<YYYYMMDD>-<short-slug>/`** (one organized subfolder per change; the directory is gitignored, so the files stay local and the PR body carries the summary): WHY THERE IS NO REGRESSION (before/after + isolation proof + exact commands and output) and PROOF THAT EVERY INTENDED CHANGE LANDED (new behavior observed on real opencode). See the root [`AGENTS.md`](../../../AGENTS.md) "STOP. QA IS MANDATORY" section for the full mandate, which also covers the Codex side.
 
 **ALWAYS. EVERY TIME. NO EXCEPTIONS.**
 
@@ -73,11 +73,12 @@ Counts verified from each composer's return object. Numbers in brackets show cou
 ```
 createHooks()
   ├─→ createCoreHooks()
-  │   ├─ createSessionHooks()     # 22: preemptiveCompaction,
+  │   ├─ createSessionHooks()     # 23: preemptiveCompaction,
   │   │                             sessionNotification, thinkMode, modelFallback,
   │   │                             anthropicContextWindowLimitRecovery, autoUpdateChecker,
+  │   │                             astGrepSgProvision,
   │   │                             agentUsageReminder, nonInteractiveEnv, interactiveBashSession,
-  │   │                             goal, editErrorRecovery, delegateTaskRetry, startWork,
+  │   │                             goal, editErrorRecovery, delegateTaskRetry, ulwExecute,
   │   │                             prometheusMdOnly, sisyphusJuniorNotepad, noSisyphusGpt,
   │   │                             noHephaestusNonGpt, hephaestusAgentsMdInjector,
   │   │                             questionLabelTruncator, taskResumeInfo,
@@ -89,9 +90,10 @@ createHooks()
   │   │                             jsonErrorRecovery, readImageResizer, todoDescriptionOverride,
   │   │                             webfetchRedirectGuard, fsyncSkipWarning,
   │   │                             notepadWriteGuard, planFormatValidator [+ teamToolGating]
-  │   └─ createTransformHooks()   # 4 [+2 with team-mode]: claudeCodeHooks, keywordDetector,
-  │                                  contextInjectorMessagesTransform,
-  │                                  toolPairValidator [+ teamModeStatusInjector, teamMailboxInjector]
+  │   └─ createTransformHooks()   # 4 [+2 team-mode, +1 monitor-gated]: claudeCodeHooks,
+  │                                  keywordDetector, contextInjectorMessagesTransform,
+  │                                  toolPairValidator [+ teamModeStatusInjector,
+  │                                  teamMailboxInjector, monitorStatusInjector (monitor.enabled)]
   ├─→ createContinuationHooks()   # 7: stopContinuationGuard, compactionContextInjector,
   │                                  compactionTodoPreserver, todoContinuationEnforcer (boulder),
   │                                  unstableAgentBabysitter, backgroundNotificationHook, atlasHook
@@ -102,25 +104,27 @@ createHooks()
     team-member-error-handler, team-member-status-handler
 ```
 
-Total: 53 base, 60 with team-mode. Each tier produces an object whose values are `(input, output) => void` handlers; the matching OpenCode handler invokes them in registration order via `safeHook()` wrappers.
+Total: 54 base, 61 with team-mode, 62 with monitor enabled. Authoritative per-tier breakdown: [`hooks/AGENTS.md`](hooks/AGENTS.md). Each tier produces an object whose values are `(input, output) => void` handlers; the matching OpenCode handler invokes them in registration order via `safeHook()` wrappers.
 
 ## SUBSYSTEM INVENTORY
 
 | Subdir | Purpose | Has AGENTS.md |
 |--------|---------|---------------|
 | `agents/` | 11 agent factories + dynamic prompt builder | yes (+ atlas, hephaestus, prometheus, sisyphus, sisyphus-junior, builtin-agents) |
-| `hooks/` | 53-60 lifecycle hooks across 60 dirs | yes (+ atlas, anthropic-context-window-limit-recovery, auto-update-checker, claude-code-hooks, comment-checker, compaction-context-injector, keyword-detector, ralph-loop, rules-injector, runtime-fallback, todo-continuation-enforcer) |
+| `hooks/` | 54-62 lifecycle hooks across 62 dirs | yes (+ atlas, anthropic-context-window-limit-recovery, auto-update-checker, claude-code-hooks, comment-checker, compaction-context-injector, keyword-detector, ralph-loop, rules-injector, runtime-fallback, todo-continuation-enforcer) |
 | `tools/` | 14 native tool dirs (+1 shared utilities dir); LSP + AST-grep moved to built-in MCPs | yes (+ background-task, call-omo-agent, delegate-task, hashline-edit, look-at, skill) |
-| `features/` | 23 feature modules (some now shimming `team-core`, `tmux-core`, `skills-loader-core`, `mcp-client-core`, and `claude-code-compat-core`) | yes (+ 11 sub-AGENTS.md including builtin-skills, team-mode, background-agent, claude-code-*) |
+| `features/` | 24 feature modules (including `btw-side`, `opengateway-provider`; some now shimming `team-core`, `tmux-core`, `skills-loader-core`, `mcp-client-core`, and `claude-code-compat-core`) | yes (+ 16 sub-AGENTS.md including team-mode, background-agent, btw-side, claude-code-*) |
 | `shared/` | Cross-cutting adapter utilities plus shims over extracted Core packages, barrel-exported | yes |
 | `cli/` | Commander.js CLI: install, run, doctor, mcp-oauth, boulder | yes (+ config-manager, doctor, run) |
 | `plugin/` | 12 OpenCode hook handlers + hook composition | yes |
 | `config/` | Zod v4 schema files | yes |
 | `plugin-handlers/` | 6-phase config loading pipeline | yes |
 | `openclaw/` | Bidirectional Discord/Telegram/HTTP integration | yes |
-| `__tests__/` | Plugin-level integration tests + perf fixtures | no |
-| `mcp/` | 5 built-in MCPs (3 remote + local stdio lsp + codegraph) | yes |
-| `testing/` | Test utilities + `create-plugin-module.ts` | no |
+| `__tests__/` | Plugin-level integration tests + perf fixtures | yes |
+| `mcp/` | 4 built-in MCPs (3 remote + local stdio lsp) | yes |
+| `testing/` | Test utilities + `create-plugin-module.ts` | yes |
+| `config-migration/` | Legacy config discovery + transform plans (consumed by senpi config-startup + codex startup) | yes |
+| `types/` | Ambient `.d.ts` declarations (markdown modules) | no |
 | `help/` | CLI help schema definitions (acp, doctor, sandbox, status) | no |
 | `locales/` | i18n strings (en, zh): toasts + model-fallback labels | no |
 

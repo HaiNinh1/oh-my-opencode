@@ -20,13 +20,13 @@ export type ChatMessageInput = {
   readonly model?: { readonly providerID: string; readonly modelID: string }
 }
 
-export type StartWorkHookOutput = {
+export type UlwExecuteHookOutput = {
   readonly parts: Array<{ readonly type: string; readonly text?: string }>
 }
 
 export type SessionModelOverride = { readonly providerID: string; readonly modelID: string }
 
-export type WorkStartingCommand = "start-work" | "ralph-loop" | "ulw-loop"
+export type WorkStartingCommand = "ulw-execute" | "ralph-loop" | "ulw-loop"
 
 type ChatMessageHook = {
   "chat.message"?: (
@@ -60,7 +60,7 @@ export type ChatMessageHooks = {
   stopContinuationGuard?: StopContinuationGuard | null
   backgroundNotificationHook?: ChatMessageHook | null
   runtimeFallback?: ChatMessageHook | null
-  keywordDetector?: ChatMessageHook | null
+  keywordDetector?: (ChatMessageHook & { clearSession?: (sessionID: string) => void }) | null
   thinkMode?: ChatMessageHook | null
   claudeCodeHooks?: ChatMessageHook | null
   autoSlashCommand?: ChatMessageHook | null
@@ -68,7 +68,7 @@ export type ChatMessageHooks = {
   noHephaestusNonGpt?: ChatMessageHook | null
   hephaestusAgentsMdInjector?: ChatMessageHook | null
   hermesPromptHardener?: ChatMessageHook | null
-  startWork?: ChatMessageHook | null
+  ulwExecute?: ChatMessageHook | null
   goal?: GoalHook | null
   todoContinuationEnforcer?: TodoContinuationEnforcerHook | null
 }

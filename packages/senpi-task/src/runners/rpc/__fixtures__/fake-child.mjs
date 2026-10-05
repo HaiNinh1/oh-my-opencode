@@ -15,13 +15,23 @@ function respond(command, id, extra) {
   emit({ type: "response", command, id, success: true, ...(extra ?? {}) })
 }
 
-function assistantMessage(text) {
-  return { role: "assistant", content: [{ type: "text", text }], stopReason: "endTurn" }
+function reject(command, id, error) {
+  emit({ type: "response", command, id, success: false, error })
+}
+
+function assistantMessage(text, stopReason = "endTurn", errorMessage) {
+  return {
+    role: "assistant",
+    content: text.length === 0 ? [] : [{ type: "text", text }],
+    stopReason,
+    ...(errorMessage === undefined ? {} : { errorMessage }),
+  }
 }
 
 function completeTurn(text) {
   emit({ type: "message_end", message: assistantMessage(text) })
   emit({ type: "agent_end", willRetry: false, messages: [assistantMessage(text)] })
+  emit({ type: "agent_idle" })
 }
 
 function handlePrompt(cmd) {
@@ -29,6 +39,11 @@ function handlePrompt(cmd) {
   if (cmd.streamingBehavior === "followUp") {
     respond("prompt", cmd.id)
     emit({ type: "queue_update", steering: [], followUp: [message] })
+    if (message === "empty-followup") {
+      emit({ type: "agent_start" })
+      emit({ type: "agent_end", willRetry: false, messages: [] })
+      emit({ type: "agent_idle" })
+    }
     return
   }
   if (message.startsWith("delay:")) {
@@ -41,6 +56,20 @@ function handlePrompt(cmd) {
     const [, codeRaw, ...rest] = message.split(":")
     process.stderr.write(rest.join(":"))
     process.exit(Number.parseInt(codeRaw, 10))
+    return
+  }
+  if (message.startsWith("prompt-error:")) {
+    reject("prompt", cmd.id, message.slice("prompt-error:".length))
+    return
+  }
+  if (message.startsWith("turn-error:")) {
+    const errorMessage = message.slice("turn-error:".length)
+    const failed = assistantMessage("", "error", errorMessage)
+    respond("prompt", cmd.id)
+    emit({ type: "agent_start" })
+    emit({ type: "message_end", message: failed })
+    emit({ type: "agent_end", willRetry: false, messages: [failed] })
+    emit({ type: "agent_idle" })
     return
   }
   if (message.startsWith("exit:")) {
@@ -88,7 +117,8 @@ function handleCommand(cmd) {
       return emit({ type: "queue_update", steering: [], followUp: [cmd.message] })
     case "abort":
       respond("abort", cmd.id)
-      return emit({ type: "agent_end", willRetry: false, messages: [] })
+      emit({ type: "agent_end", willRetry: false, messages: [] })
+      return emit({ type: "agent_idle" })
     case "get_state":
       return respond("get_state", cmd.id, {
         data: {

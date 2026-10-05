@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ulwLoopCommand } from "../src/cli-commands.ts";
+import { CLI_TEST_SESSION_ID } from "./fixtures/cli-session.js";
 
 let testDir: string;
 let out: string[];
@@ -22,6 +23,7 @@ beforeEach(async () => {
 	delete process.env["CODEX_SESSION_ID"];
 	delete process.env["CODEX_THREAD_ID"];
 	delete process.env["OMO_ULW_LOOP_SESSION_ID"];
+	process.env["OMO_ULW_LOOP_SESSION_ID"] = CLI_TEST_SESSION_ID;
 	vi.spyOn(process, "cwd").mockReturnValue(testDir);
 	vi.spyOn(process.stdout, "write").mockImplementation((chunk: string | Uint8Array): boolean => {
 		out.push(chunk.toString());
@@ -63,7 +65,7 @@ async function createPlan(brief = "- Goal A\n- Goal B"): Promise<Record<string, 
 describe("ulwLoopCommand help", () => {
 	it("prints usage when no subcommand", async () => {
 		expect(await ulwLoopCommand([])).toBe(0);
-		expect(out.join("")).toContain("omo ulw-loop");
+		expect(out.join("")).toContain("omo-agent-toolkit ulw-loop");
 	});
 });
 
@@ -191,7 +193,7 @@ describe("ulwLoopCommand add-goal", () => {
 describe("ulwLoopCommand unknown", () => {
 	it("returns 1 + prints help on unknown subcommand", async () => {
 		expect(await ulwLoopCommand(["wat"])).toBe(1);
-		expect(out.join("")).toContain("omo ulw-loop");
+		expect(out.join("")).toContain("omo-agent-toolkit ulw-loop");
 	});
 });
 

@@ -59,6 +59,25 @@
         "output": 131072
       }
     },
+    "glm-5.3": {
+      "id": "glm-5.3",
+      "family": "glm",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1048576,
+        "output": 131072
+      }
+    },
     "glm-5v-turbo": {
       "id": "glm-5v-turbo",
       "family": "glm",
@@ -2733,8 +2752,8 @@
         "output": 128000
       }
     },
-    "openai/gpt-5.4-mini": {
-      "id": "openai/gpt-5.4-mini",
+    "openai/gpt-5.6-luna-fast": {
+      "id": "openai/gpt-5.6-luna-fast",
       "family": "gpt-mini",
       "reasoning": true,
       "temperature": false,
@@ -2750,8 +2769,8 @@
         ]
       },
       "limit": {
-        "context": 400000,
-        "input": 272000,
+        "context": 1050000,
+        "input": 922000,
         "output": 128000
       }
     },
@@ -8743,8 +8762,8 @@
         "output": 163840
       }
     },
-    "gpt-5.4-mini": {
-      "id": "gpt-5.4-mini",
+    "gpt-5.6-luna-fast": {
+      "id": "gpt-5.6-luna-fast",
       "family": "gpt-mini",
       "reasoning": true,
       "temperature": false,
@@ -25602,8 +25621,8 @@
         "output": 30000
       }
     },
-    "gpt-5.4-mini-2026-03-17": {
-      "id": "gpt-5.4-mini-2026-03-17",
+    "gpt-5.6-luna-fast-2026-03-17": {
+      "id": "gpt-5.6-luna-fast-2026-03-17",
       "family": "gpt-mini",
       "reasoning": true,
       "temperature": false,
@@ -34449,8 +34468,8 @@
         "output": 64000
       }
     },
-    "openai-gpt-5.4-mini": {
-      "id": "openai-gpt-5.4-mini",
+    "openai-gpt-5.6-luna-fast": {
+      "id": "openai-gpt-5.6-luna-fast",
       "family": "gpt-mini",
       "reasoning": true,
       "temperature": false,
@@ -54146,6 +54165,345 @@
         "context": 400000,
         "input": 272000,
         "output": 128000
+      }
+    },
+    "grok-4.6": {
+      "id": "grok-4.6",
+      "family": "grok",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 500000,
+        "output": 500000
+      }
+    },
+    "xai/grok-4.6": {
+      "id": "xai/grok-4.6",
+      "family": "grok",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 500000,
+        "output": 500000
+      }
+    },
+    "claude-opus-5-5": {
+      "id": "claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "claude-opus-5-5@default": {
+      "id": "claude-opus-5-5@default",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "anthropic/claude-opus-5.5": {
+      "id": "anthropic/claude-opus-5.5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "au.anthropic.claude-opus-5-5": {
+      "id": "au.anthropic.claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "anthropic.claude-opus-5-5": {
+      "id": "anthropic.claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "eu.anthropic.claude-opus-5-5": {
+      "id": "eu.anthropic.claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "global.anthropic.claude-opus-5-5": {
+      "id": "global.anthropic.claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "jp.anthropic.claude-opus-5-5": {
+      "id": "jp.anthropic.claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "us.anthropic.claude-opus-5-5": {
+      "id": "us.anthropic.claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "anthropic/claude-opus-5-5": {
+      "id": "anthropic/claude-opus-5-5",
+      "family": "claude-opus",
+      "reasoning": true,
+      "temperature": false,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      }
+    },
+    "glm-5.3-flash": {
+      "id": "glm-5.3-flash",
+      "family": "glm-flash",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1048576,
+        "output": 1048576
+      }
+    },
+    "zai/glm-5.3-flash": {
+      "id": "zai/glm-5.3-flash",
+      "family": "glm-flash",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1000000,
+        "output": 131072
+      }
+    },
+    "mimo-v2.6-flash": {
+      "id": "mimo-v2.6-flash",
+      "family": "mimo",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1048576,
+        "output": 131072
+      }
+    },
+    "xiaomi/mimo-v2.6-flash": {
+      "id": "xiaomi/mimo-v2.6-flash",
+      "family": "mimo",
+      "reasoning": true,
+      "temperature": true,
+      "toolCall": true,
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "audio",
+          "video"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "limit": {
+        "context": 1048576,
+        "input": 1048576,
+        "output": 131072
       }
     }
   }

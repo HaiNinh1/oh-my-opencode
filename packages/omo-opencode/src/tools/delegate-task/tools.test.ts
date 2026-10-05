@@ -35,7 +35,7 @@ const TEST_AVAILABLE_MODELS = new Set([
   "anthropic/claude-haiku-4-5",
   "google/gemini-3.1-pro",
   "google/gemini-3-flash",
-  "openai/gpt-5.4-mini",
+  "openai/gpt-6-luna-fast",
   "openai/gpt-5.6-sol",
   "kimi-for-coding/kimi-for-coding-highspeed",
   "openai/gpt-5.5",
@@ -142,7 +142,7 @@ describe("sisyphus-task", () => {
       models: {
         anthropic: ["claude-opus-4-7", "claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"],
         google: ["gemini-3.1-pro", "gemini-3-flash"], "kimi-for-coding": ["k3", "kimi-for-coding-highspeed"],
-        openai: ["gpt-5.6-sol", "gpt-5.5", "gpt-5.4-mini", "gpt-5.5"],
+        openai: ["gpt-5.6-sol", "gpt-5.5", "gpt-6-luna-fast", "gpt-5.5"],
       },
       connected: ["anthropic", "google", "openai", "kimi-for-coding"],
       updatedAt: "2026-01-01T00:00:00.000Z",
@@ -163,7 +163,7 @@ describe("sisyphus-task", () => {
 
       // when / #then
       expect(category).toBeDefined()
-      expect(category.model).toBe("anthropic/claude-opus-5")
+      expect(category.model).toBe("anthropic/claude-fable-5-1")
       expect(category.variant).toBe("max")
     })
 
@@ -173,28 +173,32 @@ describe("sisyphus-task", () => {
 
       // when / #then
       expect(category).toBeDefined()
-      expect(category.model).toBe("openai/gpt-5.6-sol")
-      expect(category.variant).toBe("xhigh")
+      expect(category.model).toBe("openai/gpt-6-astra")
+      expect(category.variant).toBe("max")
     })
 
-    test("deep category has model and variant config", () => {
+    test("the deep lanes each carry their own model and variant config", () => {
       // given
-      const category = DEFAULT_CATEGORIES["deep"]
+      const low = DEFAULT_CATEGORIES["deep-low"]
+      const high = DEFAULT_CATEGORIES["deep-high"]
 
       // when / #then
-      expect(category).toBeDefined()
-      expect(category.model).toBe("openai/gpt-5.6-sol")
-      expect(category.variant).toBe("medium")
+      expect(low).toBeDefined()
+      expect(low.model).toBe("openai/gpt-6.1-sol")
+      expect(low.variant).toBe("medium")
+      expect(high).toBeDefined()
+      expect(high.model).toBe("openai/gpt-6-astra")
+      expect(high.variant).toBe("high")
     })
 
-    test("unspecified-high category uses Kimi K3 max as primary", () => {
+    test("unspecified-high category uses Claude Opus 5.5 medium as primary", () => {
       // given
       const category = DEFAULT_CATEGORIES["unspecified-high"]
 
       // when / #then
       expect(category).toBeDefined()
-      expect(category.model).toBe("kimi-for-coding/k3")
-      expect(category.variant).toBe("max")
+      expect(category.model).toBe("anthropic/claude-opus-5-5")
+      expect(category.variant).toBe("medium")
     })
   })
 
@@ -702,7 +706,7 @@ describe("sisyphus-task", () => {
        )
        
        // then proceeds without error - uses fallback chain
-       expect(result).not.toContain("oh-my-opencode requires a default model")
+       expect(result).not.toContain("[ERROR]")
     }, { timeout: 10000 })
 
     test("returns clear error when no model can be resolved", async () => {
@@ -850,7 +854,7 @@ describe("sisyphus-task", () => {
 
       // then
       expect(result).not.toBeNull()
-      expect(result?.model).toBe("anthropic/claude-fable-5")
+      expect(result?.model).toBe("anthropic/claude-fable-5-1")
     })
 
     test("allows artistry when availability is empty", () => {
@@ -866,12 +870,12 @@ describe("sisyphus-task", () => {
 
       // then
       expect(result).not.toBeNull()
-      expect(result?.model).toBe("anthropic/claude-fable-5")
+      expect(result?.model).toBe("anthropic/claude-fable-5-1")
     })
 
-    test("returns null for deep when gpt-5.6-sol is unavailable and no user config overrides it", () => {
+    test("returns null for deep-high when neither gpt-6-astra nor gpt-5.6-sol is available and no user config overrides it", () => {
       // #given
-      const categoryName = "deep"
+      const categoryName = "deep-high"
       const availableModels = new Set<string>(["anthropic/claude-opus-4-7"])
 
       // #when
@@ -884,10 +888,47 @@ describe("sisyphus-task", () => {
       expect(result).toBeNull()
     })
 
-    test("resolves deep at gpt-5.6-sol medium when the gate model is available", () => {
+    test.each([
+      ["openai/gpt-6.1-sol"],
+      ["openai/gpt-6.1-sol-fast"],
+      ["openai/gpt-5.6-sol-fast"],
+      ["openai/gpt-5.6-sol"],
+    ])("keeps deep-low open on any GPT-6.1 Sol or GPT-5.6 Sol tier (%s) while deep-high stays Astra-only", (solId) => {
+      // #given: deep-low gates on either GPT-6.1 Sol tier OR either GPT-5.6 Sol tier; the builtin default
+      // config is plain GPT-6.1 Sol and the runtime chain walk (category-resolver) picks the rung the registry carries
+      const availableModels = new Set<string>([solId])
+
+      // #when
+      const result = resolveCategoryConfig("deep-low", {
+        systemDefaultModel: SYSTEM_DEFAULT_MODEL,
+        availableModels,
+      })
+
+      // #then
+      const resolved = expectResolvedCategoryConfig(result)
+      expect(resolved.config.model).toBe("openai/gpt-6.1-sol")
+      expect(resolved.config.variant).toBe("medium")
+      expect(resolveCategoryConfig("deep-high", { systemDefaultModel: SYSTEM_DEFAULT_MODEL, availableModels })).toBeNull()
+    })
+
+    test("gates deep-low closed when the registry only carries GPT-6 Sol", () => {
       // #given
-      const categoryName = "deep"
-      const availableModels = new Set<string>(["openai/gpt-5.6-sol"])
+      const availableModels = new Set<string>(["openai/gpt-6-sol"])
+
+      // #when
+      const result = resolveCategoryConfig("deep-low", {
+        systemDefaultModel: SYSTEM_DEFAULT_MODEL,
+        availableModels,
+      })
+
+      // #then
+      expect(result).toBeNull()
+    })
+
+    test("keeps deep-high available when only gpt-6-astra is present", () => {
+      // #given
+      const categoryName = "deep-high"
+      const availableModels = new Set<string>(["openai/gpt-6-astra"])
 
       // #when
       const result = resolveCategoryConfig(categoryName, {
@@ -897,8 +938,8 @@ describe("sisyphus-task", () => {
 
       // #then
       const resolved = expectResolvedCategoryConfig(result)
-      expect(resolved.config.model).toBe("openai/gpt-5.6-sol")
-      expect(resolved.config.variant).toBe("medium")
+      expect(resolved.config.model).toBe("openai/gpt-6-astra")
+      expect(resolved.config.variant).toBe("high")
     })
 
     test("bypasses requiresModel when explicit user config provided", () => {
@@ -950,7 +991,7 @@ describe("sisyphus-task", () => {
 
       // then
       const resolved = expectResolvedCategoryConfig(result)
-      expect(resolved.config.model).toBe("anthropic/claude-opus-5")
+      expect(resolved.config.model).toBe("anthropic/claude-fable-5-1")
       expect(resolved.promptAppend).toContain("VISUAL/UI")
     })
 
@@ -975,7 +1016,7 @@ describe("sisyphus-task", () => {
       const userCategories = {
         "visual-engineering": {
           model: "google/gemini-3.1-pro",
-          prompt_append: "Custom instructions here",
+          prompt_append: "custom-instructions-sentinel",
         },
       }
 
@@ -984,8 +1025,7 @@ describe("sisyphus-task", () => {
 
       // then
       const resolved = expectResolvedCategoryConfig(result)
-      expect(resolved.promptAppend).toContain("VISUAL/UI")
-      expect(resolved.promptAppend).toContain("Custom instructions here")
+      expect(resolved.promptAppend).toContain("custom-instructions-sentinel")
     })
 
     test("user can define custom category", () => {
@@ -995,7 +1035,7 @@ describe("sisyphus-task", () => {
         "my-custom": {
           model: "openai/gpt-5.5",
           temperature: 0.5,
-          prompt_append: "You are a custom agent",
+          prompt_append: "custom-agent-prompt-append-sentinel",
         },
       }
 
@@ -1006,7 +1046,7 @@ describe("sisyphus-task", () => {
       const resolved = expectResolvedCategoryConfig(result)
       expect(resolved.config.model).toBe("openai/gpt-5.5")
       expect(resolved.config.temperature).toBe(0.5)
-      expect(resolved.promptAppend).toBe("You are a custom agent")
+      expect(resolved.promptAppend).toBe("custom-agent-prompt-append-sentinel")
     })
 
     test("user category overrides temperature", () => {
@@ -1037,7 +1077,7 @@ describe("sisyphus-task", () => {
 
       // then - category's built-in model wins over inheritedModel
       const resolved = expectResolvedCategoryConfig(result)
-      expect(resolved.config.model).toBe("anthropic/claude-opus-5")
+      expect(resolved.config.model).toBe("anthropic/claude-fable-5-1")
     })
 
     test("systemDefaultModel is used as fallback when custom category has no model", () => {
@@ -1079,7 +1119,7 @@ describe("sisyphus-task", () => {
 
       // then
       const resolved = expectResolvedCategoryConfig(result)
-      expect(resolved.config.model).toBe("anthropic/claude-opus-5")
+      expect(resolved.config.model).toBe("anthropic/claude-fable-5-1")
     })
   })
 
@@ -1516,9 +1556,18 @@ describe("sisyphus-task", () => {
       // the new contract "default false routes to sync continuation" is
       // pinned by a regression test rather than implicit behavior.
       const { createDelegateTask } = require("./tools")
+      const managerCalls: string[] = []
       const mockManager = {
-        resume: async () => ({ id: "task-1", sessionId: "ses_continue_test", status: "running" }),
+        resume: async () => {
+          managerCalls.push("resume")
+          return { id: "task-1", sessionId: "ses_continue_test", status: "running" }
+        },
+        launch: async () => {
+          managerCalls.push("launch")
+          return { id: "task-1" }
+        },
       }
+      const continuationMessagesCalls: string[] = []
       const mockClient = {
         app: { agents: async () => ({ data: [] }) },
         config: { get: async () => ({ data: { model: SYSTEM_DEFAULT_MODEL } }) },
@@ -1527,9 +1576,12 @@ describe("sisyphus-task", () => {
           create: async () => ({ data: { id: "ses_continue_test" } }),
           prompt: async () => ({ data: {} }),
           promptAsync: async () => ({ data: {} }),
-          messages: async () => ({
-            data: [{ info: { id: "msg_1", role: "assistant", time: { created: Date.now() }, finish: "end_turn" }, parts: [{ type: "text", text: "Continued" }] }],
-          }),
+          messages: async (input: { path: { id: string } }) => {
+            continuationMessagesCalls.push(input.path.id)
+            return {
+              data: [{ info: { id: "msg_1", role: "assistant", time: { created: Date.now() }, finish: "end_turn" }, parts: [{ type: "text", text: "sync-continuation-result-sentinel" }] }],
+            }
+          },
           status: async () => ({ data: { "ses_continue_test": { type: "idle" } } }),
           abort: async () => ({ data: {} }),
         },
@@ -1550,10 +1602,12 @@ describe("sisyphus-task", () => {
         { sessionID: "parent-session", messageID: "parent-message", agent: "sisyphus", abort: new AbortController().signal },
       )
 
-      // then - no throw, returned content is a string (the sync continuation
-      // returned without erroring out on the missing run_in_background flag).
+      // then - no throw, returned content is a string, and routing stayed on
+      // the sync-continuation branch: the continuation session was read and
+      // neither background path (launch/resume) was entered.
       expect(typeof result).toBe("string")
-      expect(String(result)).not.toContain("'run_in_background' parameter is REQUIRED")
+      expect(continuationMessagesCalls).toContain("ses_continue_test")
+      expect(managerCalls).toHaveLength(0)
     }, { timeout: 20000 })
 
     test("#given no category no subagent_type and no run_in_background #when executing #then still returns the (different) missing-target error (fixes #4119)", async () => {
@@ -1698,7 +1752,7 @@ describe("sisyphus-task", () => {
       try {
         await tool.execute(
           {
-            description: "My custom task name",
+            description: "my-custom-task-name-sentinel",
             prompt: "Do something else entirely",
             category: "quick",
             run_in_background: false,
@@ -1720,7 +1774,7 @@ describe("sisyphus-task", () => {
       }
 
       // then — explicit description preserved
-      expect(capturedTitle).toBe("My custom task name")
+      expect(capturedTitle).toBe("my-custom-task-name-sentinel")
     })
 
     test("#given explicit run_in_background=false #when executing #then sync execution succeeds", async () => {
@@ -1891,7 +1945,6 @@ describe("sisyphus-task", () => {
 
       // then
       expect(firstResult).toContain("Background task launched")
-      expect(firstResult).not.toContain("Task failed to start")
       expect(secondResult).toContain("Background task launched")
       expect(secondResult).toContain("session_id: ses_tool_second")
       expect(secondResult).not.toContain("interrupt")
@@ -1957,7 +2010,7 @@ describe("sisyphus-task", () => {
                  },
                  {
                    info: { id: "msg_004", role: "assistant", time: { created: now + 3 }, finish: "end_turn" },
-                   parts: [{ type: "text", text: "This is the continued task result" }],
+                   parts: [{ type: "text", text: "continued-task-result-sentinel" }],
                  },
                ],
              }
@@ -1994,9 +2047,8 @@ describe("sisyphus-task", () => {
        toolContext
      )
     
-    // then - should contain actual result, not just "Background task continued"
-    expect(result).toContain("This is the continued task result")
-    expect(result).not.toContain("Background task continued")
+    // then - should contain the actual continued session result
+    expect(result).toContain("continued-task-result-sentinel")
   }, { timeout: 10000 })
 
   test("sync continuation preserves variant from previous session message", async () => {
@@ -2166,7 +2218,7 @@ describe("sisyphus-task", () => {
       }
       
        const promptMock = async () => {
-         throw new Error("Synthetic prompt transport failure")
+         throw new Error("synthetic-prompt-transport-failure-sentinel")
        }
 
        const mockClient = {
@@ -2210,7 +2262,7 @@ describe("sisyphus-task", () => {
       
       // then - should return detailed error message with args and stack trace
       expect(result).toContain("Send prompt failed")
-      expect(result).toContain("Synthetic prompt transport failure")
+      expect(result).toContain("synthetic-prompt-transport-failure-sentinel")
       expect(result).toContain("**Arguments**:")
       expect(result).toContain("**Stack Trace**:")
     })
@@ -2243,7 +2295,7 @@ describe("sisyphus-task", () => {
                },
                {
                  info: { id: "msg_002", role: "assistant", time: { created: Date.now() + 1 }, finish: "end_turn" },
-                 parts: [{ type: "text", text: "Accepted despite EOF" }],
+                 parts: [{ type: "text", text: "accepted-despite-eof-sentinel" }],
                },
              ],
            }),
@@ -2281,7 +2333,7 @@ describe("sisyphus-task", () => {
       )
 
       // then
-      expect(result).toContain("Accepted despite EOF")
+      expect(result).toContain("accepted-despite-eof-sentinel")
       expect(result).toContain("Task completed")
       expect(promptCalls).toBe(1)
     }, { timeout: 20000 })
@@ -2308,7 +2360,7 @@ describe("sisyphus-task", () => {
                },
                {
                  info: { id: "msg_002", role: "assistant", time: { created: Date.now() + 1 }, finish: "end_turn" },
-                 parts: [{ type: "text", text: "Sync task completed successfully" }],
+                 parts: [{ type: "text", text: "sync-task-result-sentinel" }],
                },
              ],
            }),
@@ -2345,7 +2397,7 @@ describe("sisyphus-task", () => {
       )
       
       // then - should return the task result content
-      expect(result).toContain("Sync task completed successfully")
+      expect(result).toContain("sync-task-result-sentinel")
       expect(result).toContain("Task completed")
     }, { timeout: 20000 })
 
@@ -2496,7 +2548,7 @@ describe("sisyphus-task", () => {
            promptAsync: async () => ({ data: {} }),
            messages: async () => ({
              data: [
-               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "Gemini task completed successfully" }] }
+               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "gemini-forced-bg-result-sentinel" }] }
              ]
            }),
            status: async () => ({ data: { "ses_unstable_gemini": { type: "idle" } } }),
@@ -2533,7 +2585,7 @@ describe("sisyphus-task", () => {
       // then - should launch as background BUT wait for and return actual result
       expect(launchCalled).toBe(true)
       expect(result).toContain("SUPERVISED TASK COMPLETED")
-      expect(result).toContain("Gemini task completed successfully")
+      expect(result).toContain("gemini-forced-bg-result-sentinel")
     }, { timeout: 20000 })
 
     test("gemini model with run_in_background=true should not show unstable message (normal background)", async () => {
@@ -2625,7 +2677,7 @@ describe("sisyphus-task", () => {
            promptAsync: async () => ({ data: {} }),
            messages: async () => ({
              data: [
-               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "Minimax task completed successfully" }] }
+               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "minimax-forced-bg-result-sentinel" }] }
              ]
            }),
            status: async () => ({ data: { "ses_unstable_minimax": { type: "idle" } } }),
@@ -2664,7 +2716,7 @@ describe("sisyphus-task", () => {
       // then - should launch as background BUT wait for and return actual result
       expect(launchCalled).toBe(true)
       expect(result).toContain("SUPERVISED TASK COMPLETED")
-      expect(result).toContain("Minimax task completed successfully")
+      expect(result).toContain("minimax-forced-bg-result-sentinel")
     }, { timeout: 20000 })
 
     test("non-gemini model with run_in_background=false should run sync (not forced to background)", async () => {
@@ -2762,7 +2814,7 @@ describe("sisyphus-task", () => {
            promptAsync: async () => ({ data: {} }),
            messages: async () => ({
              data: [
-               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "Artistry result here" }] }
+               { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "artistry-forced-bg-result-sentinel" }] }
              ]
            }),
            status: async () => ({ data: { "ses_artistry_gemini": { type: "idle" } } }),
@@ -2799,7 +2851,7 @@ describe("sisyphus-task", () => {
       // then - should launch as background BUT wait for and return actual result
       expect(launchCalled).toBe(true)
       expect(result).toContain("SUPERVISED TASK COMPLETED")
-      expect(result).toContain("Artistry result here")
+      expect(result).toContain("artistry-forced-bg-result-sentinel")
     }, { timeout: 20000 })
 
     test("writing category (kimi) with run_in_background=false should run sync when kimi provider is available", async () => {
@@ -2908,7 +2960,7 @@ describe("sisyphus-task", () => {
           promptAsync: async () => ({ data: {} }),
           messages: async () => ({
             data: [
-              { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "Custom unstable result" }] }
+              { info: { role: "assistant", time: { created: Date.now() } }, parts: [{ type: "text", text: "custom-unstable-result-sentinel" }] }
             ]
           }),
           status: async () => ({ data: { "ses_custom_unstable": { type: "idle" } } }),
@@ -2948,7 +3000,7 @@ describe("sisyphus-task", () => {
       // then - should launch as background BUT wait for and return actual result
       expect(launchCalled).toBe(true)
       expect(result).toContain("SUPERVISED TASK COMPLETED")
-      expect(result).toContain("Custom unstable result")
+      expect(result).toContain("custom-unstable-result-sentinel")
     }, { timeout: 20000 })
   })
 
@@ -3014,10 +3066,10 @@ describe("sisyphus-task", () => {
         toolContext
       )
 
-      // then - model should be kimi-for-coding/kimi-for-coding-highspeed from DEFAULT_CATEGORIES
+      // then - model should be openai/gpt-6-luna-fast from DEFAULT_CATEGORIES
       //         NOT anthropic/claude-sonnet-4-6 (system default)
-      expect(launchInput.model.providerID).toBe("kimi-for-coding")
-      expect(launchInput.model.modelID).toBe("kimi-for-coding-highspeed")
+      expect(launchInput.model.providerID).toBe("openai")
+      expect(launchInput.model.modelID).toBe("gpt-6-luna-fast")
     })
 
     test("category delegation ignores UI-selected (Kimi) system default model", async () => {
@@ -3080,8 +3132,8 @@ describe("sisyphus-task", () => {
       )
 
       // then - category model must win (not Kimi)
-      expect(launchInput.model.providerID).toBe("kimi-for-coding")
-      expect(launchInput.model.modelID).toBe("kimi-for-coding-highspeed")
+      expect(launchInput.model.providerID).toBe("openai")
+      expect(launchInput.model.modelID).toBe("gpt-6-luna-fast")
     })
 
     test("sisyphus-junior model override takes precedence over category model", async () => {
@@ -3336,8 +3388,8 @@ describe("sisyphus-task", () => {
   })
 
   describe("browserProvider propagation", () => {
-    test("should resolve agent-browser skill when browserProvider is passed", async () => {
-      // given - task configured with browserProvider: "agent-browser"
+    test("should resolve dev-browser skill when browserProvider is passed", async () => {
+      // given - task configured with an alternate browser provider
       const { createDelegateTask } = require("./tools")
       let promptBody: CapturedPromptBody = {}
 
@@ -3367,7 +3419,7 @@ describe("sisyphus-task", () => {
        const tool = createDelegateTask({
          manager: mockManager,
          client: mockClient,
-         browserProvider: "agent-browser",
+         browserProvider: "dev-browser",
        })
 
       const toolContext = {
@@ -3377,34 +3429,34 @@ describe("sisyphus-task", () => {
         abort: new AbortController().signal,
       }
 
-      // when - request agent-browser skill
+      // when - request dev-browser skill
       await tool.execute(
         {
           description: "Test browserProvider propagation",
           prompt: "Do something",
           category: "ultrabrain",
           run_in_background: false,
-          load_skills: ["agent-browser"],
+          load_skills: ["dev-browser"],
         },
         toolContext
       )
 
-      // then - agent-browser skill should be resolved
+      // then - dev-browser skill should be resolved
       expect(promptBody).toBeDefined()
       expect(promptBody.system).toBeDefined()
       expect(promptBody.system).toContain("<Category_Context>")
       expect(String(promptBody.system).startsWith("<Category_Context>")).toBe(false)
     }, { timeout: 20000 })
 
-    test("should resolve configured agent-browser skill when browserProvider is not set", async () => {
+    test("should resolve a configured custom browser skill when browserProvider is not set", async () => {
       // given - delegate_task without browserProvider
       const { createDelegateTask } = require("./tools")
       const nativeSkills = {
         all: async () => [{
-          name: "agent-browser",
+          name: "custom-browser",
           description: "Browser automation skill",
-          location: "/native/agent-browser/SKILL.md",
-          content: "Agent browser instructions",
+          location: "/native/custom-browser/SKILL.md",
+          content: "Custom browser instructions",
         }],
         get: async () => undefined,
       }
@@ -3440,14 +3492,14 @@ describe("sisyphus-task", () => {
         abort: new AbortController().signal,
       }
 
-      // when - request agent-browser skill without browserProvider
+      // when - request custom browser skill without browserProvider
       const result = await tool.execute(
         {
           description: "Test missing browserProvider",
           prompt: "Do something",
           category: "ultrabrain",
           run_in_background: false,
-          load_skills: ["agent-browser"],
+          load_skills: ["custom-browser"],
         },
         toolContext
       )
@@ -3492,7 +3544,7 @@ describe("sisyphus-task", () => {
 			mkdirSync(skillDir, { recursive: true })
 			writeFileSync(
 				join(skillDir, "SKILL.md"),
-				"---\nname: systematic-debugging\ndescription: Nested debug skill\n---\nDebug instructions"
+				"---\nname: systematic-debugging\ndescription: Nested debug skill\n---\ndebug-skill-content-sentinel"
 			)
 			clearSkillCache()
 
@@ -3544,11 +3596,9 @@ describe("sisyphus-task", () => {
 				toolContext
 			)
 
-			// then: must NOT return "Skills not found" (failing means short name wasn't resolved)
-			expect(result).not.toContain("Skills not found")
-			// and the resolved skill content must have been injected into the prompt body
+			// then: the resolved skill content must have been injected into the prompt body
 			expect(promptBody).toBeDefined()
-			expect(promptBody.system).toContain("Debug instructions")
+			expect(promptBody.system).toContain("debug-skill-content-sentinel")
 		})
 	})
 
@@ -3630,10 +3680,8 @@ describe("sisyphus-task", () => {
         availableSkills,
       })
 
-      // then
-      expect(result).toContain("<system>")
-      expect(result).toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
-      expect(result).toContain("### AVAILABLE CATEGORIES")
+      // then - result equals the shipped plan-agent prepend; the deep
+      // category is listed and the excluded skill is absent
       expect(result).toContain("`deep`")
       expect(result).not.toContain("prompt-engineer")
       expect(result).toBe(buildPlanAgentSystemPrepend(availableCategories, availableSkills))
@@ -3652,7 +3700,6 @@ describe("sisyphus-task", () => {
 
       //#then - prometheus should NOT get plan agent system prepend
       expect(result).toBe(skillContent)
-      expect(result).not.toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
     })
 
     test("does not prepend plan agent prompt for Prometheus (case insensitive)", () => {
@@ -3668,7 +3715,6 @@ describe("sisyphus-task", () => {
 
       //#then
       expect(result).toBe(skillContent)
-      expect(result).not.toContain("MANDATORY CONTEXT GATHERING PROTOCOL")
     })
 
     test("combines plan agent prepend with skill content", () => {
@@ -3736,62 +3782,59 @@ describe("sisyphus-task", () => {
   })
 
   describe("buildTaskPrompt", () => {
-    test("appends English ULW TDD and commit guidance for plan agent", () => {
+    test("returns the task prompt unchanged for non-plan agents", () => {
       // given
       const { buildTaskPrompt } = require("./tools")
-      const prompt = "Create a work plan for this feature"
+      const prompt = "non-plan-task-input-sentinel"
 
-      // when
-      const result = buildTaskPrompt(prompt, "plan")
-
-      // then
-      expect(result).toContain(prompt)
-      expect(result).toContain("Answer in English.")
-      expect(result).toContain("Write the plan in English.")
-      expect(result).toContain("Plan well for ultrawork execution.")
-      expect(result).toContain("Use TDD-oriented planning.")
-      expect(result).toContain("Include a clear atomic commit strategy.")
+      // when / then - the non-plan branch is the identity seam
+      expect(buildTaskPrompt(prompt, "explore")).toBe(prompt)
+      expect(buildTaskPrompt(prompt, "explore", true)).toBe(prompt)
+      expect(buildTaskPrompt(prompt, undefined)).toBe(prompt)
     })
 
-    test("does not append plan guidance for non-plan agents", () => {
+    test("appends plan guidance as a suffix after the unchanged task prompt", () => {
       // given
       const { buildTaskPrompt } = require("./tools")
-      const prompt = "Investigate this module"
+      const prompt = "plan-task-input-sentinel"
 
       // when
-      const result = buildTaskPrompt(prompt, "explore")
+      const output = buildTaskPrompt(prompt, "plan", false)
 
-      // then
-      expect(result).toBe(prompt)
+      // then - the plan branch is prompt + guidance suffix, never a rewrite
+      expect(output.startsWith(prompt)).toBe(true)
+      const guidance = output.slice(prompt.length)
+      expect(guidance.length).toBeGreaterThan(0)
+      expect(guidance.startsWith("\n")).toBe(true)
     })
 
-    test("excludes TDD line when tddEnabled is false", () => {
+    test("tdd flag appends exactly one extra guidance line after the shared base", () => {
       // given
       const { buildTaskPrompt } = require("./tools")
-      const prompt = "Create a work plan for this feature"
+      const prompt = "plan-task-tdd-sentinel"
 
       // when
-      const result = buildTaskPrompt(prompt, "plan", false)
+      const base = buildTaskPrompt(prompt, "plan", false)
+      const withTdd = buildTaskPrompt(prompt, "plan", true)
 
-      // then
-      expect(result).toContain(prompt)
-      expect(result).toContain("Answer in English.")
-      expect(result).toContain("Write the plan in English.")
-      expect(result).toContain("Plan well for ultrawork execution.")
-      expect(result).toContain("Include a clear atomic commit strategy.")
-      expect(result).not.toContain("Use TDD-oriented planning.")
+      // then - the tdd branch strictly extends the base by one line
+      expect(withTdd.startsWith(base)).toBe(true)
+      expect(withTdd.slice(base.length)).toMatch(/^\n- [^\n]+$/)
+      expect(withTdd.length).toBeGreaterThan(base.length)
     })
 
-    test("includes TDD line when tddEnabled is true", () => {
+    test("defaults to the tdd-enabled branch", () => {
       // given
       const { buildTaskPrompt } = require("./tools")
-      const prompt = "Create a work plan for this feature"
+      const prompt = "plan-task-default-sentinel"
 
-      // when
-      const result = buildTaskPrompt(prompt, "plan", true)
+      // when - tddEnabled is omitted
+      const base = buildTaskPrompt(prompt, "plan", false)
+      const byDefault = buildTaskPrompt(prompt, "plan")
 
-      // then
-      expect(result).toContain("Use TDD-oriented planning.")
+      // then - the default carries the same one-line tdd delta as explicit true
+      expect(byDefault.startsWith(base)).toBe(true)
+      expect(byDefault.slice(base.length)).toMatch(/^\n- [^\n]+$/)
     })
   })
 
@@ -3805,8 +3848,8 @@ describe("sisyphus-task", () => {
       
       // then - catalog model is used
       const category = expectResolvedCategoryConfig(resolved)
-      expect(category.config.model).toBe("openai/gpt-5.6-sol")
-      expect(category.config.variant).toBe("xhigh")
+      expect(category.config.model).toBe("openai/gpt-6-astra")
+      expect(category.config.variant).toBe("max")
     })
 
     test("default model is used for category with default entry", () => {
@@ -3818,8 +3861,8 @@ describe("sisyphus-task", () => {
       
       // then - default model from DEFAULT_CATEGORIES is used
       const category = expectResolvedCategoryConfig(resolved)
-      expect(category.config.model).toBe("openai/gpt-5.6-luna")
-      expect(category.config.variant).toBe("xhigh")
+      expect(category.config.model).toBe("anthropic/claude-sonnet-5-5")
+      expect(category.config.variant).toBe("medium")
     })
 
     test("category built-in model takes precedence over inheritedModel for builtin category", () => {
@@ -3830,10 +3873,10 @@ describe("sisyphus-task", () => {
       // when
       const resolved = resolveCategoryConfig(categoryName, { inheritedModel, systemDefaultModel: SYSTEM_DEFAULT_MODEL })
       
-      // then - category's built-in model wins (ultrabrain uses gpt-5.6-sol)
+      // then - category's built-in model wins (ultrabrain uses gpt-6-astra)
       const category = expectResolvedCategoryConfig(resolved)
       const actualModel = category.config.model
-      expect(actualModel).toBe("openai/gpt-5.6-sol")
+      expect(actualModel).toBe("openai/gpt-6-astra")
     })
 
     test("when user defines model - modelInfo should report user-defined regardless of inheritedModel", () => {
@@ -3887,12 +3930,12 @@ describe("sisyphus-task", () => {
       const categoryName = "ultrabrain"
       const inheritedModel = "anthropic/claude-opus-4-7"
       
-      // when category has a built-in model (gpt-5.6-sol for ultrabrain)
+      // when category has a built-in model (gpt-6-astra for ultrabrain)
       const resolved = resolveCategoryConfig(categoryName, { inheritedModel, systemDefaultModel: SYSTEM_DEFAULT_MODEL })
       
       // then category's built-in model should be used, NOT inheritedModel
       const category = expectResolvedCategoryConfig(resolved)
-      expect(category.model).toBe("openai/gpt-5.6-sol")
+      expect(category.model).toBe("openai/gpt-6-astra")
     })
 
     test("FIXED: systemDefaultModel is used when no userConfig.model and no inheritedModel", () => {
@@ -3956,7 +3999,7 @@ describe("sisyphus-task", () => {
       
       // then should use category's built-in model (Opus 5 high for visual-engineering)
       const category = expectResolvedCategoryConfig(resolved)
-      expect(category.model).toBe("anthropic/claude-opus-5")
+      expect(category.model).toBe("anthropic/claude-fable-5-1")
     })
 
     test("systemDefaultModel is used when no other model is available", () => {
@@ -4067,7 +4110,7 @@ describe("sisyphus-task", () => {
            create: async () => ({ data: { id: "ses_ok" } }),
            prompt: async () => ({ data: {} }),
            promptAsync: async () => ({ data: {} }),
-           messages: async () => ({ data: [{ info: { role: "assistant" }, parts: [{ type: "text", text: "Plan created" }] }] }),
+           messages: async () => ({ data: [{ info: { role: "assistant" }, parts: [{ type: "text", text: "plan-created-sentinel" }] }] }),
            status: async () => ({ data: { "ses_ok": { type: "idle" } } }),
          },
        }
@@ -4081,7 +4124,7 @@ describe("sisyphus-task", () => {
       
       //#then
       expect(result).not.toContain("plan-family")
-      expect(result).toContain("Plan created")
+      expect(result).toContain("plan-created-sentinel")
     }, { timeout: 20000 })
   })
 

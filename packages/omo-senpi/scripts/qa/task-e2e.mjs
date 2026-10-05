@@ -32,6 +32,8 @@ import {
   SYNC_SCRIPT,
 } from "./task-e2e-scenarios.mjs"
 import { isAlive, killTree } from "./task-e2e-process.mjs"
+import { runTaskResumeScenarios } from "./task-resume-e2e.mjs"
+import { isolatedChildEnv, sandboxStateDir } from "./sandbox-child-env.mjs"
 
 const scriptDir = dirname(fileURLToPath(import.meta.url))
 const mockProviderEntry = join(scriptDir, "task-e2e-mock-provider.ts")
@@ -63,7 +65,7 @@ function seedScenario(script, { withMarker } = {}) {
     mkdirSync(extDir, { recursive: true })
     writeFileSync(join(extDir, "marker.js"), `import { appendFileSync } from "node:fs"\nexport default function () { appendFileSync(${JSON.stringify(markerLog)}, "x\\n") }\n`)
   }
-  return { sandbox, sessionDir, markerLog, stateDir: join(sandbox.cwd, ".omo", "senpi-task") }
+  return { sandbox, sessionDir, markerLog, stateDir: sandboxStateDir(sandbox) }
 }
 
 function driveSenpi(senpiBin, scenario, prompt, pids) {
@@ -72,7 +74,7 @@ function driveSenpi(senpiBin, scenario, prompt, pids) {
     ["-e", mockProviderEntry, "-p", "--mode", "json", "--provider", "omo-mock", "--model", "mock-1", "--session-dir", scenario.sessionDir, prompt],
     {
       cwd: scenario.sandbox.cwd,
-      env: { ...process.env, SENPI_CODING_AGENT_DIR: scenario.sandbox.agentDir, XDG_CONFIG_HOME: scenario.sandbox.xdgConfigHome, SENPI_CODING_AGENT_SESSION_DIR: scenario.sessionDir, OMO_SENPI_QA: "1" },
+      env: { ...isolatedChildEnv(process.env, scenario.sandbox.agentDir), SENPI_CODING_AGENT_DIR: scenario.sandbox.agentDir, XDG_CONFIG_HOME: scenario.sandbox.xdgConfigHome, SENPI_CODING_AGENT_SESSION_DIR: scenario.sessionDir, OMO_SENPI_QA: "1" },
       encoding: "utf8",
       timeout: 120_000,
       maxBuffer: 64 * 1024 * 1024,
@@ -151,7 +153,7 @@ function runNegativeFlow(senpiBin, checks, capture, pids) {
   return scenario.sandbox
 }
 
-function main() {
+async function main() {
   const configuredOutDir = process.env.TASK_E2E_OUT_DIR?.trim()
   const outDir = configuredOutDir ? resolve(configuredOutDir) : undefined
   const beforeDigest = digestDirectory(realSenpiAgentDir)
@@ -171,6 +173,8 @@ function main() {
     for (const runner of [runMainFlow, runBatchFlow, runSyncFlow, runNegativeFlow]) {
       sandboxes.push(runner(senpiBin, checks, capture, pids))
     }
+    // Plan todo 22: quit->resume revival scenarios live in their own module (this driver is oversize).
+    sandboxes.push(...await runTaskResumeScenarios({ senpiBin, checks, capture, pids, outDir }))
   } finally {
     for (const pid of pids) if (isAlive(pid)) killTree(pid)
   }
@@ -244,6 +248,11 @@ function runSelfTest() {
   if (!findTranscript(parseJsonEvents(JSON.stringify({ type: "toolResult", content: `st_abc [completed] transcript via jsonl:\n${CHILD_FIRST}` })), CHILD_FIRST)) throw new Error("self-test: transcript must be detected")
   if (!findPeekTaskOutput(parseJsonEvents(JSON.stringify({ name: "task_output", arguments: { mode: "tail" } })))) throw new Error("self-test: non-blocking output peek must be detected")
   if (findPeekTaskOutput(parseJsonEvents(JSON.stringify({ name: "task_output", arguments: { block: true } })))) throw new Error("self-test: legacy blocking output call must not count as a peek")
+  const taskSendIndex = MAIN_SCRIPT.parentSteps.findIndex((step) => step.type === "tool_call" && step.name === "task_send")
+  const taskOutputIndex = MAIN_SCRIPT.parentSteps.findIndex((step) => step.type === "tool_call" && step.name === "task_output")
+  if (taskSendIndex < 0 || taskOutputIndex !== taskSendIndex + 1) {
+    throw new Error("self-test: task_output must be the next tool boundary after task_send")
+  }
   if (!findInlineFinal(parseJsonEvents(JSON.stringify({ type: "text", text: SYNC_FINAL })), SYNC_FINAL)) throw new Error("self-test: inline final must be detected")
   if (!findCategoryListingError(parseJsonEvents(JSON.stringify({ type: "toolResult", content: "Unknown category. Available categories: quick, deep." })))) throw new Error("self-test: category listing error must be detected")
   const batchItems = findBatchFanout(parseJsonEvents(JSON.stringify({
@@ -326,5 +335,5 @@ function runSelfTest() {
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--self-test")) runSelfTest()
-  else main()
+  else await main()
 }

@@ -3,6 +3,16 @@ import type { ToolsRecord } from "./types"
 import { log } from "../shared"
 
 const LOW_PRIORITY_TOOL_ORDER = [
+  "wiki_lint",
+  "wiki_list",
+  "wiki_read",
+  "wiki_query",
+  "wiki_add",
+  "project_memory_write",
+  "project_memory_read",
+  "project_memory_add_directive",
+  "project_memory_add_note",
+  "parallel_tasks",
   "session_list",
   "session_read",
   "session_search",

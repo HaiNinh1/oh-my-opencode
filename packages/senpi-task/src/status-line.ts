@@ -21,9 +21,12 @@ export type StatusTargetInput = {
   readonly fallbackCount?: number
 }
 
-export type StatusLineStats = Pick<TaskRunStats, "turns" | "tool_calls"> & {
+export type StatusLineStats = Pick<TaskRunStats, "turns" | "tool_calls" | "failed_turns"> & {
   readonly runtime_ms?: number
   readonly tokens_per_second?: number
+  readonly cost_usd?: number
+  readonly cache_hit_rate_last?: number
+  readonly cache_hit_rate_run?: number
 }
 
 export type StatusLineInput = {
@@ -42,12 +45,15 @@ export function taskIdentityLabel(input: TaskIdentityInput): string {
   return label === undefined ? excerptRendererText(input.taskId, IDENTITY_MAX_WIDTH) : excerptRendererText(label, IDENTITY_MAX_WIDTH)
 }
 
-// WHO it runs as: one routing identity, shared by category- and agent-routed tasks. Category wins
-// when both are present (a record never carries both, but a defensive caller might).
+// WHO it runs as: one routing identity, shared by category- and agent-routed tasks. A record
+// carrying BOTH shows both, asked-for name first (`agent:<asked>→category:<used>`): the caller wrote
+// that subagent_type, so preferring the category would erase the only evidence of what was asked
+// for and make a deliberate call indistinguishable from a routing accident (#8348).
 export function formatTargetIdentity(input: Pick<StatusTargetInput, "category" | "agentType">): string | undefined {
   const category = optionalRendererText(input.category)
-  if (category !== undefined) return `category:${category}`
   const agentType = optionalRendererText(input.agentType)
+  if (category !== undefined && agentType !== undefined) return `agent:${agentType}→category:${category}`
+  if (category !== undefined) return `category:${category}`
   if (agentType !== undefined) return `agent:${agentType}`
   return undefined
 }
@@ -72,17 +78,76 @@ export function formatStatusTarget(input: StatusTargetInput): string | undefined
   return fallback === undefined ? target : `${target} · ${fallback}`
 }
 
+// The stats tokens of the canonical live-row grammar, as DISCRETE tokens so each surface keeps its
+// own order around the verb: turn N (M tools) · failed K · $C · T tok/s. A run that has landed no
+// successful turn and made no tool call renders NO turn token - nothing has happened yet - while
+// failed attempts surface as their own counter instead of masquerading as turns. Spend follows
+// provider-reported cost, which a run with no successful turn never carries (run-stats omits it);
+// a successful turn reporting a genuine zero still renders $0.0000.
+export type LiveStatsTokens = {
+  readonly turn?: string
+  readonly failed?: string
+  readonly spend?: string
+  readonly throughput?: string
+}
+
+export function buildLiveStatsTokens(stats: StatusLineStats): LiveStatsTokens {
+  const spend = formatLiveSpend(stats)
+  return {
+    ...((stats.turns > 0 || stats.tool_calls > 0)
+      ? { turn: `turn ${stats.turns}${toolCountSuffix(stats.tool_calls)}` }
+      : {}),
+    ...((stats.failed_turns ?? 0) > 0 ? { failed: `failed ${stats.failed_turns}` } : {}),
+    ...(spend === undefined ? {} : { spend }),
+    ...(stats.tokens_per_second === undefined ? {} : { throughput: `${stats.tokens_per_second} tok/s` }),
+  }
+}
+
 // The canonical grammar every live/status row shares:
-//   <identity> · <target (model)> · turn N (M tools) · <verb> · T tok/s
+//   <identity> · <target (model)> · turn N (M tools) [· failed K] · <verb> · $C · T tok/s
 export function composeStatusLine(input: StatusLineInput): string {
+  const statsTokens = input.stats === undefined ? undefined : buildLiveStatsTokens(input.stats)
   const tokens = [
     input.identity,
     input.target,
-    input.stats === undefined ? undefined : `turn ${input.stats.turns}${toolCountSuffix(input.stats.tool_calls)}`,
+    statsTokens?.turn,
+    statsTokens?.failed,
     input.verb,
-    input.stats?.tokens_per_second === undefined ? undefined : `${input.stats.tokens_per_second} tok/s`,
+    statsTokens?.spend,
+    statsTokens?.throughput,
   ]
   return tokens.filter((token): token is string => typeof token === "string" && token.length > 0).join(" · ")
+}
+
+// Running task rows keep spend compact; cache-hit rate remains available in completed-run details.
+export function formatLiveSpend(stats: Pick<TaskRunStats, "cost_usd">): string | undefined {
+  return formatCostUsd(stats.cost_usd)
+}
+
+// Completed-run summaries pair spend with the cumulative whole-run cache-hit rate.
+export function formatRunSpend(
+  stats: Pick<TaskRunStats, "cost_usd" | "cache_hit_rate_run">,
+): string | undefined {
+  return formatSpendFacts(stats.cost_usd, stats.cache_hit_rate_run)
+}
+
+function formatSpendFacts(costUsd: number | undefined, cacheHitRate: number | undefined): string | undefined {
+  const cost = formatCostUsd(costUsd)
+  const cacheHit = formatCacheHitPercent(cacheHitRate)
+  if (cost === undefined) return cacheHit
+  return cacheHit === undefined ? cost : `${cost} ${cacheHit}`
+}
+
+export function formatCostUsd(costUsd: number | undefined): string | undefined {
+  if (costUsd === undefined || !Number.isFinite(costUsd) || costUsd < 0) return undefined
+  return `$${costUsd.toFixed(4)}`
+}
+
+export function formatCacheHitPercent(cacheHitRate: number | undefined): string | undefined {
+  if (cacheHitRate === undefined || !Number.isFinite(cacheHitRate) || cacheHitRate < 0 || cacheHitRate > 1) {
+    return undefined
+  }
+  return `(CH: ${Math.round(cacheHitRate * 100)}%)`
 }
 
 export function toolCountSuffix(toolCalls: number): string {
