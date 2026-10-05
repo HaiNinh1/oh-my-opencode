@@ -27,7 +27,6 @@ import {
   createPreemptiveCompactionHook,
   createRuntimeFallbackHook,
   createLegacyPluginToastHook,
-  createHermesPromptHardenerHook,
   createNativeEditionNudgeHook,
 } from "../../hooks"
 import { createGoalHook } from "../../hooks/goal"
@@ -65,7 +64,6 @@ export type SessionHooks = {
   taskResumeInfo: ReturnType<typeof createTaskResumeInfoHook> | null
   runtimeFallback: ReturnType<typeof createRuntimeFallbackHook> | null
   legacyPluginToast: ReturnType<typeof createLegacyPluginToastHook> | null
-  hermesPromptHardener: ReturnType<typeof createHermesPromptHardenerHook> | null
   nativeEditionNudge: ReturnType<typeof createNativeEditionNudgeHook> | null
 }
 
@@ -233,10 +231,6 @@ export function createSessionHooks(args: {
     ? safeHook("legacy-plugin-toast", () => createLegacyPluginToastHook(ctx))
     : null
 
-  const hermesPromptHardener = isHookEnabled("hermes-prompt-hardener")
-    ? safeHook("hermes-prompt-hardener", () => createHermesPromptHardenerHook())
-    : null
-
   const nativeEditionNudge = isHookEnabled("native-edition-nudge")
     ? safeHook("native-edition-nudge", () => createNativeEditionNudgeHook(ctx))
     : null
@@ -265,7 +259,6 @@ export function createSessionHooks(args: {
     taskResumeInfo,
     runtimeFallback,
     legacyPluginToast,
-    hermesPromptHardener,
     nativeEditionNudge,
   }
 }

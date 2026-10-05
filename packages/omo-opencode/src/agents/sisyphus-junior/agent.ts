@@ -41,7 +41,7 @@ const MODE: AgentMode = "subagent"
 // - question: leaf sub-subagent — no human in its turn, so a `question` call
 //   would deadlock the parent agent waiting for this result.
 // Note: call_omo_agent is ALLOWED so subagents can spawn explore/librarian
-const BLOCKED_TOOLS = ["task", "question"]
+const BLOCKED_TOOLS = ["task", "parallel_tasks", "question"]
 
 export const SISYPHUS_JUNIOR_DEFAULTS = {
   model: "anthropic/claude-sonnet-5",

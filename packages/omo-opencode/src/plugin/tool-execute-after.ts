@@ -1,7 +1,6 @@
 import { recoverToolMetadata } from "../features/tool-metadata-store"
 import type { CreatedHooks } from "../create-hooks"
 import { log as defaultLog } from "../shared/logger"
-import { pinHermesChildSession } from "../hooks/hermes-routing-guard/child-session-pin"
 import type { PluginContext } from "./types"
 
 const METADATA_LINKED_TOOLS = new Set([
@@ -48,7 +47,7 @@ export function createToolExecuteAfterHandler(args: {
   input: ToolExecuteAfterInput,
   output: ToolExecuteAfterOutput | undefined,
 ) => Promise<void> {
-  const { ctx, hooks } = args
+  const { hooks } = args
   const log = args.log ?? defaultLog
 
   // OpenCode injects tool call ids into execute() context and after-hook input via undocumented runtime fields.
@@ -92,17 +91,6 @@ export function createToolExecuteAfterHandler(args: {
         sessionID: input.sessionID,
         callID: input.callID ?? input.callId ?? input.call_id,
       })
-    }
-
-    // ULW oracle verification-session tracking now lives in hooks/ralph-loop/
-    // (pending-verification-handler, loop-state-controller) as of upstream v4.19.
-    // Only the fork's Hermes proxy pin remains here.
-    if (input.tool === "task") {
-      const sessionId = getMetadataString(output.metadata, ["sessionId", "sessionID", "session_id"])
-
-      // Hermes proxy: capture child session ID on first successful task() and
-      // abort the Hermes parent so it cannot emit further output. No-op otherwise.
-      pinHermesChildSession(ctx, input.sessionID, sessionId, output.output)
     }
 
     const runToolExecuteAfterHooks = async (): Promise<void> => {

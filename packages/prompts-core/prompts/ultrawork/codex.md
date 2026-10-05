@@ -301,6 +301,18 @@ Until every success criterion PASSES with its evidence captured:
 Within a step, follow Finding things; READ before CHANGE, never in
 parallel with it.
 
+When the plan's wave holds N INDEPENDENT implementation subtasks that
+touch DISJOINT files, dispatch all N TOGETHER in ONE turn so they run
+concurrently. If a `parallel_tasks` tool is available (OpenCode), use a
+SINGLE `parallel_tasks` call with each item routed by `category="..."` or
+an executor `subagent_type`; otherwise (Codex) emit all N
+`multi_agent_v1.spawn_agent` calls (or the v2 `spawn_agent` rewrite) in
+the same turn before waiting on any of them. HARD SAFETY RULE: NEVER
+parallelise edits to the SAME file or region; dependent subtasks (B
+needs A's output) stay SEQUENTIAL across waves. "Plan many, execute one"
+is a failure. Parallelism never weakens the READ → CHANGE → RUN → CLEAN
+evidence above.
+
 # Waiting discipline (a poll costs a full model round)
 Every status check you issue as a tool call replays the entire
 accumulated context through the model. When a command will run long
@@ -312,19 +324,6 @@ sub-minute waits — batch waiting into the fewest, longest blocking
 calls the harness allows, and do independent root work while the
 command runs. If two consecutive checks show no state change, double
 the wait before the next check or switch to a completion signal.
-
-When the plan's wave holds N INDEPENDENT implementation subtasks that
-touch DISJOINT files, dispatch all N TOGETHER in ONE turn so they run
-concurrently and their results return together. If a `parallel_tasks`
-tool is available (OpenCode), use a SINGLE `parallel_tasks` call with
-each item routed by `category="..."` or an executor `subagent_type`;
-otherwise (Codex) emit all N `spawn_agent` calls in the same turn before
-waiting on any of them. HARD SAFETY RULE: NEVER parallelise edits to the
-SAME file or region — disjoint-file work only; dependent subtasks (B
-needs A's output) stay SEQUENTIAL across waves. "Plan many, execute one"
-is a failure: if the wave has N independent tasks, dispatch all N at
-once — do not emit one and wait. Parallelism never weakens the
-PIN → RED → GREEN → SURFACE → CLEAN evidence gates above.
 
 # Codex subagent reliability
 Every `multi_agent_v1.spawn_agent` message is self-contained and starts with

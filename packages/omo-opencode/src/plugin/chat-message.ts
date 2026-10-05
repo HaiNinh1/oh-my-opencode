@@ -13,7 +13,6 @@ import { handleGoalMessage } from "./chat-message/loop-commands"
 import { extractPromptText as extractGoalPromptText } from "./chat-message/prompt-text"
 import { notifyWhenModelCacheIsMissing } from "./chat-message/model-cache-warning"
 import { recordSessionModel, getStoredMainSessionModel } from "./chat-message/session-model"
-import { applyHermesProxySessionBootstrap } from "../hooks/hermes-routing-guard/proxy-session"
 import { runUlwExecuteHookIfApplicable } from "./chat-message/ulw-execute-message"
 import { consumeNativeGoalCommandMarker } from "./command-execute-before"
 import { stopContinuation } from "./stop-continuation"
@@ -75,7 +74,6 @@ async function runChatMessageHooks(args: {
   await hooks.noSisyphusGpt?.["chat.message"]?.(input, output)
   await hooks.noHephaestusNonGpt?.["chat.message"]?.(input, output)
   await hooks.hephaestusAgentsMdInjector?.["chat.message"]?.(input, output)
-  await hooks.hermesPromptHardener?.["chat.message"]?.(input, output)
 }
 
 export function createChatMessageHandler(args: {
@@ -105,11 +103,6 @@ export function createChatMessageHandler(args: {
       })
       return
     }
-
-    // Hermes proxy: reset per-turn flag and pin @agent target on first message.
-    // No-op for non-Hermes sessions. Runs before firstMessageVariantGate is consumed
-    // below so the first-message gate still reflects the unparsed state for the target.
-    applyHermesProxySessionBootstrap(input, output, firstMessageVariantGate)
 
     if (input.agent) {
       updateSessionAgent(input.sessionID, input.agent)

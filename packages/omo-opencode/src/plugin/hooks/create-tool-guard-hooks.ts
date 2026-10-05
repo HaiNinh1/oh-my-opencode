@@ -21,7 +21,6 @@ import {
   createFsyncSkipWarningHook,
   createNotepadWriteGuardHook,
   createPlanFormatValidatorHook,
-  createHermesRoutingGuardHook,
 } from "../../hooks"
 import {
   getOpenCodeVersion,
@@ -50,7 +49,6 @@ export type ToolGuardHooks = {
   teamToolGating: ReturnType<typeof createTeamToolGating> | null
   notepadWriteGuard: ReturnType<typeof createNotepadWriteGuardHook> | null
   planFormatValidator: ReturnType<typeof createPlanFormatValidatorHook> | null
-  hermesRoutingGuard: ReturnType<typeof createHermesRoutingGuardHook> | null
 }
 
 export function createToolGuardHooks(args: {
@@ -159,10 +157,6 @@ export function createToolGuardHooks(args: {
     ? safeHook("notepad-write-guard", () => createNotepadWriteGuardHook())
     : null
 
-  const hermesRoutingGuard = isHookEnabled("hermes-routing-guard")
-    ? safeHook("hermes-routing-guard", () => createHermesRoutingGuardHook(ctx))
-    : null
-
   return {
     commentChecker,
     toolOutputTruncator,
@@ -182,6 +176,5 @@ export function createToolGuardHooks(args: {
     teamToolGating,
     notepadWriteGuard,
     planFormatValidator,
-    hermesRoutingGuard,
   }
 }
