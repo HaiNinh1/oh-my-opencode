@@ -33,8 +33,18 @@ export async function isGitAvailable(): Promise<boolean> {
   return result.code === 0
 }
 
+/** Windows specs (`.\\wt`, `..\\wt`, `C:\\wt`) are accepted by normalizing backslashes to forward slashes. */
+export function normalizeWorktreeSpec(spec: string): string {
+  return spec.replaceAll("\\", "/")
+}
+
 export function validateWorktreeSpec(spec: string): void {
-  if (!/^(\.\.?\/|\/).+/.test(spec) || countParentSegments(spec) > 2) {
+  const normalized = normalizeWorktreeSpec(spec)
+  const isRelative = /^\.\.?\/.+/.test(normalized)
+  // UNC/network roots (`//server/share`, `\\server\share`) stay rejected.
+  const isPosixAbsolute = /^\/(?!\/).+/.test(normalized)
+  const isDriveAbsolute = /^[A-Za-z]:\/.+/.test(normalized)
+  if (normalized.includes("\0") || !(isRelative || isPosixAbsolute || isDriveAbsolute) || countParentSegments(normalized) > 2) {
     throw new Error("worktreePath must be a filesystem path (relative './...', '../...' or absolute '/...')")
   }
 }
@@ -52,7 +62,8 @@ export async function createWorktree(
     throw new GitUnavailableError()
   }
 
-  const absolutePath = path.isAbsolute(worktreePath) ? worktreePath : path.resolve(repoRoot, worktreePath)
+  const normalizedPath = normalizeWorktreeSpec(worktreePath)
+  const absolutePath = path.isAbsolute(normalizedPath) ? normalizedPath : path.resolve(repoRoot, normalizedPath)
   const result = await gitCommandRunner(["-C", repoRoot, "worktree", "add", "--detach", absolutePath])
 
   if (result.code !== 0) {

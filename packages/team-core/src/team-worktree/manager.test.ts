@@ -6,7 +6,7 @@ import fs from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
-import { GitUnavailableError, createWorktree, setGitCommandRunnerForTests, validateWorktreeSpec } from "./manager"
+import { GitUnavailableError, createWorktree, normalizeWorktreeSpec, setGitCommandRunnerForTests, validateWorktreeSpec } from "./manager"
 import { removeWorktree } from "./cleanup"
 
 const temporaryDirectories: string[] = []
@@ -70,6 +70,27 @@ describe("team-worktree manager", () => {
 
     // then
     expect(validate).toThrow("worktreePath must be a filesystem path (relative './...', '../...' or absolute '/...')")
+  })
+
+  test("validateWorktreeSpec accepts Windows backslash and drive paths after normalization", () => {
+    // given
+    const accepted = [".\\worktrees\\member-a", "..\\member-b", "C:\\work\\wt", "D:/work/wt", "./a", "/abs/wt"]
+
+    // when / then
+    for (const spec of accepted) {
+      expect(() => validateWorktreeSpec(spec)).not.toThrow()
+    }
+    expect(normalizeWorktreeSpec("..\\wt\\a")).toBe("../wt/a")
+  })
+
+  test("validateWorktreeSpec keeps rejecting unsafe specs", () => {
+    // given
+    const rejected = ["feature-x", "\\\\server\\share\\wt", "//server/share", "..\\..\\..\\escape", "C:", "wt\\a", "./a\0b"]
+
+    // when / then
+    for (const spec of rejected) {
+      expect(() => validateWorktreeSpec(spec)).toThrow("worktreePath must be a filesystem path")
+    }
   })
 
   test("given git unavailable when createWorktree then throws unavailable error", async () => {
