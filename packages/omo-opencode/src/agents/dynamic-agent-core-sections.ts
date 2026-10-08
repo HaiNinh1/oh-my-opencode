@@ -191,16 +191,14 @@ export function buildNonClaudePlannerSection(model: string): string {
     return ""
   }
 
-  return `### Plan Agent Dependency (Non-Claude)
+  return `### Plan First, Inline (Non-Claude)
 
-Multi-step task? **ALWAYS consult Plan Agent first.** Do NOT start implementation without a plan.
+Multi-step task? **Plan before you edit - but plan yourself, in this turn.** Do not start implementation without a plan, and do not spend a sub-agent round on a plan you can write from the code you just read.
 
-- Single-file fix or trivial change → proceed directly
-- Anything else (2+ steps, unclear scope, architecture) → \`task(subagent_type="plan", ...)\` FIRST
-- Use \`task_id\` to resume the same Plan Agent - ask follow-up questions aggressively
-- If ANY part of the task is ambiguous, ask Plan Agent before guessing
-
-Plan Agent returns a structured work breakdown with parallel execution opportunities. Follow it.`
+- Single-file fix or trivial change → proceed directly.
+- 2+ steps → read the relevant code, then write the plan as your todo list (files, changes, order), then execute it in the same turn without waiting for approval.
+- Consult \`task(subagent_type="plan", ...)\` only when the user asks for a plan, or the work spans several modules with an architectural ambiguity you cannot settle by reading the code. A separate Plan Agent re-reads the codebase in its own session, so it costs a full extra round-trip.
+- A small ambiguity is settled by reading code or by one precise question to the user, not by a planning round.`
 }
 
 export function buildParallelDelegationSection(

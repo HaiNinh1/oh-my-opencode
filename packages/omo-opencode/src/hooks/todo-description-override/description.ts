@@ -10,29 +10,14 @@ The upstream OpenCode \`todowrite\` schema expects each todo item to include:
 
 \`priority\` is a string field. Never send numeric priorities such as \`0\`, \`1\`, \`2\`, or labels such as \`P0\`, \`P1\`, \`P2\`.
 
-## Todo Format (MANDATORY)
+## When to use
 
-Each todo title MUST encode four elements: WHERE, WHY, HOW, and EXPECTED RESULT.
+Use this tool for multi-step work (2 or more steps), or when the user gives several separate items; the list is your plan. Skip it for single, trivial changes.
 
-Format: "[WHERE] [HOW] to [WHY] - expect [RESULT]"
+## Todo Format
 
-GOOD:
-- "src/utils/validation.ts: Add validateEmail() for input sanitization - returns boolean"
-- "UserService.create(): Call validateEmail() before DB insert - rejects invalid emails with 400"
-- "validation.test.ts: Add test for missing @ sign - expect validateEmail('foo') to return false"
-
-BAD:
-- "Implement email validation" (where? how? what result?)
-- "Add dark mode" (feature, not a todo)
-- "Fix auth" (what file? what changes? what's expected?)
-
-## Granularity Rules
-
-Each todo MUST be a single atomic action completable in 1-3 tool calls. If it needs more, split it.
-
-**Size test**: Can you complete this todo by editing one file or running one command? If not, it's too big.
+Each todo is a short imperative phrase naming the concrete change, e.g. "Add validateEmail() to src/utils/validation.ts" or "Run auth tests". One item per meaningful step, not one per tool call.
 
 ## Task Management
 - One in_progress at a time. Complete it before starting the next.
-- Mark completed immediately after finishing each item.
-- Skip this tool for single trivial tasks (one-step, obvious action).`
+- Mark completed immediately after finishing each item.`

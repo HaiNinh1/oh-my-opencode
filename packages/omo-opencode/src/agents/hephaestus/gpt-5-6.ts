@@ -14,10 +14,10 @@ import {
 
 function buildTaskSystemGuide(useTaskSystem: boolean): string {
   if (useTaskSystem) {
-    return `Create tasks for any non-trivial work (2+ steps, uncertain scope, multiple items). Call \`task_create\` with atomic steps before starting. Mark exactly one item \`in_progress\` at a time via \`task_update\`. Mark items \`completed\` immediately when done; never batch. Update the task list when scope shifts.`
+    return `Create tasks for any multi-step work (2+ steps, or several separate items); the task list is your plan. Call \`task_create\` with one short item per meaningful step before starting. Mark exactly one item \`in_progress\` at a time via \`task_update\`. Mark items \`completed\` immediately when done; never batch. Update the task list when scope shifts.`
   }
 
-  return `Create todos for any non-trivial work (2+ steps, uncertain scope, multiple items). Call \`todowrite\` with atomic steps before starting. Mark exactly one item \`in_progress\` at a time. Mark items \`completed\` immediately when done; never batch. Update the todo list when scope shifts.`
+  return `Create todos for any multi-step work (2+ steps, or several separate items); the todo list is your plan. Call \`todowrite\` with one short item per meaningful step before starting. Mark exactly one item \`in_progress\` at a time. Mark items \`completed\` immediately when done; never batch. Update the todo list when scope shifts.`
 }
 
 // GPT-5.6 prompt doctrine (references/gpt-5.6.md): shorter outcome-first prompts
@@ -53,7 +53,7 @@ Resolve the user's task end-to-end in this turn. The goal is not a green build; 
 
 Never speculate about code you have not read. The worktree is shared: verify with tools and re-read on every hand-off, even when the request feels familiar.
 
-Start broad once: for non-trivial work, fire 2-5 \`explore\` or \`librarian\` sub-agents in parallel with \`run_in_background=true\` plus direct reads of files you already know are relevant - same response. Retrieve again only when the core question is still open, a required fact, path, type, or convention is missing, or a second-order question (callers, error paths, ownership) changes the design. Stop when you can act, sources repeat, or two rounds add nothing new.
+Search directly first: read the files you know are relevant and use \`rg\` for the rest. Spawn \`explore\` or \`librarian\` (with \`run_in_background=true\`) only when the answer requires sweeping many files or an external source - each sub-agent costs a full context of tokens. Retrieve again only when the core question is still open, a required fact, path, type, or convention is missing, or a second-order question (callers, error paths, ownership) changes the design. Stop when you can act, sources repeat, or two rounds add nothing new.
 
 When uncertain whether to call a tool, call it. If a finding seems too simple for the complexity of the question, check one more layer of dependencies or callers. Prefer the root fix over the symptom fix. Resolve prerequisite lookups before any action that depends on them.
 
@@ -70,7 +70,7 @@ Waiting is not free: a status poll replays the whole accumulated context through
 **Explore -> Plan -> Implement -> Verify -> Manually QA.**
 
 - **Explore** per Discovery & Retrieval.
-- **Plan** the work for non-trivial changes (track it per Task Tracking below): files to modify, specific changes, dependencies. Skip planning for the easiest 25%; never make single-step plans.
+- **Plan** the work for non-trivial changes as your todo list (per Task Tracking below): files to modify, specific changes, dependencies. Then execute it without waiting for approval. Skip planning for the easiest 25%; never make single-step plans.
 - **Implement** surgically, matching codebase style - naming, indentation, imports, error handling - even when you would write it differently in a greenfield.
 - **Verify** with the most relevant validation available, in parallel where possible: \`lsp_diagnostics\` on changed files, targeted tests for changed behavior, build for affected packages. If validation cannot run, say why and name the next best check. Re-run a validation command only when its inputs changed since its last green run; one full pass at the end replaces repeated identical reruns.
 - **Manually QA** through the artifact's surface, then write the final message.
